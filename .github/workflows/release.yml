@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write # create git tags + GitHub Releases
+  pull-requests: write # open the "Version Packages" PR
+  id-token: write # OIDC: npm provenance + trusted publishing (no long-lived token)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run build
+      # Changesets opens/updates a "Version Packages" PR when there are unreleased
+      # changesets on main. When that PR is merged, `publish` runs: it publishes to
+      # npm (with provenance), then creates a git tag (vX.Y.Z) and a GitHub Release.
+      - uses: changesets/action@v1
+        with:
+          version: npx changeset version
+          publish: npm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # One-time setup on npmjs.com: configure this GitHub repo/workflow as a
+          # Trusted Publisher for the "archprint" package, then OIDC needs no token.
+          # Fallback if you prefer a token instead of OIDC trusted publishing:
+          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

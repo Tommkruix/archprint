@@ -1,0 +1,10 @@
+dist
+node_modules
+coverage
+
+# Local, gitignored A/B tooling + vendored third-party repo clones. Not part of the package.
+ab
+
+# Intentionally malformed / fixed-shape config fixtures. Formatting them would
+# defeat the tests that prove the resolver tolerates JSONC and odd layouts.
+tests/fixtures

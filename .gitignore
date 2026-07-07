@@ -1,0 +1,39 @@
+# ── Private AI agent config — NEVER commit or push ──
+# These are our own working notes for Claude / GPT / Gemini.
+# They stay local so the public repo shows only real code, not scaffolding.
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.cursor/
+.cursorrules
+.gemini/
+.github/copilot-instructions.md
+
+# ── OS / editor cruft ──
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# ── Node / TypeScript ──
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── Local scratch / benchmark clones ──
+/tmp-repos/
+*.local
+.env
+.env.*
+
+# ── A/B evaluation harness (local only, one subfolder per day) ──
+ab/
+
+# ── Private strategy / planning docs — never ship in the public repo ──
+docs/

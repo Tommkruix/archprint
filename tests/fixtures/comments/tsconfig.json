@@ -1,0 +1,10 @@
+{
+  // A tsconfig with comments and trailing commas, which plain JSON.parse rejects
+  // but the TypeScript config reader accepts.
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@x/*": ["lib/*"], // trailing comma below is intentional
+    },
+  },
+}

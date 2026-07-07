@@ -1,0 +1,89 @@
+{
+  "name": "archprint",
+  "version": "0.1.0",
+  "description": "Generate deterministic, evidence-backed ESLint rules from the architecture your TypeScript repo already follows.",
+  "keywords": [
+    "eslint",
+    "eslint-plugin",
+    "typescript",
+    "static-analysis",
+    "software-architecture",
+    "ast",
+    "ts-morph",
+    "import-graph",
+    "code-quality",
+    "linter",
+    "cli",
+    "ai-coding-agents",
+    "developer-tools"
+  ],
+  "homepage": "https://github.com/Tommkruix/archprint#readme",
+  "bugs": {
+    "url": "https://github.com/Tommkruix/archprint/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tommkruix/archprint.git"
+  },
+  "license": "MIT",
+  "author": "Tommkruix",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run build && npm run test",
+    "day1:resolve": "tsx scripts/day1-resolve.ts",
+    "changeset": "changeset",
+    "release": "changeset publish",
+    "prepare": "husky"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "ts-morph": "28.0.0",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.0",
+    "chart.js": "^4.5.1",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "get-tsconfig": "^4.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "oxc-resolver": "^11.22.0",
+    "prettier": "^3.9.4",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.22.4",
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^4.1.9"
+  }
+}
