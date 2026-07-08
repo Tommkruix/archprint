@@ -21,15 +21,9 @@ export type Role =
 
 export interface RoleClassification {
   role: Role;
-  /**
-   * 0..1 heuristic: how strongly the path signals this role. A specific filename suffix
-   * (`.service.ts`) is stronger than a structural path (`app/api/.../route.ts`), which is
-   * stronger than a generic `.tsx`. This is a per-file signal, NOT the pattern-level
-   * "role confidence" gate used in detection (that is the fraction of role files matching a
-   * naming convention, computed later).
-   */
+  /** 0..1: how specifically the path signals the role (named suffix > structural path > `.tsx`). */
   confidence: number;
-  /** Id of the rule that matched, for debuggability. Null when unclassified. */
+  /** Id of the rule that matched, or null when unclassified. */
   matchedRule: string | null;
 }
 
@@ -40,11 +34,7 @@ interface RoleRule {
   confidence: number;
 }
 
-/**
- * Ordered ruleset: FIRST match wins. Specific filename suffixes precede structural path
- * patterns, which precede the generic `.tsx` fallback. TEST precedes COMPONENT so that a
- * `.test.tsx` classifies as a test, not a component.
- */
+// First match wins; TEST precedes COMPONENT so a `.test.tsx` is not read as a component.
 const ROLE_RULES: readonly RoleRule[] = [
   { role: 'TEST', id: 'test-spec-suffix', test: /\.(test|spec)\.(ts|tsx)$/, confidence: 1 },
   { role: 'CONTROLLER', id: 'controller-suffix', test: /\.controller\.ts$/, confidence: 1 },
@@ -99,4 +89,29 @@ export function classifyFile(relativePath: string): RoleClassification {
     }
   }
   return { role: 'UNKNOWN', confidence: 0, matchedRule: null };
+}
+
+/** A module-level `"use server"` directive as the first statement (ignoring comments/blank lines). */
+const USE_SERVER_DIRECTIVE = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)\s*)*["']use server["']/;
+
+export function hasUseServerDirective(sourceHead: string): boolean {
+  return USE_SERVER_DIRECTIVE.test(sourceHead);
+}
+
+/**
+ * Path-based role, upgraded to SERVER_ACTION when a `.ts` module declares a top-level `"use server"`
+ * directive (a Next.js server-action module). `.tsx` files are never upgraded: a page/component with
+ * a `"use server"` directive still renders UI and legitimately imports components, so treating it as
+ * a server-entry would be wrong. A named path role (controller, route, test) also always wins.
+ */
+export function classifyFileWithDirective(
+  relativePath: string,
+  hasServerDirective: boolean,
+): RoleClassification {
+  const base = classifyFile(relativePath);
+  const isTsx = /\.tsx$/.test(relativePath.replace(/\\/g, '/'));
+  if (hasServerDirective && base.role === 'UNKNOWN' && !isTsx) {
+    return { role: 'SERVER_ACTION', confidence: 0.9, matchedRule: 'use-server-directive' };
+  }
+  return base;
 }

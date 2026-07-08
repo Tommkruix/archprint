@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { classifyFile, type Role } from '../../src/scanner/role-classifier.js';
+import {
+  classifyFile,
+  classifyFileWithDirective,
+  hasUseServerDirective,
+  type Role,
+} from '../../src/scanner/role-classifier.js';
 
 describe('classifyFile', () => {
   const cases: Array<[path: string, role: Role]> = [
@@ -45,5 +50,35 @@ describe('classifyFile', () => {
     expect(classifyFile('a.service.ts').confidence).toBeGreaterThan(
       classifyFile('a.tsx').confidence,
     );
+  });
+});
+
+describe('use-server directive detection', () => {
+  it('detects a top-of-file directive, ignoring leading comments', () => {
+    expect(hasUseServerDirective('"use server";\nimport x from "y";')).toBe(true);
+    expect(hasUseServerDirective("// header\n'use server'\n")).toBe(true);
+    expect(hasUseServerDirective('import x from "y";\n"use server";')).toBe(false);
+    expect(hasUseServerDirective('export const x = 1;')).toBe(false);
+  });
+});
+
+describe('classifyFileWithDirective', () => {
+  it('upgrades an UNKNOWN .ts module with a directive to SERVER_ACTION', () => {
+    const r = classifyFileWithDirective('utils/actions/create-user.ts', true);
+    expect(r.role).toBe('SERVER_ACTION');
+    expect(r.matchedRule).toBe('use-server-directive');
+  });
+
+  it('never upgrades a .tsx page/component, even with a directive', () => {
+    // A page.tsx with "use server" still renders UI and legitimately imports components.
+    expect(classifyFileWithDirective('modules/x/settings/page.tsx', true).role).toBe('COMPONENT');
+  });
+
+  it('leaves a named path role (route handler) unchanged', () => {
+    expect(classifyFileWithDirective('app/api/x/route.ts', true).role).toBe('ROUTE_HANDLER');
+  });
+
+  it('is a no-op without a directive', () => {
+    expect(classifyFileWithDirective('utils/helper.ts', false).role).toBe('UNKNOWN');
   });
 });

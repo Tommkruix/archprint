@@ -1,11 +1,6 @@
 import type { SourceFile } from 'ts-morph';
 
-/**
- * A "barrel" is a file that exists only to re-export other modules (e.g. an `index.ts` full of
- * `export * from './x'` / `export { y } from './y'`) and declares no local values of its own.
- * Detecting barrels lets us resolve an alias import to the real leaf modules behind it before
- * analyzing the import graph, so a boundary is not hidden behind an index file.
- */
+/** A file that only re-exports other modules (`export * from './x'`) and declares no values. */
 export function isBarrelFile(sourceFile: SourceFile): boolean {
   const hasReExport = sourceFile
     .getExportDeclarations()
@@ -13,7 +8,6 @@ export function isBarrelFile(sourceFile: SourceFile): boolean {
   if (!hasReExport) {
     return false;
   }
-  // A file that also defines its own values is a real module, not a pure barrel.
   const declaresLocalValues =
     sourceFile.getFunctions().length > 0 ||
     sourceFile.getClasses().length > 0 ||

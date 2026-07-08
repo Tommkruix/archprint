@@ -1,8 +1,13 @@
-import { readdirSync } from 'node:fs';
+import { closeSync, openSync, readSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { Project, type SourceFile } from 'ts-morph';
 import { isBarrelFile, resolveToLeafFiles } from './barrel-resolver.js';
-import { classifyFile, type RoleClassification } from './role-classifier.js';
+import {
+  classifyFile,
+  classifyFileWithDirective,
+  hasUseServerDirective,
+  type RoleClassification,
+} from './role-classifier.js';
 import { buildWorkspaceMap } from './workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from './workspace-packages.js';
 
@@ -23,14 +28,9 @@ export interface ResolvedImport {
   edgeKind: EdgeKind;
   /** True if the resolved target is a barrel we saw through. */
   throughBarrel: boolean;
-  /**
-   * Leaf modules reached by VALUE bindings (real runtime dependencies), resolved at the SYMBOL
-   * level: only the leaf that actually defines each imported name, not every export of a barrel.
-   * This is what boundary rules should count.
-   */
+  /** Leaf modules reached by value bindings, resolved at the symbol level (not every barrel export). */
   valueLeafPaths: string[];
-  /** Leaf modules reached by TYPE-only bindings (`import type`), which are erased at compile time
-   *  and are therefore NOT real runtime dependencies. Kept separate so rules can ignore them. */
+  /** Leaf modules reached by `import type` bindings (erased at compile time). */
   typeLeafPaths: string[];
 }
 
@@ -56,32 +56,56 @@ export function listSourceFiles(rootDir: string): string[] {
   return files;
 }
 
-/** Walk a directory and assign an architectural role to every source file. */
-export function walkRepo(rootDir: string): WalkedFile[] {
-  return listSourceFiles(rootDir).map((absolutePath) => {
-    const relativePath = path.relative(rootDir, absolutePath).split(path.sep).join('/');
-    return { absolutePath, relativePath, ...classifyFile(relativePath) };
-  });
+/** Read the first `bytes` of a file (enough to catch a leading `"use server"` directive). */
+function readHead(file: string, bytes = 512): string {
+  const fd = openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(bytes);
+    const read = readSync(fd, buf, 0, bytes, 0);
+    return buf.toString('utf8', 0, read);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /**
- * Resolve the imports of a single file, following barrels to their leaf modules. Uses the app's
- * tsconfig so workspace aliases resolve. Files are added on demand (the whole project is not
- * loaded), keeping this cheap for targeted analysis.
+ * Walk a directory and assign an architectural role to every source file. Path rules decide the
+ * role; a file the path rules leave weakly classified is re-checked for a top-level `"use server"`
+ * directive and upgraded to SERVER_ACTION, so server actions outside `app/**` are not missed.
  */
-export function analyzeImports(appDir: string, absoluteFilePath: string): ResolvedImport[] {
+export function walkRepo(rootDir: string): WalkedFile[] {
+  return listSourceFiles(rootDir).map((absolutePath) => {
+    const relativePath = path.relative(rootDir, absolutePath).split(path.sep).join('/');
+    const base = classifyFile(relativePath);
+    // Only `.ts` files the path rules left UNKNOWN can be a server-action module; `.tsx` pages that
+    // carry a "use server" directive still render UI, so they stay COMPONENT (not a server entry).
+    if (base.role === 'UNKNOWN' && !relativePath.endsWith('.tsx')) {
+      let head: string;
+      try {
+        head = readHead(absolutePath);
+      } catch {
+        head = '';
+      }
+      if (hasUseServerDirective(head)) {
+        return { absolutePath, relativePath, ...classifyFileWithDirective(relativePath, true) };
+      }
+    }
+    return { absolutePath, relativePath, ...base };
+  });
+}
+
+/** Import analyzer bound to one ts-morph Project; reuse across many files instead of one per file. */
+export function createImportAnalyzer(
+  appDir: string,
+): (absoluteFilePath: string) => ResolvedImport[] {
   const project = new Project({
     tsConfigFilePath: path.join(appDir, 'tsconfig.json'),
     skipAddingFilesFromTsConfig: true,
   });
-  const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
   const aliases = Object.keys(buildWorkspaceMap(appDir));
-  // Workspace-package names (e.g. @acme/db) are INTERNAL boundaries even though they resolve
-  // through node_modules symlinks. tsconfig-path resolvers miss these; we label them correctly.
   const workspacePackages = Object.keys(buildWorkspacePackageMap(findWorkspaceRoot(appDir)));
 
-  // Cache each target's export map (exported name -> the leaf files that actually define it,
-  // following re-exports). This is the type checker doing symbol-level resolution for us.
+  // exported name -> leaf files that define it, following re-exports.
   const exportedLeafCache = new Map<string, Map<string, Set<string>>>();
   const exportedLeaves = (target: SourceFile): Map<string, Set<string>> => {
     const key = target.getFilePath();
@@ -106,50 +130,64 @@ export function analyzeImports(appDir: string, absoluteFilePath: string): Resolv
   const classifyEdge = (specifier: string, target: SourceFile | undefined): EdgeKind => {
     if (specifier.startsWith('.')) return 'relative';
     if (matchesPrefix(specifier, aliases)) return 'alias';
-    // A workspace-package import is internal even when it resolves via a node_modules symlink.
+    // internal even when resolved via a node_modules symlink
     if (matchesPrefix(specifier, workspacePackages)) return 'workspace';
     if (target === undefined) return 'unresolved';
     return target.getFilePath().includes('/node_modules/') ? 'external' : 'workspace';
   };
 
-  return sourceFile.getImportDeclarations().map((importDeclaration) => {
-    const specifier = importDeclaration.getModuleSpecifierValue();
-    const target = importDeclaration.getModuleSpecifierSourceFile();
-    const edgeKind = classifyEdge(specifier, target);
-    const valueLeaves = new Set<string>();
-    const typeLeaves = new Set<string>();
+  return (absoluteFilePath: string): ResolvedImport[] => {
+    const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
+    return sourceFile.getImportDeclarations().map((importDeclaration) => {
+      const specifier = importDeclaration.getModuleSpecifierValue();
+      const target = importDeclaration.getModuleSpecifierSourceFile();
+      const edgeKind = classifyEdge(specifier, target);
+      const throughBarrel = target !== undefined && isBarrelFile(target);
+      const valueLeaves = new Set<string>();
+      const typeLeaves = new Set<string>();
 
-    if (target !== undefined) {
-      const declarationIsTypeOnly = importDeclaration.isTypeOnly();
-      const named = importDeclaration.getNamedImports();
-      const namespaceImport = importDeclaration.getNamespaceImport();
-      const defaultImport = importDeclaration.getDefaultImport();
-      const exported = exportedLeaves(target);
+      if (target !== undefined) {
+        const declarationIsTypeOnly = importDeclaration.isTypeOnly();
+        const named = importDeclaration.getNamedImports();
+        const namespaceImport = importDeclaration.getNamespaceImport();
+        const defaultImport = importDeclaration.getDefaultImport();
+        // Only barrels need the type checker to trace where a re-exported name is defined; a
+        // non-barrel defines its own names, so the leaf is the target file itself.
+        const exported = throughBarrel ? exportedLeaves(target) : null;
 
-      const attribute = (name: string, isTypeOnly: boolean): void => {
-        const leaves = exported.get(name) ?? new Set([target.getFilePath()]);
-        for (const leaf of leaves) (isTypeOnly ? typeLeaves : valueLeaves).add(leaf);
+        const attribute = (name: string, isTypeOnly: boolean): void => {
+          const leaves = exported?.get(name) ?? new Set([target.getFilePath()]);
+          for (const leaf of leaves) (isTypeOnly ? typeLeaves : valueLeaves).add(leaf);
+        };
+
+        for (const namedImport of named) {
+          attribute(namedImport.getName(), declarationIsTypeOnly || namedImport.isTypeOnly());
+        }
+        if (defaultImport !== undefined) {
+          attribute('default', declarationIsTypeOnly);
+        }
+        if (namespaceImport !== undefined || (named.length === 0 && defaultImport === undefined)) {
+          const bucket = declarationIsTypeOnly ? typeLeaves : valueLeaves;
+          if (throughBarrel) {
+            for (const leaf of resolveToLeafFiles(target)) bucket.add(leaf.getFilePath());
+          } else {
+            bucket.add(target.getFilePath());
+          }
+        }
+      }
+
+      return {
+        specifier,
+        edgeKind,
+        throughBarrel,
+        valueLeafPaths: [...valueLeaves],
+        typeLeafPaths: [...typeLeaves],
       };
+    });
+  };
+}
 
-      for (const namedImport of named) {
-        attribute(namedImport.getName(), declarationIsTypeOnly || namedImport.isTypeOnly());
-      }
-      if (defaultImport !== undefined) {
-        attribute('default', declarationIsTypeOnly);
-      }
-      // Namespace (`import * as x`) or side-effect (`import '...'`) touches the whole module.
-      if (namespaceImport !== undefined || (named.length === 0 && defaultImport === undefined)) {
-        const bucket = declarationIsTypeOnly ? typeLeaves : valueLeaves;
-        for (const leaf of resolveToLeafFiles(target)) bucket.add(leaf.getFilePath());
-      }
-    }
-
-    return {
-      specifier,
-      edgeKind,
-      throughBarrel: target !== undefined && isBarrelFile(target),
-      valueLeafPaths: [...valueLeaves],
-      typeLeafPaths: [...typeLeaves],
-    };
-  });
+/** Convenience: analyze a single file (creates a one-off analyzer bound to `appDir`). */
+export function analyzeImports(appDir: string, absoluteFilePath: string): ResolvedImport[] {
+  return createImportAnalyzer(appDir)(absoluteFilePath);
 }

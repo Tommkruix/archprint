@@ -1,13 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 
-/**
- * Map of workspace-package name to its absolute directory, read from the monorepo's
- * `package.json` "workspaces" or `pnpm-workspace.yaml`. Cross-package imports (e.g. importing
- * `@acme/db` from `@acme/web`) are INTERNAL architectural boundaries, but they resolve through
- * node_modules symlinks and would otherwise look "external". This map lets us label them
- * correctly. tsconfig-path resolvers (get-tsconfig, tsconfig-paths) miss these entirely.
- */
+/** Map workspace-package name to its directory, from `package.json` workspaces or pnpm-workspace.yaml. */
 export function buildWorkspacePackageMap(rootDir: string): Record<string, string> {
   const map: Record<string, string> = {};
   for (const packageDir of expandGlobs(rootDir, readWorkspaceGlobs(rootDir))) {
