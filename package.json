@@ -54,7 +54,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepublishOnly": "npm run build && npm run test",
-    "day1:resolve": "tsx scripts/day1-resolve.ts",
     "changeset": "changeset",
     "release": "changeset publish",
     "prepare": "husky"
