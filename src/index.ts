@@ -1,6 +1,11 @@
 export { buildWorkspaceMap } from './scanner/workspace-resolver.js';
 export { buildWorkspacePackageMap, findWorkspaceRoot } from './scanner/workspace-packages.js';
-export { classifyFile, type Role, type RoleClassification } from './scanner/role-classifier.js';
+export {
+  classifyFile,
+  ROLE_PATTERNS,
+  type Role,
+  type RoleClassification,
+} from './scanner/role-classifier.js';
 export { isBarrelFile, resolveToLeafFiles } from './scanner/barrel-resolver.js';
 export {
   analyzeImports,
@@ -27,3 +32,8 @@ export {
   type GateResult,
   type GenerationStatus,
 } from './detector/confidence-gate.js';
+export {
+  generateRuleArtifacts,
+  emitRuleArtifacts,
+  type RuleArtifacts,
+} from './generator/rule-generator.js';

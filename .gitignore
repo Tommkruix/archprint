@@ -37,3 +37,6 @@ ab/
 
 # ── Private strategy / planning docs — never ship in the public repo ──
 docs/
+
+# generated at test time
+tests/generator/__generated__/

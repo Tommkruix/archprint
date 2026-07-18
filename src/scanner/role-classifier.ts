@@ -78,6 +78,15 @@ const ROLE_RULES: readonly RoleRule[] = [
 ];
 
 /**
+ * Each role's path pattern, in first-match order. Single source of truth for tools that must mirror
+ * classification (e.g. the rule generator embeds these into standalone rules) so the patterns can
+ * never drift from ROLE_RULES.
+ */
+export const ROLE_PATTERNS: ReadonlyMap<Role, RegExp> = new Map(
+  ROLE_RULES.map((rule) => [rule.role, rule.test]),
+);
+
+/**
  * Classify a repo-relative file path into an architectural role. Accepts either POSIX or
  * Windows separators. Returns UNKNOWN with confidence 0 when no rule matches.
  */
