@@ -17,9 +17,8 @@ function renderRule(config: PatternConfig, result: DetectedPattern): string {
   const entryPatterns = config.roles
     .map((role) => ROLE_PATTERNS.get(role)?.source)
     .filter((source): source is string => source !== undefined);
-  // Every other classified role: a "use server" file matching one of these keeps its role and is NOT
-  // re-read as server-entry (mirrors classifyFileWithDirective, which upgrades only UNKNOWN files).
-  // COMPONENT (.tsx) is excluded here because the emitted rule handles .tsx separately.
+  // Non-entry roles (COMPONENT handled separately as .tsx): a "use server" file matching these keeps
+  // its role, mirroring classifyFileWithDirective.
   const nonEntryPatterns = [...ROLE_PATTERNS]
     .filter(([role]) => !config.roles.includes(role) && role !== 'COMPONENT')
     .map(([, pattern]) => pattern.source);

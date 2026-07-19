@@ -19,12 +19,22 @@ export {
 export {
   detectForbiddenImport,
   detectNoDbInRequestEntry,
+  detectDbClientInRequestEntry,
+  detectUiLayerInServerEntry,
   DEFAULT_DB_MARKERS,
   REQUEST_ENTRY_ROLES,
   type DetectedPattern,
   type PatternConfig,
   type Violation,
 } from './detector/pattern-detector.js';
+export {
+  inferUiLayerMarkers,
+  inferDbClientMarkers,
+  KNOWN_DB_LIBRARIES,
+  type InferredMarkers,
+  type InferredDbMarkers,
+  type UiSegmentEvidence,
+} from './detector/marker-inference.js';
 export {
   evaluateGate,
   GATE_THRESHOLDS,

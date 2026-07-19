@@ -1,6 +1,13 @@
 import { createImportAnalyzer, walkRepo } from '../scanner/file-walker.js';
 import type { Role } from '../scanner/role-classifier.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
+import {
+  inferDbClientMarkers,
+  inferUiLayerMarkers,
+  KNOWN_DB_LIBRARIES,
+  type InferredDbMarkers,
+  type InferredMarkers,
+} from './marker-inference.js';
 
 export const REQUEST_ENTRY_ROLES: readonly Role[] = [
   'CONTROLLER',
@@ -10,17 +17,8 @@ export const REQUEST_ENTRY_ROLES: readonly Role[] = [
   'TRPC_ROUTER',
 ];
 
-/** Matched against both the import specifier and its resolved leaf path. */
-export const DEFAULT_DB_MARKERS: readonly RegExp[] = [
-  /@prisma\/client/,
-  /generated\/prisma\/client/,
-  /(^|\/)utils\/prisma(\/|\.|$)/,
-  /(^|\/)prisma\/client/,
-  /drizzle-orm/,
-  /(^|\/)typeorm(\/|$)/,
-  /(^|\/)mongoose(\/|$)/,
-  /(^|\/)sequelize(\/|$)/,
-];
+/** Known db libraries only; first-party wrappers are inferred (see inferDbClientMarkers). */
+export const DEFAULT_DB_MARKERS: readonly RegExp[] = KNOWN_DB_LIBRARIES;
 
 const INFRA_PATH = /(^|\/)(health|seed|admin|webhook|webhooks|migration|migrations|cron)(\/|\.|$)/;
 
@@ -125,6 +123,42 @@ export function detectForbiddenImport(appDir: string, config: PatternConfig): De
     infraCaution: violatingFileCount > 0 && infraExceptions.length === violatingFileCount,
     infraExceptions,
   };
+}
+
+/** Detect the server-entry-to-UI boundary with the UI marker inferred from this repo's graph. */
+export function detectUiLayerInServerEntry(
+  appDir: string,
+): DetectedPattern & { inferredUi: InferredMarkers } {
+  const inferredUi = inferUiLayerMarkers(appDir);
+  const result = detectForbiddenImport(appDir, {
+    id: 'AP-002',
+    name: 'no-ui-layer-in-server-entry',
+    description:
+      'A server-entry file must not import from the UI layer (inferred from where components live in this repo).',
+    roles: REQUEST_ENTRY_ROLES,
+    forbidden: inferredUi.markers,
+  });
+  // No identifiable UI layer: reject rather than emit a vacuous AUTO on zero markers.
+  if (inferredUi.markers.length === 0) {
+    result.gate = { ...result.gate, status: 'REJECT', passes: false };
+  }
+  return { ...result, inferredUi };
+}
+
+/** Detect the request-entry-to-db-client boundary with markers inferred from this repo's graph. */
+export function detectDbClientInRequestEntry(
+  appDir: string,
+): DetectedPattern & { inferredDb: InferredDbMarkers } {
+  const inferredDb = inferDbClientMarkers(appDir);
+  const result = detectForbiddenImport(appDir, {
+    id: 'AP-001',
+    name: 'no-db-client-in-request-entry',
+    description:
+      'A request-entry file must not import the database client directly; go through a service or data-access layer.',
+    roles: REQUEST_ENTRY_ROLES,
+    forbidden: inferredDb.markers,
+  });
+  return { ...result, inferredDb };
 }
 
 export function detectNoDbInRequestEntry(
