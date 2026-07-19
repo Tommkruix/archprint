@@ -11,8 +11,7 @@ const STRUCTURAL_SEGMENT = /^(\(.*\)|\[.*\]|app|pages|src|dist|build)$/;
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const normalize = (filePath: string): string => filePath.replace(/\\/g, '/');
 
-// Heuristic specifier extraction for inference signals only (fan-in, wrapper library check). The
-// authoritative import graph is resolved by the detector with the TypeScript AST, not here.
+// Heuristic specifier extraction for inference signals only; the detector resolves the graph via AST.
 function importSpecifiers(text: string): string[] {
   const specifiers = new Set<string>();
   for (const match of text.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g)) specifiers.add(match[1]!);
@@ -85,10 +84,8 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
     .slice(0, 10);
   if (candidates.length === 0) return { markers: [], segments: [], evidence: [] };
 
-  // Import fan-in: how many files import each candidate segment. The encompassing UI layer is a superset
-  // of any nested sub-library's usage (so it wins where it is the real layer), while a shared library
-  // still out-draws an insular feature directory. Counting all importers (not just external ones) avoids
-  // penalising the broad layer for its own internal imports.
+  // Import fan-in (all importers): the encompassing UI layer out-draws a nested sub-library (superset of
+  // its usage) and an insular feature directory alike.
   const candidateTests = candidates.map((candidate) => ({
     candidate,
     inPath: new RegExp(`(^|/)${escapeRegExp(candidate.segment)}(/|$)`),

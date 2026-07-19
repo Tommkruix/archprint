@@ -12,7 +12,8 @@ barrel re-exports are caught via the detector's barrel resolution. `detectUiLaye
 `detectDbClientInRequestEntry` use them, and `DEFAULT_DB_MARKERS` drops its repo-specific first-party
 entries.
 
-This reduces hardcoding of first-party conventions; it does not eliminate hardcoding — the known-db
+This reduces hardcoding of first-party conventions; it does not eliminate hardcoding: the known-db
 library list, the ORM constructor set, and the structural-segment exclusions are curated framework/ORM
-vocabulary by design. Inference is heuristic (e.g. an exotic ORM whose constructor is not listed is
-missed).
+vocabulary by design. Inference is heuristic: an exotic ORM whose constructor is not listed is missed,
+and UI fan-in only helps when the shared layer is actually imported, so a fully colocated app whose
+routes never import the shared library can still pick a feature directory.
