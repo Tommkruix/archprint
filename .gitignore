@@ -40,3 +40,6 @@ docs/
 
 # generated at test time
 tests/generator/__generated__/
+
+tests/cli/__generated__/
+tests/cli/__prog__/

@@ -88,6 +88,7 @@ export function detectForbiddenImport(appDir: string, config: PatternConfig): De
     try {
       imports = analyze(file.absolutePath);
     } catch {
+      /* v8 ignore next -- defensive: a file that fails to parse contributes no imports */
       imports = [];
     }
     for (const imp of imports) {
@@ -99,13 +100,20 @@ export function detectForbiddenImport(appDir: string, config: PatternConfig): De
     }
   }
 
-  const roleFileCount = roleFiles.length;
+  return buildPattern(config, violations, roleFiles.length, confidenceSum);
+}
+
+function buildPattern(
+  config: PatternConfig,
+  violations: Violation[],
+  roleFileCount: number,
+  confidenceSum: number,
+): DetectedPattern {
   const violatingFiles = [...new Set(violations.map((violation) => violation.file))];
   const violatingFileCount = violatingFiles.length;
   const roleConfidence = roleFileCount === 0 ? 0 : confidenceSum / roleFileCount;
   const gate = evaluateGate({ roleFileCount, violatingFileCount, roleConfidence });
   const infraExceptions = violatingFiles.filter((file) => INFRA_PATH.test(file));
-
   return {
     id: config.id,
     name: config.name,
@@ -123,6 +131,57 @@ export function detectForbiddenImport(appDir: string, config: PatternConfig): De
     infraCaution: violatingFileCount > 0 && infraExceptions.length === violatingFileCount,
     infraExceptions,
   };
+}
+
+/**
+ * Detect several patterns in one pass: walk the repo and resolve each role file's imports once, testing
+ * every config's markers against the shared result. Much faster than calling detectForbiddenImport per
+ * pattern, which re-resolves the same files each time.
+ */
+export function detectForbiddenImports(
+  appDir: string,
+  configs: readonly PatternConfig[],
+  options: { resolve?: boolean } = {},
+): DetectedPattern[] {
+  const roleUnion = new Set(configs.flatMap((config) => [...config.roles]));
+  const roleFiles = walkRepo(appDir).filter((file) => roleUnion.has(file.role));
+  const analyze = createImportAnalyzer(appDir, { resolve: options.resolve ?? true });
+
+  const accumulators = configs.map((config) => ({
+    config,
+    violations: [] as Violation[],
+    roleFileCount: 0,
+    confidenceSum: 0,
+  }));
+  for (const file of roleFiles) {
+    let imports: { specifier: string; valueLeafPaths: string[] }[];
+    try {
+      imports = analyze(file.absolutePath);
+    } catch {
+      /* v8 ignore next -- defensive: a file that fails to parse contributes no imports */
+      imports = [];
+    }
+    for (const accumulator of accumulators) {
+      if (!accumulator.config.roles.includes(file.role)) continue;
+      accumulator.roleFileCount += 1;
+      accumulator.confidenceSum += file.confidence;
+      for (const imp of imports) {
+        const leaf = forbiddenTargetReachedByValue(imp, accumulator.config.forbidden);
+        if (leaf !== null) {
+          accumulator.violations.push({ file: file.relativePath, specifier: imp.specifier, leaf });
+          break;
+        }
+      }
+    }
+  }
+  return accumulators.map((accumulator) =>
+    buildPattern(
+      accumulator.config,
+      accumulator.violations,
+      accumulator.roleFileCount,
+      accumulator.confidenceSum,
+    ),
+  );
 }
 
 /** Detect the server-entry-to-UI boundary with the UI marker inferred from this repo's graph. */

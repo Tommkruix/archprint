@@ -18,6 +18,7 @@ export {
 } from './scanner/file-walker.js';
 export {
   detectForbiddenImport,
+  detectForbiddenImports,
   detectNoDbInRequestEntry,
   detectDbClientInRequestEntry,
   detectUiLayerInServerEntry,

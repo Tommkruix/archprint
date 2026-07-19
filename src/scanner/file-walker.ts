@@ -84,6 +84,7 @@ export function walkRepo(rootDir: string): WalkedFile[] {
       try {
         head = readHead(absolutePath);
       } catch {
+        /* v8 ignore next -- defensive: unreadable file head */
         head = '';
       }
       if (hasUseServerDirective(head)) {
@@ -94,14 +95,21 @@ export function walkRepo(rootDir: string): WalkedFile[] {
   });
 }
 
-/** Import analyzer bound to one ts-morph Project; reuse across many files instead of one per file. */
+/**
+ * Import analyzer bound to one ts-morph Project; reuse across many files instead of one per file.
+ * With `{ resolve: false }` it only reads each import's specifier (no module resolution or type
+ * checker), which is far faster but drops barrel/leaf resolution.
+ */
 export function createImportAnalyzer(
   appDir: string,
+  options: { resolve?: boolean } = {},
 ): (absoluteFilePath: string) => ResolvedImport[] {
-  const project = new Project({
-    tsConfigFilePath: path.join(appDir, 'tsconfig.json'),
-    skipAddingFilesFromTsConfig: true,
-  });
+  const resolve = options.resolve ?? true;
+  const project = new Project(
+    resolve
+      ? { tsConfigFilePath: path.join(appDir, 'tsconfig.json'), skipAddingFilesFromTsConfig: true }
+      : { skipAddingFilesFromTsConfig: true },
+  );
   const aliases = Object.keys(buildWorkspaceMap(appDir));
   const workspacePackages = Object.keys(buildWorkspacePackageMap(findWorkspaceRoot(appDir)));
 
@@ -140,6 +148,15 @@ export function createImportAnalyzer(
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
     return sourceFile.getImportDeclarations().map((importDeclaration) => {
       const specifier = importDeclaration.getModuleSpecifierValue();
+      if (!resolve) {
+        return {
+          specifier,
+          edgeKind: classifyEdge(specifier, undefined),
+          throughBarrel: false,
+          valueLeafPaths: [],
+          typeLeafPaths: [],
+        };
+      }
       const target = importDeclaration.getModuleSpecifierSourceFile();
       const edgeKind = classifyEdge(specifier, target);
       const throughBarrel = target !== undefined && isBarrelFile(target);

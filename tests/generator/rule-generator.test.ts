@@ -93,6 +93,37 @@ describe('rule generator — artifacts', () => {
       expect(files.rule).toContain(pattern.source);
     }
   });
+
+  it('renders a rule without the "use server" branch and without an exception section', () => {
+    const config: PatternConfig = {
+      id: 'AP-009',
+      name: 'no-x-in-route',
+      description: 'x',
+      roles: ['ROUTE_HANDLER'],
+      forbidden: [/(^|\/)x(\/|$)/],
+    };
+    const gate = evaluateGate({ roleFileCount: 30, violatingFileCount: 0, roleConfidence: 0.95 });
+    const result: DetectedPattern = {
+      id: config.id,
+      name: config.name,
+      description: config.description,
+      roles: config.roles,
+      stats: {
+        roleFileCount: 30,
+        conformingFileCount: 30,
+        violatingFileCount: 0,
+        ratio: gate.conditions.ratio.value,
+        roleConfidence: gate.conditions.roleConfidence.value,
+      },
+      gate,
+      violations: [],
+      infraCaution: false,
+      infraExceptions: [],
+    };
+    const { files } = generateRuleArtifacts(config, result);
+    expect(files.rule).not.toContain('hasUseServerDirective(context)'); // no SERVER_ACTION role
+    expect(files.card).not.toContain('The one exception'); // no violations to disclose
+  });
 });
 
 const ruleTester = new RuleTester({

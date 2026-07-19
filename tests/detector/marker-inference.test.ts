@@ -24,6 +24,11 @@ describe('inferUiLayerMarkers', () => {
     const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'walker'));
     expect(inferred.markers).toHaveLength(0);
   });
+
+  it('returns no marker when components live only under structural (routing) directories', () => {
+    const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'ui-structural'));
+    expect(inferred.segments).toEqual([]);
+  });
 });
 
 describe('inferDbClientMarkers', () => {
@@ -53,6 +58,11 @@ describe('inferDbClientMarkers', () => {
     expect(inferred.wrappers).toContain('@/db/client');
     const leafPath = path.join(dir, 'src', 'db', 'client.ts');
     expect(inferred.markers.some((marker) => marker.test(leafPath.replace(/\\/g, '/')))).toBe(true);
+  });
+
+  it('discovers a db wrapper that lives in a sibling workspace package', () => {
+    const inferred = inferDbClientMarkers(fixtureFor('monorepo-db/apps/web'));
+    expect(inferred.wrappers).toContain('@acme/db');
   });
 });
 

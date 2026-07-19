@@ -95,6 +95,7 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
     try {
       text = readFileSync(file.absolutePath, 'utf8');
     } catch {
+      /* v8 ignore next -- defensive: file listed by the walker but unreadable */
       continue;
     }
     const specifiers = importSpecifiers(text);
@@ -220,6 +221,7 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
     try {
       text = readFileSync(file, 'utf8');
     } catch {
+      /* v8 ignore next -- defensive: file listed by the walker but unreadable */
       continue;
     }
     if (!DB_TOKENS.some((token) => text.includes(token))) continue;

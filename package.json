@@ -15,7 +15,8 @@
     "linter",
     "cli",
     "ai-coding-agents",
-    "developer-tools"
+    "developer-tools",
+    "node"
   ],
   "homepage": "https://github.com/Tommkruix/archprint#readme",
   "bugs": {
@@ -38,6 +39,9 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "archprint": "./dist/cli.js"
+  },
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
@@ -56,13 +60,15 @@
     "prepublishOnly": "npm run build && npm run test",
     "changeset": "changeset",
     "release": "changeset publish",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:coverage": "vitest run --coverage"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "dependencies": {
+    "commander": "^14.0.3",
     "ts-morph": "28.0.0",
     "typescript": "6.0.3"
   },
@@ -72,6 +78,7 @@
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "chart.js": "^4.5.1",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
