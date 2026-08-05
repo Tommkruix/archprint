@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { listSourceFiles, walkRepo } from '../scanner/file-walker.js';
+import { listSourceFiles, walkRepo, type WalkedFile } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 
@@ -25,7 +25,6 @@ export interface UiSegmentEvidence {
   nonComponentFiles: number;
   specificity: number;
   coverage: number;
-  importFanIn: number;
 }
 
 export interface InferredMarkers {
@@ -34,13 +33,21 @@ export interface InferredMarkers {
   evidence: UiSegmentEvidence[];
 }
 
+// Tests and stories are scaffolding, not architecture. Excluding them keeps a component directory's purity
+// from being diluted by colocated tests (which would otherwise sink the real UI layer below the specificity
+// gate). `.d.ts` declarations are already dropped by the walker.
+function isScaffolding(file: WalkedFile): boolean {
+  return file.role === 'TEST' || /\.stories\.(ts|tsx)$/.test(file.relativePath);
+}
+
 /**
- * Infer this repo's UI-layer specifier marker from its own graph: the directory segment where COMPONENT
- * files cluster most exclusively, disambiguated by import fan-in so the encompassing shared component
- * layer (imported the most) beats an insular feature directory.
+ * Infer this repo's UI-layer specifier marker from its own graph: among directories that are almost
+ * exclusively components (specificity), the one holding the largest share of the repo's components
+ * (coverage). Coverage selects the encompassing UI layer over both insular feature directories and
+ * heavily-imported primitive sub-libraries (e.g. components/ui), which raw import fan-in wrongly favors.
  */
 export function inferUiLayerMarkers(appDir: string): InferredMarkers {
-  const files = walkRepo(appDir);
+  const files = walkRepo(appDir).filter((file) => !isScaffolding(file));
   const components = files.filter((file) => file.role === 'COMPONENT');
   const others = files.filter((file) => file.role !== 'COMPONENT');
   if (components.length < 5) return { markers: [], segments: [], evidence: [] };
@@ -70,7 +77,6 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
         nonComponentFiles,
         specificity: componentFiles / (componentFiles + nonComponentFiles),
         coverage: componentFiles / components.length,
-        importFanIn: 0,
       };
     })
     .filter(
@@ -80,31 +86,9 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
         !STRUCTURAL_SEGMENT.test(entry.segment) &&
         !entry.segment.includes('.'),
     )
-    .sort((a, b) => b.coverage * b.specificity - a.coverage * a.specificity)
-    .slice(0, 10);
+    .sort((a, b) => b.coverage * b.specificity - a.coverage * a.specificity);
   if (candidates.length === 0) return { markers: [], segments: [], evidence: [] };
 
-  // Import fan-in (all importers): the encompassing UI layer out-draws a nested sub-library (superset of
-  // its usage) and an insular feature directory alike.
-  const candidateTests = candidates.map((candidate) => ({
-    candidate,
-    inPath: new RegExp(`(^|/)${escapeRegExp(candidate.segment)}(/|$)`),
-  }));
-  for (const file of files) {
-    let text: string;
-    try {
-      text = readFileSync(file.absolutePath, 'utf8');
-    } catch {
-      /* v8 ignore next -- defensive: file listed by the walker but unreadable */
-      continue;
-    }
-    const specifiers = importSpecifiers(text);
-    for (const { candidate, inPath } of candidateTests) {
-      if (specifiers.some((specifier) => inPath.test(specifier))) candidate.importFanIn += 1;
-    }
-  }
-
-  candidates.sort((a, b) => b.importFanIn * b.specificity - a.importFanIn * a.specificity);
   const top = candidates[0]!;
   const segments = [top.segment];
   const markers = segments.map((segment) => new RegExp(`(^|/)${escapeRegExp(segment)}(/|$)`));

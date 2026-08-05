@@ -66,11 +66,27 @@ describe('inferDbClientMarkers', () => {
   });
 });
 
-describe('inferUiLayerMarkers fan-in', () => {
-  // Gap 3: settings/ has more components (8) than the shared ui/ (4), but ui/ is imported broadly, so
-  // fan-in must pick ui/ over the feature directory.
-  it('prefers the broadly-imported shared library over a larger feature directory', () => {
+describe('inferUiLayerMarkers selection', () => {
+  // Colocated tests must not sink the UI layer: 6 components + 6 sibling tests would drop `components`
+  // purity to 0.5 (below the gate) if tests counted; excluding scaffolding restores it.
+  it('excludes colocated tests so they do not dilute the component directory', () => {
+    const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'ui-colocated-tests'));
+    expect(inferred.segments).toEqual(['components']);
+  });
+
+  // Coverage picks the encompassing `components` over a nested, heavily-importable primitive kit
+  // `components/ui` (the case where raw import fan-in mis-selects the sub-library).
+  it('selects the encompassing layer over a nested primitive kit', () => {
+    const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'ui-nested-kit'));
+    expect(inferred.segments).toEqual(['components']);
+  });
+
+  // Documented limitation: when a shared kit `ui/` (4) and a larger feature dir `settings/` (8) are
+  // siblings with no common parent, coverage picks the larger `settings`. Separating a shared kit from
+  // feature components needs AST-level component detection (planned). Fan-in used to pick `ui` here but
+  // mis-selects primitive sub-libraries on real repos, so it was removed.
+  it('picks the directory holding the most components among unrelated siblings', () => {
     const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'ui-feature'));
-    expect(inferred.segments).toEqual(['ui']);
+    expect(inferred.segments).toEqual(['settings']);
   });
 });
