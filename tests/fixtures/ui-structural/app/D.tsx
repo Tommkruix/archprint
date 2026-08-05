@@ -1,1 +1,1 @@
-export const D = () => null;
+export const D = () => <div />;

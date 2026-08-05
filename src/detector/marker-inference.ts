@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { ts } from 'ts-morph';
 import { listSourceFiles, walkRepo, type WalkedFile } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
@@ -40,16 +41,76 @@ function isScaffolding(file: WalkedFile): boolean {
   return file.role === 'TEST' || /\.stories\.(ts|tsx)$/.test(file.relativePath);
 }
 
+/** A `React.createElement` / `cloneElement` call, matched structurally (no parent nodes needed). */
+function isCreateElementCall(node: ts.CallExpression): boolean {
+  const callee = node.expression;
+  const name = ts.isPropertyAccessExpression(callee)
+    ? callee.name.text
+    : ts.isIdentifier(callee)
+      ? callee.text
+      : '';
+  return name === 'createElement' || name === 'cloneElement';
+}
+
+/**
+ * A file renders JSX when it contains a JSX element/fragment or a `React.createElement` call: the
+ * definitional "is a component" signal (react-docgen, eslint-plugin-react), far stronger than the `.tsx`
+ * extension. Syntactic parse only (no type checker), so it stays cheap.
+ */
+function rendersJsx(absolutePath: string): boolean {
+  let text: string;
+  try {
+    text = readFileSync(absolutePath, 'utf8');
+  } catch {
+    /* v8 ignore next -- defensive: file listed by the walker but unreadable */
+    return false;
+  }
+  const isTsx = absolutePath.endsWith('.tsx');
+  // JSX syntax is valid only in `.tsx`; a `.ts` file can render only via createElement, so skip the parse
+  // when it cannot contain one.
+  if (!isTsx && !text.includes('createElement') && !text.includes('cloneElement')) return false;
+  const source = ts.createSourceFile(
+    absolutePath,
+    text,
+    ts.ScriptTarget.Latest,
+    false,
+    isTsx ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      node.kind === ts.SyntaxKind.JsxElement ||
+      node.kind === ts.SyntaxKind.JsxFragment ||
+      node.kind === ts.SyntaxKind.JsxSelfClosingElement ||
+      (ts.isCallExpression(node) && isCreateElementCall(node))
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/** A reusable UI component: a path-plausible file (component or unclassified `.ts`) that renders JSX. */
+function isUiComponent(file: WalkedFile): boolean {
+  return (file.role === 'COMPONENT' || file.role === 'UNKNOWN') && rendersJsx(file.absolutePath);
+}
+
 /**
  * Infer this repo's UI-layer specifier marker from its own graph: among directories that are almost
  * exclusively components (specificity), the one holding the largest share of the repo's components
- * (coverage). Coverage selects the encompassing UI layer over both insular feature directories and
- * heavily-imported primitive sub-libraries (e.g. components/ui), which raw import fan-in wrongly favors.
+ * (coverage). A component is identified by rendered JSX (not the `.tsx` extension); route entries and
+ * tests are already excluded. Coverage selects the encompassing UI layer over both insular feature
+ * directories and heavily-imported primitive sub-libraries (e.g. components/ui), which fan-in wrongly favors.
  */
 export function inferUiLayerMarkers(appDir: string): InferredMarkers {
   const files = walkRepo(appDir).filter((file) => !isScaffolding(file));
-  const components = files.filter((file) => file.role === 'COMPONENT');
-  const others = files.filter((file) => file.role !== 'COMPONENT');
+  const components = files.filter(isUiComponent);
+  const componentSet = new Set(components);
+  const others = files.filter((file) => !componentSet.has(file));
   if (components.length < 5) return { markers: [], segments: [], evidence: [] };
 
   const directorySegments = (relativePath: string): string[] => [

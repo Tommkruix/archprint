@@ -1,1 +1,1 @@
-export const Panel = () => null;
+export const Panel = () => <div />;

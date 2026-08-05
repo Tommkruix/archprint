@@ -1,1 +1,1 @@
-export const Nav = () => null;
+export const Nav = () => <div />;

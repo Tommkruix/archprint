@@ -1,1 +1,1 @@
-export const C6 = () => null;
+export const C6 = () => <div />;

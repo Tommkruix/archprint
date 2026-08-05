@@ -1,1 +1,1 @@
-export const Sidebar = () => null;
+export const Sidebar = () => <div />;

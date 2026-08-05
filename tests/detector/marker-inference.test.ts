@@ -81,6 +81,14 @@ describe('inferUiLayerMarkers selection', () => {
     expect(inferred.segments).toEqual(['components']);
   });
 
+  // AST component detection: a component renders JSX, it is not merely a `.tsx` file. A `generated/` dir
+  // of 8 non-JSX `.tsx` type files would out-count `components/` (5) under the old extension rule and be
+  // mis-selected; the JSX check excludes them, and `.ts` files that render via createElement DO count.
+  it('identifies components by rendered JSX, not the .tsx extension', () => {
+    const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'ui-jsx-detect'));
+    expect(inferred.segments).toEqual(['components']);
+  });
+
   // App Router entry files (page/layout) are not reusable components: a page-heavy feature area
   // (`dashboard`, 7 entries) must not out-cover the real `components` layer (5). Route-entry separation
   // keeps the pages out of the component count so `components` wins.

@@ -1,1 +1,1 @@
-export const Card = () => null;
+export const Card = () => <div />;
