@@ -7,6 +7,7 @@ export type Role =
   | 'SERVICE'
   | 'REPOSITORY'
   | 'ROUTE_HANDLER'
+  | 'ROUTE_ENTRY'
   | 'SERVER_ACTION'
   | 'API_HANDLER'
   | 'TRPC_ROUTER'
@@ -73,6 +74,14 @@ const ROLE_RULES: readonly RoleRule[] = [
     id: 'db-directory',
     test: /(\/db\/|\/database\/|\/prisma\/)/,
     confidence: 0.8,
+  },
+  // Next.js App Router entry files render UI but are framework entry points, not reusable components; must
+  // precede the `.tsx` component rule so a page is never counted as part of the shared UI layer.
+  {
+    role: 'ROUTE_ENTRY',
+    id: 'next-app-router-entry',
+    test: /(^|\/)app\/(.*\/)?(page|layout|template|loading|error|not-found|default|global-error)\.tsx?$/,
+    confidence: 0.9,
   },
   { role: 'COMPONENT', id: 'tsx-component', test: /\.tsx$/, confidence: 0.5 },
 ];

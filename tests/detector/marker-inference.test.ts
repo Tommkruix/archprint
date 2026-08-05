@@ -81,6 +81,14 @@ describe('inferUiLayerMarkers selection', () => {
     expect(inferred.segments).toEqual(['components']);
   });
 
+  // App Router entry files (page/layout) are not reusable components: a page-heavy feature area
+  // (`dashboard`, 7 entries) must not out-cover the real `components` layer (5). Route-entry separation
+  // keeps the pages out of the component count so `components` wins.
+  it('does not mistake a page-heavy feature area for the UI layer', () => {
+    const inferred = inferUiLayerMarkers(path.join(here, '..', 'fixtures', 'ui-page-heavy'));
+    expect(inferred.segments).toEqual(['components']);
+  });
+
   // Documented limitation: when a shared kit `ui/` (4) and a larger feature dir `settings/` (8) are
   // siblings with no common parent, coverage picks the larger `settings`. Separating a shared kit from
   // feature components needs AST-level component detection (planned). Fan-in used to pick `ui` here but
