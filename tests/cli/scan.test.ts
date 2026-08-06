@@ -13,17 +13,18 @@ const fixture = path.join(here, '..', 'fixtures', 'ui-infer');
 
 function fakePattern(id: string, status: GenerationStatus): ScannedPattern {
   const violatingFileCount = status === 'AUTO' ? 0 : 4;
-  const gate = evaluateGate({ roleFileCount: 20, violatingFileCount, roleConfidence: 0.9 });
+  // 50 observations clears the Wilson floor when clean (AUTO); 4 exceptions keeps it a SUGGEST.
+  const gate = evaluateGate({ roleFileCount: 50, violatingFileCount, roleConfidence: 0.9 });
   const result: DetectedPattern = {
     id,
     name: `rule-${id}`,
     description: 'd',
     roles: REQUEST_ENTRY_ROLES,
     stats: {
-      roleFileCount: 20,
-      conformingFileCount: 20 - violatingFileCount,
+      roleFileCount: 50,
+      conformingFileCount: 50 - violatingFileCount,
       violatingFileCount,
-      ratio: gate.conditions.ratio.value,
+      ratio: gate.observedConformance,
       roleConfidence: 0.9,
     },
     gate,

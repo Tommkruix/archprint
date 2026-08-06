@@ -123,7 +123,7 @@ function buildPattern(
       roleFileCount,
       conformingFileCount: roleFileCount - violatingFileCount,
       violatingFileCount,
-      ratio: gate.conditions.ratio.value,
+      ratio: gate.observedConformance,
       roleConfidence: gate.conditions.roleConfidence.value,
     },
     gate,

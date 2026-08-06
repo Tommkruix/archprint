@@ -1,4 +1,4 @@
 import { util } from '@/lib/util';
 export async function GET() {
-  return new Response(String(util));
+  return new Response(String(util) + '36');
 }

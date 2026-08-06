@@ -13,11 +13,14 @@ const yellow = paint('33');
 function patternLines(pattern: ScannedPattern): string[] {
   const { config, result } = pattern;
   const { stats, infraCaution } = result;
-  const confidence = stats.ratio >= 1 ? '100%' : `${(stats.ratio * 100).toFixed(1)}%`;
+  // "confidence" is the Wilson lower bound (the statistical confidence), NOT the observed rate: 9/9 is
+  // 100% observed but only ~70% confident. Show both so the number is not misleading.
+  const floor = `${(result.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+  const observed = stats.ratio >= 1 ? '100%' : `${(stats.ratio * 100).toFixed(1)}%`;
   const lines = [
-    `  ${bold(config.id)}  ${config.name.padEnd(32)} confidence ${confidence}`,
+    `  ${bold(config.id)}  ${config.name.padEnd(32)} confidence ${floor}`,
     dim(
-      `          Evidence: ${stats.conformingFileCount}/${stats.roleFileCount} server-entry files conform`,
+      `          Evidence: ${stats.conformingFileCount}/${stats.roleFileCount} role files conform (${observed} observed)`,
     ),
   ];
   if (stats.violatingFileCount > 0) {
@@ -92,6 +95,11 @@ export function renderExplain(pattern: ScannedPattern): string {
       `  [${mark}] ${name.padEnd(15)} ${String(condition.value).padStart(6)}   threshold ${condition.threshold}`,
     );
   }
+  lines.push(
+    dim(
+      `  observations: ${result.gate.observations} (${(result.gate.observedConformance * 100).toFixed(1)}% conforming); confidence floor is the Wilson 95% lower bound`,
+    ),
+  );
   if (result.violations.length > 0) {
     lines.push('', 'Exceptions:');
     for (const violation of result.violations.slice(0, 10)) {

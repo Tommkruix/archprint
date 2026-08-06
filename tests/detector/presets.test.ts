@@ -34,7 +34,7 @@ describe('detector presets', () => {
   it('detectNoDbInRequestEntry classifies the request-entry files with the default markers', () => {
     const result = detectNoDbInRequestEntry(fixture('cli-auto'));
     expect(result.name).toBe('no-direct-db-in-request-entry');
-    expect(result.stats.roleFileCount).toBe(22); // cli-auto has 22 route handlers
+    expect(result.stats.roleFileCount).toBe(45); // cli-auto has 45 route handlers
     expect(Array.isArray(result.violations)).toBe(true);
   });
 });

@@ -118,12 +118,12 @@ module that itself imports a component) is out of scope.
 
 | gate condition | value | threshold | result |
 |---|---|---|---|
-| ratio (conforming) | ${(ratio * 100).toFixed(1)}% (${roleFileCount - violatingFileCount}/${roleFileCount}) | >= 90% | ${pass(gate.ratio.pass)} |
-| evidence (files) | ${roleFileCount} | >= 20 | ${pass(gate.evidence.pass)} |
+| conformance (95% lower bound) | ${(gate.confidence.value * 100).toFixed(1)}% floor, ${(ratio * 100).toFixed(1)}% observed (${roleFileCount - violatingFileCount}/${roleFileCount}) | >= 90% | ${pass(gate.confidence.pass)} |
 | exceptions | ${violatingFileCount} | <= 3 | ${pass(gate.exceptions.pass)} |
 | role confidence | ${roleConfidence.toFixed(2)} | >= 0.80 | ${pass(gate.roleConfidence.pass)} |
 
-Status: **${result.gate.status}** (all four conditions must pass to auto-generate).
+Status: **${result.gate.status}** (all conditions must pass to auto-generate; the conformance floor is the
+Wilson 95% lower bound over ${roleFileCount} observations, so a thin sample cannot auto-generate).
 ${
   example
     ? `\n## The one exception in the source repo\n\n\`${example.file}\` imports \`${example.specifier}\`. Review whether it is a genuine violation or a legitimate exception before enforcing.`
