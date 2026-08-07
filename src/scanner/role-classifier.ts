@@ -109,11 +109,34 @@ export function classifyFile(relativePath: string): RoleClassification {
   return { role: 'UNKNOWN', confidence: 0, matchedRule: null };
 }
 
-/** A module-level `"use server"` directive as the first statement (ignoring comments/blank lines). */
-const USE_SERVER_DIRECTIVE = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)\s*)*["']use server["']/;
+const USE_SERVER_LITERAL = /^["']use server["']/;
+const isWhitespace = (c: string): boolean =>
+  c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 
+/**
+ * True when the first statement is a module-level `"use server"` / `'use server'` directive, allowing
+ * leading whitespace and comments. Scans linearly (skipping whitespace, line comments, and block comments)
+ * rather than one backtracking regex: a head full of comment tokens must never cause catastrophic
+ * backtracking (ReDoS). Only the final fixed-literal check uses a regex.
+ */
 export function hasUseServerDirective(sourceHead: string): boolean {
-  return USE_SERVER_DIRECTIVE.test(sourceHead);
+  let i = 0;
+  const n = sourceHead.length;
+  for (;;) {
+    while (i < n && isWhitespace(sourceHead[i]!)) i++;
+    if (sourceHead.startsWith('//', i)) {
+      const newline = sourceHead.indexOf('\n', i);
+      if (newline === -1) return false;
+      i = newline + 1;
+    } else if (sourceHead.startsWith('/*', i)) {
+      const end = sourceHead.indexOf('*/', i + 2);
+      if (end === -1) return false;
+      i = end + 2;
+    } else {
+      break;
+    }
+  }
+  return USE_SERVER_LITERAL.test(sourceHead.slice(i));
 }
 
 /**

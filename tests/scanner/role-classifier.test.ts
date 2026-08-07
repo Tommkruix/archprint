@@ -60,8 +60,20 @@ describe('use-server directive detection', () => {
   it('detects a top-of-file directive, ignoring leading comments', () => {
     expect(hasUseServerDirective('"use server";\nimport x from "y";')).toBe(true);
     expect(hasUseServerDirective("// header\n'use server'\n")).toBe(true);
+    expect(hasUseServerDirective('/* license\n block */\n"use server";')).toBe(true);
     expect(hasUseServerDirective('import x from "y";\n"use server";')).toBe(false);
     expect(hasUseServerDirective('export const x = 1;')).toBe(false);
+    expect(hasUseServerDirective('/* unterminated comment "use server"')).toBe(false);
+    expect(hasUseServerDirective('// line comment, no newline, then EOF')).toBe(false);
+  });
+
+  // Regression: the directive check must be LINEAR, a comment-heavy head must never blow up (ReDoS).
+  // The old backtracking regex took ~6s at 20 comment tokens; this must be instant at 200.
+  it('is linear on a comment-heavy head (no catastrophic backtracking)', () => {
+    const pathological = '/*x*/ '.repeat(200) + '!';
+    const start = Date.now();
+    expect(hasUseServerDirective(pathological)).toBe(false);
+    expect(Date.now() - start).toBeLessThan(100);
   });
 });
 
