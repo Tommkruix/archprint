@@ -101,3 +101,8 @@ export {
   layerGraphEdges,
   type LayerGraphEdge,
 } from './generator/graph-emitters.js';
+export {
+  toDependencyCruiserPublicApi,
+  type DeepImportConfig,
+  type DeepImportRule,
+} from './generator/public-api-emitters.js';

@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
+import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -45,6 +46,23 @@ export function writeLayerConfig(
     write('dependency-cruiser.archprint.json', dependencyCruiser),
     write('eslint-boundaries.archprint.json', toEslintBoundaries(scan.layerBoundaries, statuses)),
   ];
+}
+
+/**
+ * Write the inferred public-API boundaries as a dependency-cruiser deep-import ruleset. Returns the file
+ * paths written, empty when no group qualifies at the requested statuses.
+ */
+export function writePublicApiConfig(
+  scan: ScanResult,
+  outDir: string,
+  statuses: readonly GenerationStatus[] = ['AUTO'],
+): string[] {
+  const config = toDependencyCruiserPublicApi(scan.publicApi.groups, statuses);
+  if (config.forbidden.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'dependency-cruiser.public-api.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
 }
 
 /**

@@ -10,6 +10,7 @@ const auto = fixture('cli-auto'); // gates AP-002 AUTO
 const reject = fixture('ui-infer'); // nothing meets the gate
 const layerAuto = fixture('layer-auto'); // gates a helpers !-> views layer boundary AUTO
 const multiApp = fixture('multi-app'); // two sibling app dirs under one root
+const publicApiAuto = fixture('public-api-auto'); // a barrel with 36 clean consumers gates AUTO
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -69,6 +70,12 @@ describe('cli program', () => {
     expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'eslint-boundaries.archprint.json'))).toBe(true);
     expect(output()).toContain('layer boundaries');
+  });
+
+  it('generate writes the public-API deep-import config for an AUTO barrel', async () => {
+    await run(['generate', publicApiAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.public-api.archprint.json'))).toBe(true);
+    expect(output()).toContain('public API boundaries');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

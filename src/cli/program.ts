@@ -5,7 +5,13 @@ import { Command } from 'commander';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
-import { emitOne, writeGraph, writeLayerConfig, writeRules } from './generate.js';
+import {
+  emitOne,
+  writeGraph,
+  writeLayerConfig,
+  writePublicApiConfig,
+  writeRules,
+} from './generate.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -93,8 +99,14 @@ export function buildProgram(version = readVersion()): Command {
       const outDir = path.resolve(options.out);
       const written = writeRules(scan, outDir, ['AUTO']);
       const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
+      const apiFiles = writePublicApiConfig(scan, outDir, ['AUTO']);
       const graphFiles = writeGraph(scan, outDir);
-      if (written.length === 0 && layerFiles.length === 0 && graphFiles.length === 0) {
+      if (
+        written.length === 0 &&
+        layerFiles.length === 0 &&
+        apiFiles.length === 0 &&
+        graphFiles.length === 0
+      ) {
         console.log('No AUTO rules to generate.');
         return;
       }
@@ -111,6 +123,11 @@ export function buildProgram(version = readVersion()): Command {
         console.log(
           `  (${count} layer boundaries: dependency-cruiser and eslint-plugin-boundaries)`,
         );
+      }
+      for (const file of apiFiles) report(file);
+      if (apiFiles.length > 0) {
+        const count = scan.publicApi.groups.filter((group) => group.gate.status === 'AUTO').length;
+        console.log(`  (${count} public API boundaries: dependency-cruiser deep-import rules)`);
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

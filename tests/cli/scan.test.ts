@@ -14,7 +14,12 @@ import type {
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
-import { writeGraph, writeLayerConfig, writeRules } from '../../src/cli/generate.js';
+import {
+  writeGraph,
+  writeLayerConfig,
+  writePublicApiConfig,
+  writeRules,
+} from '../../src/cli/generate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'ui-infer');
@@ -351,6 +356,28 @@ describe('cli generate', () => {
     };
     expect(config.forbidden[0]!.name).toBe('no-utils-to-api');
     expect(files.some((file) => file.endsWith('eslint-boundaries.archprint.json'))).toBe(true);
+  });
+
+  it('writes a public-API deep-import config for AUTO groups, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
+    };
+    const files = writePublicApiConfig(scan, outDir, ['AUTO']);
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-deep-import-features-auth');
+
+    const none: ScanResult = { ...scan, publicApi: emptyPublicApi() };
+    expect(writePublicApiConfig(none, outDir, ['AUTO'])).toEqual([]);
   });
 
   it('writes no layer config when there are no AUTO boundaries', () => {
