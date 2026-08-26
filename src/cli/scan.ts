@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { listSourceFiles } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
 import { detectLayerBoundaries, type LayerBoundary } from '../detector/layer-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
@@ -22,6 +23,7 @@ export interface ScanResult {
   aliasCount: number;
   patterns: ScannedPattern[];
   layerBoundaries: LayerBoundary[];
+  cycles: CycleAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -61,5 +63,8 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const layerBoundaries = detectLayerBoundaries(appDir, {
     resolve: options.deep ?? false,
   }).boundaries;
-  return { appDir, fileCount, aliasCount, patterns, layerBoundaries };
+  // Cycle detection is graph-structural; the fast file-resolver is faithful to deep resolution, so it always
+  // uses fast mode (avoids a slow, redundant third type-checked pass on --deep).
+  const cycles = detectCycles(appDir, { resolve: false });
+  return { appDir, fileCount, aliasCount, patterns, layerBoundaries, cycles };
 }

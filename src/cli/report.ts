@@ -95,6 +95,18 @@ export function renderReport(
     }
     lines.push('');
   }
+  if (scan.cycles.cycles.length > 0) {
+    lines.push(yellow(bold(`CIRCULAR DEPENDENCIES (${scan.cycles.cycles.length})`)));
+    for (const cycle of scan.cycles.cycles.slice(0, 5)) {
+      lines.push(dim(`  ${cycle.files.join(' -> ')}`));
+    }
+    if (scan.cycles.cycles.length > 5) {
+      lines.push(dim(`  ... and ${scan.cycles.cycles.length - 5} more`));
+    }
+    lines.push('');
+  } else if (scan.cycles.gate.status === 'AUTO') {
+    lines.push(green('No circular dependencies (the no-cycles rule is enforceable).'), '');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

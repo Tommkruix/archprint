@@ -3,7 +3,12 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
-import type { DetectedPattern, GenerationStatus, LayerBoundary } from '../../src/index.js';
+import type {
+  CycleAnalysis,
+  DetectedPattern,
+  GenerationStatus,
+  LayerBoundary,
+} from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import { writeLayerConfig, writeRules } from '../../src/cli/generate.js';
@@ -41,6 +46,31 @@ function fakePattern(id: string, status: GenerationStatus): ScannedPattern {
       forbidden: [/x/],
     },
     result,
+  };
+}
+
+function emptyCycles(): CycleAnalysis {
+  return {
+    appDir: 'x',
+    fileCount: 0,
+    cycles: [],
+    filesInCycles: 0,
+    gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
+  };
+}
+
+function withCycles(cycleFiles: string[][], fileCount: number): CycleAnalysis {
+  const filesInCycles = new Set(cycleFiles.flat()).size;
+  return {
+    appDir: 'x',
+    fileCount,
+    cycles: cycleFiles.map((files) => ({ files })),
+    filesInCycles,
+    gate: evaluateGate({
+      roleFileCount: fileCount,
+      violatingFileCount: filesInCycles,
+      roleConfidence: 1,
+    }),
   };
 }
 
@@ -99,6 +129,7 @@ describe('cli scan', () => {
       aliasCount: 2,
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
       layerBoundaries: [],
+      cycles: emptyCycles(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -114,10 +145,37 @@ describe('cli scan', () => {
       aliasCount: 1,
       patterns: [],
       layerBoundaries: [fakeLayerBoundary('shared', 'components', 40)],
+      cycles: emptyCycles(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
     expect(report).toContain('shared !-> components');
+  });
+
+  it('reports circular dependencies when present', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: withCycles([['a.ts', 'b.ts']], 10),
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('CIRCULAR DEPENDENCIES');
+    expect(report).toContain('a.ts -> b.ts');
+  });
+
+  it('reports a clean no-cycles rule when the repo is cycle-free', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 40,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: withCycles([], 40),
+    };
+    expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
 
   it('reports nothing-generatable and omits the footer in deep mode', () => {
@@ -127,6 +185,7 @@ describe('cli scan', () => {
       aliasCount: 0,
       patterns: [],
       layerBoundaries: [],
+      cycles: emptyCycles(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -143,6 +202,7 @@ describe('cli scan', () => {
       aliasCount: 0,
       patterns: [pattern],
       layerBoundaries: [],
+      cycles: emptyCycles(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -166,6 +226,7 @@ describe('cli generate', () => {
       aliasCount: 1,
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
       layerBoundaries: [],
+      cycles: emptyCycles(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -181,6 +242,7 @@ describe('cli generate', () => {
       aliasCount: 1,
       patterns: [],
       layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      cycles: emptyCycles(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -199,6 +261,7 @@ describe('cli generate', () => {
       aliasCount: 1,
       patterns: [],
       layerBoundaries: [],
+      cycles: emptyCycles(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });
