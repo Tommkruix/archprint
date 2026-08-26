@@ -1,6 +1,6 @@
-import { closeSync, openSync, readSync, readdirSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
-import { type ImportDeclaration, Project, type SourceFile } from 'ts-morph';
+import { type ImportDeclaration, Project, type SourceFile, SyntaxKind } from 'ts-morph';
 import { isBarrelFile, resolveToLeafFiles } from './barrel-resolver.js';
 import {
   classifyFile,
@@ -50,6 +50,19 @@ function importHasValueBinding(importDeclaration: ImportDeclaration): boolean {
   const sideEffectOnly = named.length === 0 && !hasDefault && !hasNamespace;
   return hasValueNamed || hasDefault || hasNamespace || sideEffectOnly;
 }
+
+/** String specifiers of dynamic `import('...')` calls: runtime module loads the static scan would miss. */
+function dynamicImportSpecifiers(sourceFile: SourceFile): string[] {
+  const specifiers: string[] = [];
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getExpression().getKind() !== SyntaxKind.ImportKeyword) continue;
+    const argument = call.getArguments()[0]?.asKind(SyntaxKind.StringLiteral);
+    if (argument !== undefined) specifiers.push(argument.getLiteralValue());
+  }
+  return specifiers;
+}
+
+const DYNAMIC_FILE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
 
 /**
  * Recursively list `.ts`/`.tsx` source files under a directory, skipping build/vendor and
@@ -130,6 +143,31 @@ export function createImportAnalyzer(
   const aliases = Object.keys(buildWorkspaceMap(appDir));
   const workspacePackages = Object.keys(buildWorkspacePackageMap(findWorkspaceRoot(appDir)));
 
+  const aliasDirs = Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
+    prefix: key.replace(/\/?\*$/, ''),
+    dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
+  }));
+  // Resolve a dynamic-import specifier to a first-party source file (relative path or tsconfig alias), fast.
+  const resolveDynamicFile = (specifier: string, containingFile: string): string | undefined => {
+    let base: string | undefined;
+    if (specifier.startsWith('.')) {
+      base = path.resolve(path.dirname(containingFile), specifier);
+    } else {
+      for (const { prefix, dir } of aliasDirs) {
+        if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
+          base = path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, ''));
+          break;
+        }
+      }
+    }
+    if (base === undefined) return undefined;
+    for (const suffix of DYNAMIC_FILE_CANDIDATES) {
+      const candidate = base + suffix;
+      if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return candidate;
+    }
+    return undefined;
+  };
+
   // exported name -> leaf files that define it, following re-exports.
   const exportedLeafCache = new Map<string, Map<string, Set<string>>>();
   const exportedLeaves = (target: SourceFile): Map<string, Set<string>> => {
@@ -163,64 +201,97 @@ export function createImportAnalyzer(
 
   return (absoluteFilePath: string): ResolvedImport[] => {
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
-    return sourceFile.getImportDeclarations().map((importDeclaration) => {
-      const specifier = importDeclaration.getModuleSpecifierValue();
-      const hasValueBinding = importHasValueBinding(importDeclaration);
-      if (!resolve) {
-        return {
-          specifier,
-          edgeKind: classifyEdge(specifier, undefined),
-          throughBarrel: false,
-          valueLeafPaths: [],
-          typeLeafPaths: [],
-          hasValueBinding,
-        };
-      }
-      const target = importDeclaration.getModuleSpecifierSourceFile();
-      const edgeKind = classifyEdge(specifier, target);
-      const throughBarrel = target !== undefined && isBarrelFile(target);
-      const valueLeaves = new Set<string>();
-      const typeLeaves = new Set<string>();
-
-      if (target !== undefined) {
-        const declarationIsTypeOnly = importDeclaration.isTypeOnly();
-        const named = importDeclaration.getNamedImports();
-        const namespaceImport = importDeclaration.getNamespaceImport();
-        const defaultImport = importDeclaration.getDefaultImport();
-        // Only barrels need the type checker to trace where a re-exported name is defined; a
-        // non-barrel defines its own names, so the leaf is the target file itself.
-        const exported = throughBarrel ? exportedLeaves(target) : null;
-
-        const attribute = (name: string, isTypeOnly: boolean): void => {
-          const leaves = exported?.get(name) ?? new Set([target.getFilePath()]);
-          for (const leaf of leaves) (isTypeOnly ? typeLeaves : valueLeaves).add(leaf);
-        };
-
-        for (const namedImport of named) {
-          attribute(namedImport.getName(), declarationIsTypeOnly || namedImport.isTypeOnly());
+    const results: ResolvedImport[] = sourceFile
+      .getImportDeclarations()
+      .map((importDeclaration) => {
+        const specifier = importDeclaration.getModuleSpecifierValue();
+        const hasValueBinding = importHasValueBinding(importDeclaration);
+        if (!resolve) {
+          return {
+            specifier,
+            edgeKind: classifyEdge(specifier, undefined),
+            throughBarrel: false,
+            valueLeafPaths: [],
+            typeLeafPaths: [],
+            hasValueBinding,
+          };
         }
-        if (defaultImport !== undefined) {
-          attribute('default', declarationIsTypeOnly);
-        }
-        if (namespaceImport !== undefined || (named.length === 0 && defaultImport === undefined)) {
-          const bucket = declarationIsTypeOnly ? typeLeaves : valueLeaves;
-          if (throughBarrel) {
-            for (const leaf of resolveToLeafFiles(target)) bucket.add(leaf.getFilePath());
-          } else {
-            bucket.add(target.getFilePath());
+        const target = importDeclaration.getModuleSpecifierSourceFile();
+        const edgeKind = classifyEdge(specifier, target);
+        const throughBarrel = target !== undefined && isBarrelFile(target);
+        const valueLeaves = new Set<string>();
+        const typeLeaves = new Set<string>();
+
+        if (target !== undefined) {
+          const declarationIsTypeOnly = importDeclaration.isTypeOnly();
+          const named = importDeclaration.getNamedImports();
+          const namespaceImport = importDeclaration.getNamespaceImport();
+          const defaultImport = importDeclaration.getDefaultImport();
+          // Only barrels need the type checker to trace where a re-exported name is defined; a
+          // non-barrel defines its own names, so the leaf is the target file itself.
+          const exported = throughBarrel ? exportedLeaves(target) : null;
+
+          const attribute = (name: string, isTypeOnly: boolean): void => {
+            const leaves = exported?.get(name) ?? new Set([target.getFilePath()]);
+            for (const leaf of leaves) (isTypeOnly ? typeLeaves : valueLeaves).add(leaf);
+          };
+
+          for (const namedImport of named) {
+            attribute(namedImport.getName(), declarationIsTypeOnly || namedImport.isTypeOnly());
+          }
+          if (defaultImport !== undefined) {
+            attribute('default', declarationIsTypeOnly);
+          }
+          if (
+            namespaceImport !== undefined ||
+            (named.length === 0 && defaultImport === undefined)
+          ) {
+            const bucket = declarationIsTypeOnly ? typeLeaves : valueLeaves;
+            if (throughBarrel) {
+              for (const leaf of resolveToLeafFiles(target)) bucket.add(leaf.getFilePath());
+            } else {
+              bucket.add(target.getFilePath());
+            }
           }
         }
-      }
 
-      return {
+        return {
+          specifier,
+          edgeKind,
+          throughBarrel,
+          valueLeafPaths: [...valueLeaves],
+          typeLeafPaths: [...typeLeaves],
+          hasValueBinding,
+        };
+      });
+
+    for (const specifier of dynamicImportSpecifiers(sourceFile)) {
+      let target: SourceFile | undefined;
+      if (resolve) {
+        const file = resolveDynamicFile(specifier, absoluteFilePath);
+        target =
+          file === undefined ? undefined : (project.addSourceFileAtPathIfExists(file) ?? undefined);
+      }
+      const throughBarrel = target !== undefined && isBarrelFile(target);
+      const valueLeaves = new Set<string>();
+      if (target !== undefined) {
+        if (throughBarrel) {
+          for (const leaf of resolveToLeafFiles(target)) valueLeaves.add(leaf.getFilePath());
+        } else {
+          valueLeaves.add(target.getFilePath());
+        }
+      }
+      // A dynamic import always loads the module at runtime: a value dependency.
+      results.push({
         specifier,
-        edgeKind,
+        edgeKind: classifyEdge(specifier, target),
         throughBarrel,
         valueLeafPaths: [...valueLeaves],
-        typeLeafPaths: [...typeLeaves],
-        hasValueBinding,
-      };
-    });
+        typeLeafPaths: [],
+        hasValueBinding: true,
+      });
+    }
+    return results;
   };
 }
 
