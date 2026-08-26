@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
-import type { DetectedPattern, GenerationStatus } from '../../src/index.js';
+import type { DetectedPattern, GenerationStatus, LayerBoundary } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import { writeRules } from '../../src/cli/generate.js';
@@ -44,6 +44,27 @@ function fakePattern(id: string, status: GenerationStatus): ScannedPattern {
   };
 }
 
+function fakeLayerBoundary(from: string, to: string, roleFileCount: number): LayerBoundary {
+  const gate = evaluateGate({ roleFileCount, violatingFileCount: 0, roleConfidence: 1 });
+  return {
+    id: 'AP-LAYER',
+    name: `no-import:${from}->${to}`,
+    from,
+    to,
+    description: 'layer boundary',
+    stats: {
+      roleFileCount,
+      conformingFileCount: roleFileCount,
+      violatingFileCount: 0,
+      ratio: 1,
+      roleConfidence: 1,
+    },
+    gate,
+    violations: [],
+    reverseFlow: 20,
+  };
+}
+
 describe('cli scan', () => {
   it('runs the full pipeline on a fixture and renders a report', () => {
     const scan = scanRepo(fixture);
@@ -77,6 +98,7 @@ describe('cli scan', () => {
       fileCount: 100,
       aliasCount: 2,
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
+      layerBoundaries: [],
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -85,8 +107,27 @@ describe('cli scan', () => {
     expect(report).toContain('archprint approve AP-001');
   });
 
+  it('renders inferred layer boundaries in their own section', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 100,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [fakeLayerBoundary('shared', 'components', 40)],
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('LAYER BOUNDARIES');
+    expect(report).toContain('shared !-> components');
+  });
+
   it('reports nothing-generatable and omits the footer in deep mode', () => {
-    const empty: ScanResult = { appDir: 'x', fileCount: 5, aliasCount: 0, patterns: [] };
+    const empty: ScanResult = {
+      appDir: 'x',
+      fileCount: 5,
+      aliasCount: 0,
+      patterns: [],
+      layerBoundaries: [],
+    };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
     expect(report).toContain('(0.0s)');
@@ -96,7 +137,13 @@ describe('cli scan', () => {
   it('flags an infrastructure-only exception set with caution', () => {
     const pattern = fakePattern('AP-002', 'SUGGEST');
     pattern.result.infraCaution = true;
-    const scan: ScanResult = { appDir: 'x', fileCount: 1, aliasCount: 0, patterns: [pattern] };
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 1,
+      aliasCount: 0,
+      patterns: [pattern],
+      layerBoundaries: [],
+    };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
 
@@ -118,6 +165,7 @@ describe('cli generate', () => {
       fileCount: 10,
       aliasCount: 1,
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
+      layerBoundaries: [],
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);

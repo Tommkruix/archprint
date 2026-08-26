@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { listSourceFiles } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { detectLayerBoundaries, type LayerBoundary } from '../detector/layer-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -20,6 +21,7 @@ export interface ScanResult {
   fileCount: number;
   aliasCount: number;
   patterns: ScannedPattern[];
+  layerBoundaries: LayerBoundary[];
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -56,5 +58,8 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
 
   const results = detectForbiddenImports(appDir, configs, { resolve: options.deep ?? false });
   const patterns = configs.map((config, index) => ({ config, result: results[index]! }));
-  return { appDir, fileCount, aliasCount, patterns };
+  const layerBoundaries = detectLayerBoundaries(appDir, {
+    resolve: options.deep ?? false,
+  }).boundaries;
+  return { appDir, fileCount, aliasCount, patterns, layerBoundaries };
 }

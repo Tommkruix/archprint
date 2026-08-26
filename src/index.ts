@@ -1,5 +1,6 @@
 export { buildWorkspaceMap } from './scanner/workspace-resolver.js';
 export { buildWorkspacePackageMap, findWorkspaceRoot } from './scanner/workspace-packages.js';
+export { discoverAppDirs } from './scanner/app-dirs.js';
 export {
   classifyFile,
   ROLE_PATTERNS,
@@ -36,6 +37,14 @@ export {
   type InferredDbMarkers,
   type UiSegmentEvidence,
 } from './detector/marker-inference.js';
+export {
+  detectLayerBoundaries,
+  layerOfPath,
+  type LayerAnalysis,
+  type LayerBoundary,
+  type LayerInfo,
+  type LayerDetectorOptions,
+} from './detector/layer-detector.js';
 export {
   evaluateGate,
   GATE_THRESHOLDS,

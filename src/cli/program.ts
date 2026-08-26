@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
 import { emitOne, writeRules } from './generate.js';
@@ -55,10 +56,24 @@ export function buildProgram(version = readVersion()): Command {
     .argument('[path]', 'app directory (contains tsconfig.json)', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
     .action((input: string, options: { deep?: boolean }) => {
-      const appDir = resolveApp(input);
+      const root = path.resolve(input);
+      const appDirs = discoverAppDirs(root);
+      if (appDirs.length === 0) {
+        throw new Error(
+          `No tsconfig.json found under ${root}. Point archprint at an app directory (a directory with a tsconfig.json); a monorepo root is fine.`,
+        );
+      }
       const started = performance.now();
-      const scan = scanRepo(appDir, { deep: options.deep });
-      console.log(renderReport(scan, version, performance.now() - started, options.deep));
+      const reports = appDirs.map((appDir) => {
+        const scan = scanRepo(appDir, { deep: options.deep });
+        const label = appDirs.length > 1 ? `### ${path.relative(root, appDir) || '.'}\n` : '';
+        return label + renderReport(scan, version, undefined, options.deep);
+      });
+      console.log(reports.join('\n\n'));
+      if (appDirs.length > 1) {
+        const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+        console.log(`\nScanned ${appDirs.length} app directories in ${elapsed}s.`);
+      }
     });
 
   program
