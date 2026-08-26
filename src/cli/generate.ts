@@ -5,7 +5,6 @@ import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emit
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
-/** Emit the four artifacts for every pattern whose gate status is in `statuses`. Returns the dirs written. */
 export function writeRules(
   scan: ScanResult,
   outDir: string,
@@ -19,7 +18,6 @@ export function writeRules(
   return written;
 }
 
-/** Emit the four artifacts for a single pattern. */
 export function emitOne(pattern: ScannedPattern, appDir: string, outDir: string): string {
   return emitRuleArtifacts(pattern.config, pattern.result, outDir, `archprint scan ${appDir}`);
 }
