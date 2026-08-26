@@ -46,6 +46,12 @@ export {
   type LayerDetectorOptions,
 } from './detector/layer-detector.js';
 export {
+  detectCycles,
+  type CycleAnalysis,
+  type CycleDetectorOptions,
+  type ImportCycle,
+} from './detector/cycle-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
