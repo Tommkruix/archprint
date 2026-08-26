@@ -1,7 +1,7 @@
 {
   "name": "archprint",
   "version": "0.1.0",
-  "description": "Generate deterministic, evidence-backed ESLint rules from the architecture your TypeScript repo already follows.",
+  "description": "Mine the architecture rules your TypeScript repo already enforces, with the evidence attached.",
   "keywords": [
     "eslint",
     "eslint-plugin",
