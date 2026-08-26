@@ -64,6 +64,14 @@ describe('inferDbClientMarkers', () => {
     const inferred = inferDbClientMarkers(fixtureFor('monorepo-db/apps/web'));
     expect(inferred.wrappers).toContain('@acme/db');
   });
+
+  // A whole-declaration `export type { X } from '@prisma/client'` re-exposes only types (erased at compile
+  // time), so it is not a runtime db surface and must not be minted as a wrapper.
+  it('does not treat a type-only db re-export as a wrapper', () => {
+    const inferred = inferDbClientMarkers(fixtureFor('db-type-reexport'));
+    expect(inferred.wrappers).toHaveLength(0);
+    expect(inferred.markers.some((marker) => marker.test('@/lib/types'))).toBe(false);
+  });
 });
 
 describe('inferUiLayerMarkers selection', () => {

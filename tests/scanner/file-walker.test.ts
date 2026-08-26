@@ -37,4 +37,29 @@ describe('analyzeImports', () => {
     expect(imported?.valueLeafPaths.some((p) => p.endsWith('/leaf.ts'))).toBe(true);
     expect(imported?.valueLeafPaths.some((p) => p.endsWith('/index.ts'))).toBe(false);
   });
+
+  // dyn-variants/entry.ts: a resolved default import plus four dynamic imports (relative, external,
+  // aliased-but-missing, and through a barrel), covering every dynamic-resolution branch.
+  it('resolves default and dynamic imports across relative, external, missing, and barrel targets', () => {
+    const dir = path.join(walkerFixture, '..', 'dyn-variants');
+    const imports = analyzeImports(dir, path.join(dir, 'entry.ts'));
+    const bySpecifier = new Map(imports.map((imp) => [imp.specifier, imp]));
+
+    // Default import resolves to the leaf that defines it.
+    expect(bySpecifier.get('./leaf')?.valueLeafPaths.some((p) => p.endsWith('/leaf.ts'))).toBe(
+      true,
+    );
+    // A relative dynamic import resolves to a first-party file.
+    expect(
+      imports.filter((imp) => imp.specifier === './leaf' && imp.valueLeafPaths.length > 0).length,
+    ).toBeGreaterThan(0);
+    // An external dynamic import resolves to no first-party leaf.
+    expect(bySpecifier.get('node:path')?.valueLeafPaths).toEqual([]);
+    // An aliased dynamic import with no target file resolves to nothing.
+    expect(bySpecifier.get('@/missing')?.valueLeafPaths).toEqual([]);
+    // A dynamic import through a barrel resolves to the re-exported leaf.
+    expect(bySpecifier.get('@/barrel')?.valueLeafPaths.some((p) => p.endsWith('/impl.ts'))).toBe(
+      true,
+    );
+  });
 });

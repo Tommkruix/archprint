@@ -8,6 +8,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => path.join(here, '..', 'fixtures', name);
 const auto = fixture('cli-auto'); // gates AP-002 AUTO
 const reject = fixture('ui-infer'); // nothing meets the gate
+const layerAuto = fixture('layer-auto'); // gates a helpers !-> views layer boundary AUTO
+const multiApp = fixture('multi-app'); // two sibling app dirs under one root
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -62,6 +64,20 @@ describe('cli program', () => {
     expect(output()).toContain('No AUTO rules to generate');
   });
 
+  it('generate writes the layer-boundary configs for an AUTO boundary', async () => {
+    await run(['generate', layerAuto, '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'eslint-boundaries.archprint.json'))).toBe(true);
+    expect(output()).toContain('layer boundaries');
+  });
+
+  it('scan of a multi-app root reports every app and a summary footer', async () => {
+    await run(['scan', multiApp]);
+    expect(output()).toContain('### app-a');
+    expect(output()).toContain('### app-b');
+    expect(output()).toContain('Scanned 2 app directories');
+  });
+
   it('explain shows the gate breakdown', async () => {
     await run(['explain', 'AP-002', auto]);
     expect(output()).toContain('Gate:');
@@ -79,6 +95,10 @@ describe('cli program', () => {
 
   it('errors when the path has no tsconfig', async () => {
     await expect(run(['scan', here])).rejects.toThrow(/No tsconfig/);
+  });
+
+  it('explain errors when the app path has no tsconfig', async () => {
+    await expect(run(['explain', 'AP-002', here])).rejects.toThrow(/No tsconfig/);
   });
 
   it('errors when the rule id is unknown', async () => {

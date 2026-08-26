@@ -175,6 +175,7 @@ export function detectLayerBoundaries(
     try {
       imports = analyze(file.absolutePath);
     } catch {
+      /* v8 ignore next -- defensive: analyze throws only on an unreadable/malformed source file */
       imports = [];
     }
     for (const imp of imports) {

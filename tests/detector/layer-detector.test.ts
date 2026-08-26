@@ -52,6 +52,19 @@ describe('detectLayerBoundaries', () => {
     expect(boundary(analysis, 'utils', 'components')).toBeDefined();
   });
 
+  it('gates a large, clean boundary to AUTO from relative imports (fast mode)', () => {
+    // layer-auto: 40 "helpers" leaves + 5 "views" that import them via RELATIVE specifiers. helpers never
+    // import views, so helpers !-> views is the clean minority direction, and 40 clean observations clear the
+    // Wilson floor. Exercises the relative-specifier resolution and the same-layer/type-only skips.
+    const dir = path.join(here, '..', 'fixtures', 'layer-auto');
+    const analysis = detectLayerBoundaries(dir, { resolve: false });
+    const hv = boundary(analysis, 'helpers', 'views');
+    expect(hv).toBeDefined();
+    expect(hv!.stats.violatingFileCount).toBe(0);
+    expect(hv!.stats.roleFileCount).toBe(40);
+    expect(hv!.gate.status).toBe('AUTO');
+  });
+
   it('fast and deep modes agree on the clean boundary', () => {
     const fast = boundary(
       detectLayerBoundaries(fixture, { minLayerFiles: 3, resolve: false }),

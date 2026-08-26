@@ -25,6 +25,21 @@ describe('buildWorkspacePackageMap', () => {
   it('finds the workspace root by walking up from a package', () => {
     expect(findWorkspaceRoot(webDir)).toBe(monorepo);
   });
+
+  const fixture = (name: string): string =>
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', name);
+
+  it('expands both a /** glob and an explicit (wildcard-free) workspace path', () => {
+    const map = buildWorkspacePackageMap(fixture('ws-glob-explicit'));
+    expect(map['@x/a']).toBe(path.join(fixture('ws-glob-explicit'), 'packages', 'a'));
+    expect(map['@x/util']).toBe(path.join(fixture('ws-glob-explicit'), 'libs', 'util'));
+  });
+
+  it('stops the pnpm packages list at the next top-level yaml key', () => {
+    // `catalog:` after the list must end it, not be read as another package glob.
+    const map = buildWorkspacePackageMap(fixture('ws-pnpm-nextkey'));
+    expect(map['@y/p']).toBe(path.join(fixture('ws-pnpm-nextkey'), 'packages', 'p'));
+  });
 });
 
 describe('edge classification with workspace-package awareness', () => {

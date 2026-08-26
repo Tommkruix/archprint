@@ -34,4 +34,11 @@ describe('buildImportGraph', () => {
     const deep = edgesFrom(buildImportGraph(fixture, { resolve: true }), 'entry.ts');
     expect(deep).toEqual(fast);
   });
+
+  it('drops a type-only import (erased at compile time) but keeps the value edge', () => {
+    const graph = buildImportGraph(path.join(here, '..', 'fixtures', 'type-only-graph'));
+    const edges = edgesFrom(graph, 'entry.ts');
+    expect(edges).toContain('v.ts');
+    expect(edges).not.toContain('t.ts');
+  });
 });
