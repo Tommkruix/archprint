@@ -9,6 +9,7 @@ import type {
   GenerationStatus,
   LayerBoundary,
   OrphanAnalysis,
+  PublicApiAnalysis,
   ReachabilityAnalysis,
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
@@ -84,6 +85,25 @@ function emptyReachability(): ReachabilityAnalysis {
   return { appDir: 'x', layers: [], reaches: new Map() };
 }
 
+function emptyPublicApi(): PublicApiAnalysis {
+  return { appDir: 'x', groups: [] };
+}
+
+function fakeApiGroup(dir: string, consumerCount: number, deepImporterCount: number) {
+  return {
+    dir,
+    internalCount: 4,
+    consumerCount,
+    deepImporterCount,
+    gate: evaluateGate({
+      roleFileCount: consumerCount,
+      violatingFileCount: deepImporterCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
 function fakeLayerBoundary(from: string, to: string, roleFileCount: number): LayerBoundary {
   const gate = evaluateGate({ roleFileCount, violatingFileCount: 0, roleConfidence: 1 });
   return {
@@ -142,6 +162,7 @@ describe('cli scan', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -160,6 +181,7 @@ describe('cli scan', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
@@ -180,10 +202,35 @@ describe('cli scan', () => {
         layers: ['utils', 'api'],
         reaches: new Map([['utils', new Set(['api'])]]),
       },
+      publicApi: emptyPublicApi(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('Transitive leak');
     expect(report).toContain('utils reaches api through another layer');
+  });
+
+  it('renders enforceable and suggested public API boundaries', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 100,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      // 40 clean consumers clears the Wilson floor (AUTO); 18/20 (0.90 observed) is a thin-sample SUGGEST.
+      publicApi: {
+        appDir: 'x',
+        groups: [fakeApiGroup('features/auth', 40, 0), fakeApiGroup('features/billing', 20, 2)],
+      },
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('PUBLIC API BOUNDARIES (enforceable)');
+    expect(report).toContain('features/auth (public API)');
+    expect(report).toContain('PUBLIC API BOUNDARIES (suggested)');
+    expect(report).toContain('features/billing (public API)');
+    expect(report).toContain('Deep imports: 2');
   });
 
   it('reports circular dependencies when present', () => {
@@ -196,6 +243,7 @@ describe('cli scan', () => {
       cycles: withCycles([['a.ts', 'b.ts']], 10),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
@@ -212,6 +260,7 @@ describe('cli scan', () => {
       cycles: withCycles([], 40),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
@@ -226,6 +275,7 @@ describe('cli scan', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -245,6 +295,7 @@ describe('cli scan', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -271,6 +322,7 @@ describe('cli generate', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -289,6 +341,7 @@ describe('cli generate', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -310,6 +363,7 @@ describe('cli generate', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });
@@ -326,6 +380,7 @@ describe('cli generate', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
     };
     const files = writeGraph(withBoundaries, outDir);
     expect(files.map((file) => path.basename(file)).sort()).toEqual([

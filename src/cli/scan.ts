@@ -7,6 +7,10 @@ import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js'
 import { detectLayerBoundaries, type LayerBoundary } from '../detector/layer-detector.js';
 import { detectOrphans, type OrphanAnalysis } from '../detector/orphan-detector.js';
 import { computeLayerReachability, type ReachabilityAnalysis } from '../detector/reachability.js';
+import {
+  detectPublicApiBoundaries,
+  type PublicApiAnalysis,
+} from '../detector/public-api-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -29,6 +33,7 @@ export interface ScanResult {
   cycles: CycleAnalysis;
   orphans: OrphanAnalysis;
   reachability: ReachabilityAnalysis;
+  publicApi: PublicApiAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -68,14 +73,14 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const layerBoundaries = detectLayerBoundaries(appDir, {
     resolve: options.deep ?? false,
   }).boundaries;
-  // Cycle detection is graph-structural; the fast file-resolver is faithful to deep resolution, so it always
-  // uses fast mode (avoids a slow, redundant third type-checked pass on --deep).
-  // Cycles, orphans, and reachability are all structural (fast mode is faithful to deep here), so build the
-  // first-party graph once and share it across the three passes.
+  // Cycles, orphans, reachability, and public-API detection are all structural, so build the first-party
+  // graph once (fast: faithful to deep for cycles/orphans/reachability, and required for public-API since
+  // deep resolution would resolve through barrels and erase the barrel-vs-deep signal) and share it.
   const graph = buildImportGraph(appDir, { resolve: false });
   const cycles = detectCycles(appDir, { graph });
   const orphans = detectOrphans(appDir, { graph });
   const reachability = computeLayerReachability(appDir, { graph });
+  const publicApi = detectPublicApiBoundaries(appDir, { graph });
   return {
     appDir,
     fileCount,
@@ -85,5 +90,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     cycles,
     orphans,
     reachability,
+    publicApi,
   };
 }

@@ -1,4 +1,5 @@
 import type { LayerBoundary } from '../detector/layer-detector.js';
+import type { PublicApiGroup } from '../detector/public-api-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
@@ -44,6 +45,20 @@ function layerLines(boundary: LayerBoundary): string[] {
   ];
   if (boundary.stats.violatingFileCount > 0) {
     lines.push(dim(`          Exceptions: ${boundary.stats.violatingFileCount}`));
+  }
+  return lines;
+}
+
+function apiLines(group: PublicApiGroup): string[] {
+  const floor = `${(group.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+  const lines = [
+    `  ${bold(`${group.dir} (public API)`)}  import via the barrel   confidence ${floor}`,
+    dim(
+      `          Evidence: ${group.consumerCount - group.deepImporterCount}/${group.consumerCount} external consumers use the barrel; ${group.internalCount} internal file(s)`,
+    ),
+  ];
+  if (group.deepImporterCount > 0) {
+    lines.push(dim(`          Deep imports: ${group.deepImporterCount}`));
   }
   return lines;
 }
@@ -133,6 +148,19 @@ export function renderReport(
         '  Nothing imports these and they are not framework entries. Suggest only, not enforced.',
       ),
     );
+    lines.push('');
+  }
+  const autoApi = scan.publicApi.groups.filter((g) => g.gate.status === 'AUTO');
+  const suggestApi = scan.publicApi.groups.filter((g) => g.gate.status === 'SUGGEST');
+  if (autoApi.length > 0) {
+    lines.push(green(bold('PUBLIC API BOUNDARIES (enforceable)')));
+    for (const g of autoApi) lines.push(...apiLines(g));
+    lines.push('');
+  }
+  if (suggestApi.length > 0) {
+    lines.push(yellow(bold('PUBLIC API BOUNDARIES (suggested)')));
+    for (const g of suggestApi.slice(0, 8)) lines.push(...apiLines(g));
+    if (suggestApi.length > 8) lines.push(dim(`          ... and ${suggestApi.length - 8} more`));
     lines.push('');
   }
   if (

@@ -68,6 +68,13 @@ export {
   type ReachabilityOptions,
 } from './detector/reachability.js';
 export {
+  detectPublicApiBoundaries,
+  type PublicApiAnalysis,
+  type PublicApiGroup,
+  type PublicApiViolation,
+  type PublicApiDetectorOptions,
+} from './detector/public-api-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
