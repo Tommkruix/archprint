@@ -59,7 +59,7 @@ describe('cli program', () => {
 
   it('generate reports when there is nothing to generate', async () => {
     await run(['generate', reject, '--out', out]);
-    expect(output()).toContain('No AUTO patterns to generate');
+    expect(output()).toContain('No AUTO rules to generate');
   });
 
   it('explain shows the gate breakdown', async () => {

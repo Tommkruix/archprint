@@ -57,3 +57,8 @@ export {
   emitRuleArtifacts,
   type RuleArtifacts,
 } from './generator/rule-generator.js';
+export {
+  toDependencyCruiser,
+  type DependencyCruiserConfig,
+  type DependencyCruiserRule,
+} from './generator/layer-emitters.js';

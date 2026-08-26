@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -6,7 +6,7 @@ import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import type { DetectedPattern, GenerationStatus, LayerBoundary } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
-import { writeRules } from '../../src/cli/generate.js';
+import { writeLayerConfig, writeRules } from '../../src/cli/generate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'ui-infer');
@@ -171,5 +171,33 @@ describe('cli generate', () => {
     expect(written).toHaveLength(1);
     expect(existsSync(path.join(written[0]!, 'rule-AP-002.ts'))).toBe(true);
     expect(existsSync(path.join(written[0]!, 'fixtures', 'failing.ts'))).toBe(true);
+  });
+
+  it('writes a dependency-cruiser config from AUTO layer boundaries', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+    };
+    const file = writeLayerConfig(scan, outDir, ['AUTO']);
+    expect(file).not.toBeNull();
+    const config = JSON.parse(readFileSync(file!, 'utf8')) as {
+      forbidden: { name: string }[];
+    };
+    expect(config.forbidden[0]!.name).toBe('no-utils-to-api');
+  });
+
+  it('writes no layer config when there are no AUTO boundaries', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+    };
+    expect(writeLayerConfig(scan, outDir, ['AUTO'])).toBeNull();
   });
 });

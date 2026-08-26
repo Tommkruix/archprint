@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
-import { emitOne, writeRules } from './generate.js';
+import { emitOne, writeLayerConfig, writeRules } from './generate.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -90,14 +90,25 @@ export function buildProgram(version = readVersion()): Command {
     .action((input: string, options: { out: string; fast?: boolean }) => {
       // Generation is the commitment point, so it gates on the full graph by default; --fast opts out.
       const scan = scanRepo(resolveApp(input), { deep: !options.fast });
-      const written = writeRules(scan, path.resolve(options.out), ['AUTO']);
-      if (written.length === 0) {
-        console.log('No AUTO patterns to generate.');
+      const outDir = path.resolve(options.out);
+      const written = writeRules(scan, outDir, ['AUTO']);
+      const layerConfig = writeLayerConfig(scan, outDir, ['AUTO']);
+      if (written.length === 0 && layerConfig === null) {
+        console.log('No AUTO rules to generate.');
         return;
       }
       for (const dir of written) {
         const relative = path.relative(process.cwd(), dir);
         console.log(`generated ${relative.startsWith('..') ? dir : relative}/`);
+      }
+      if (layerConfig !== null) {
+        const relative = path.relative(process.cwd(), layerConfig);
+        const count = scan.layerBoundaries.filter(
+          (boundary) => boundary.gate.status === 'AUTO',
+        ).length;
+        console.log(
+          `generated ${relative.startsWith('..') ? layerConfig : relative} (${count} layer boundaries, dependency-cruiser)`,
+        );
       }
       if (options.fast) {
         console.log(
