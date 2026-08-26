@@ -2,9 +2,11 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { listSourceFiles } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { buildImportGraph } from '../scanner/import-graph.js';
 import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
 import { detectLayerBoundaries, type LayerBoundary } from '../detector/layer-detector.js';
 import { detectOrphans, type OrphanAnalysis } from '../detector/orphan-detector.js';
+import { computeLayerReachability, type ReachabilityAnalysis } from '../detector/reachability.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -26,6 +28,7 @@ export interface ScanResult {
   layerBoundaries: LayerBoundary[];
   cycles: CycleAnalysis;
   orphans: OrphanAnalysis;
+  reachability: ReachabilityAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -67,8 +70,20 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   }).boundaries;
   // Cycle detection is graph-structural; the fast file-resolver is faithful to deep resolution, so it always
   // uses fast mode (avoids a slow, redundant third type-checked pass on --deep).
-  const cycles = detectCycles(appDir, { resolve: false });
-  // Orphan detection is structural too; fast mode is faithful and avoids a redundant type-checked pass.
-  const orphans = detectOrphans(appDir, { resolve: false });
-  return { appDir, fileCount, aliasCount, patterns, layerBoundaries, cycles, orphans };
+  // Cycles, orphans, and reachability are all structural (fast mode is faithful to deep here), so build the
+  // first-party graph once and share it across the three passes.
+  const graph = buildImportGraph(appDir, { resolve: false });
+  const cycles = detectCycles(appDir, { graph });
+  const orphans = detectOrphans(appDir, { graph });
+  const reachability = computeLayerReachability(appDir, { graph });
+  return {
+    appDir,
+    fileCount,
+    aliasCount,
+    patterns,
+    layerBoundaries,
+    cycles,
+    orphans,
+    reachability,
+  };
 }

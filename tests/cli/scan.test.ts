@@ -9,6 +9,7 @@ import type {
   GenerationStatus,
   LayerBoundary,
   OrphanAnalysis,
+  ReachabilityAnalysis,
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
@@ -79,6 +80,10 @@ function emptyOrphans(): OrphanAnalysis {
   return { appDir: 'x', fileCount: 0, orphans: [] };
 }
 
+function emptyReachability(): ReachabilityAnalysis {
+  return { appDir: 'x', layers: [], reaches: new Map() };
+}
+
 function fakeLayerBoundary(from: string, to: string, roleFileCount: number): LayerBoundary {
   const gate = evaluateGate({ roleFileCount, violatingFileCount: 0, roleConfidence: 1 });
   return {
@@ -136,6 +141,7 @@ describe('cli scan', () => {
       layerBoundaries: [],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -153,10 +159,31 @@ describe('cli scan', () => {
       layerBoundaries: [fakeLayerBoundary('shared', 'components', 40)],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
     expect(report).toContain('shared !-> components');
+  });
+
+  it('flags an AUTO layer boundary that leaks transitively through another layer', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 100,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: {
+        appDir: 'x',
+        layers: ['utils', 'api'],
+        reaches: new Map([['utils', new Set(['api'])]]),
+      },
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('Transitive leak');
+    expect(report).toContain('utils reaches api through another layer');
   });
 
   it('reports circular dependencies when present', () => {
@@ -168,6 +195,7 @@ describe('cli scan', () => {
       layerBoundaries: [],
       cycles: withCycles([['a.ts', 'b.ts']], 10),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
@@ -183,6 +211,7 @@ describe('cli scan', () => {
       layerBoundaries: [],
       cycles: withCycles([], 40),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
@@ -196,6 +225,7 @@ describe('cli scan', () => {
       layerBoundaries: [],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -214,6 +244,7 @@ describe('cli scan', () => {
       layerBoundaries: [],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -239,6 +270,7 @@ describe('cli generate', () => {
       layerBoundaries: [],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -256,6 +288,7 @@ describe('cli generate', () => {
       layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -276,6 +309,7 @@ describe('cli generate', () => {
       layerBoundaries: [],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
+      reachability: emptyReachability(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });

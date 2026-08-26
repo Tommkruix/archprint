@@ -8,6 +8,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const cyclesFixture = path.join(here, '..', 'fixtures', 'cycles');
 // layers fixture is acyclic.
 const acyclicFixture = path.join(here, '..', 'fixtures', 'layers');
+// self-import fixture: one file imports itself (a self-loop).
+const selfImportFixture = path.join(here, '..', 'fixtures', 'self-import');
 
 describe('detectCycles', () => {
   it('finds a circular import between two files', () => {
@@ -39,5 +41,11 @@ describe('detectCycles', () => {
   it('is robust to a relative appDir', () => {
     const relative = path.relative(process.cwd(), cyclesFixture);
     expect(detectCycles(relative).cycles).toHaveLength(1);
+  });
+
+  it('reports a file that imports itself as a single-file cycle', () => {
+    const analysis = detectCycles(selfImportFixture);
+    expect(analysis.filesInCycles).toBe(1);
+    expect(analysis.cycles).toEqual([{ files: ['node.ts'] }]);
   });
 });

@@ -1,4 +1,4 @@
-import { buildImportGraph } from '../scanner/import-graph.js';
+import { buildImportGraph, type ImportGraph } from '../scanner/import-graph.js';
 import type { WalkedFile } from '../scanner/file-walker.js';
 import { REQUEST_ENTRY_ROLES } from './pattern-detector.js';
 
@@ -29,6 +29,8 @@ export interface OrphanAnalysis {
 export interface OrphanDetectorOptions {
   /** Resolve the graph with the type checker (deep). Default false: fast file resolution. */
   resolve?: boolean;
+  /** A prebuilt graph to analyze, so a caller running several detectors builds the graph once. */
+  graph?: ImportGraph;
 }
 
 /**
@@ -38,15 +40,13 @@ export interface OrphanDetectorOptions {
  * magic can make a live file look unreferenced, so a human should confirm before deleting.
  */
 export function detectOrphans(appDir: string, options: OrphanDetectorOptions = {}): OrphanAnalysis {
-  const { root, files, adjacency } = buildImportGraph(appDir, {
-    resolve: options.resolve ?? false,
-  });
+  const { root, files, adjacency } =
+    options.graph ?? buildImportGraph(appDir, { resolve: options.resolve ?? false });
 
   const inDegree = new Map<string, number>(files.map((file) => [file.relativePath, 0]));
+  // Every adjacency target is a walked file, so it is always already a key in inDegree.
   for (const targets of adjacency.values()) {
-    for (const target of targets) {
-      if (inDegree.has(target)) inDegree.set(target, (inDegree.get(target) ?? 0) + 1);
-    }
+    for (const target of targets) inDegree.set(target, inDegree.get(target)! + 1);
   }
 
   const orphans = files

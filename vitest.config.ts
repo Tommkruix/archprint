@@ -5,6 +5,9 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     exclude: [...configDefaults.exclude, 'tests/fixtures/**'],
     environment: 'node',
+    // The CLI's deep tests run the TypeScript type checker; under coverage instrumentation a single project
+    // load can exceed the 5s default. This bound only engages when a test genuinely runs long.
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

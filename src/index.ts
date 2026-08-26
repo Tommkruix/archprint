@@ -56,7 +56,17 @@ export {
   type OrphanAnalysis,
   type OrphanDetectorOptions,
 } from './detector/orphan-detector.js';
-export { buildImportGraph, type ImportGraph } from './scanner/import-graph.js';
+export {
+  buildImportGraph,
+  stronglyConnectedComponents,
+  type ImportGraph,
+} from './scanner/import-graph.js';
+export {
+  computeLayerReachability,
+  reachesLayer,
+  type ReachabilityAnalysis,
+  type ReachabilityOptions,
+} from './detector/reachability.js';
 export {
   evaluateGate,
   GATE_THRESHOLDS,

@@ -1,4 +1,5 @@
 import type { LayerBoundary } from '../detector/layer-detector.js';
+import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
@@ -83,7 +84,18 @@ export function renderReport(
   );
   if (autoLayers.length > 0) {
     lines.push(green(bold('LAYER BOUNDARIES (enforceable)')));
-    for (const boundary of autoLayers) lines.push(...layerLines(boundary));
+    for (const boundary of autoLayers) {
+      lines.push(...layerLines(boundary));
+      // A direct-clean boundary can still leak through an intermediary layer; a plain import rule would not
+      // catch that, so flag it and point at the stronger transitive (dependency-cruiser reachable) form.
+      if (reachesLayer(scan.reachability, boundary.from, boundary.to)) {
+        lines.push(
+          yellow(
+            `          Transitive leak: ${boundary.from} reaches ${boundary.to} through another layer (needs a reachability rule).`,
+          ),
+        );
+      }
+    }
     lines.push('');
   }
   if (suggestLayers.length > 0) {
