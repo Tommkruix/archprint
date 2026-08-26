@@ -13,7 +13,10 @@ describe('classifyFile', () => {
     ['apps/api/src/users/users.repository.ts', 'REPOSITORY'],
     ['apps/api/src/users/users.repo.ts', 'REPOSITORY'],
     ['apps/web/app/api/billing/usage/route.ts', 'ROUTE_HANDLER'],
+    // .tsx route handlers are real (next/og ImageResponse routes use JSX); must not fall through to COMPONENT.
+    ['apps/web/app/api/og/workout/route.tsx', 'ROUTE_HANDLER'],
     ['apps/web/pages/api/webhook.ts', 'API_HANDLER'],
+    ['apps/web/pages/api/og.tsx', 'API_HANDLER'],
     ['apps/web/server/api/routers/user.ts', 'TRPC_ROUTER'],
     ['apps/web/app/dashboard/actions.ts', 'SERVER_ACTION'],
     ['apps/web/app/dashboard/action.ts', 'SERVER_ACTION'],
