@@ -20,6 +20,18 @@ function importSpecifiers(text: string): string[] {
   return [...specifiers];
 }
 
+// Re-export declarations that re-expose a module's value bindings: `export * from '...'`,
+// `export { x } from '...'`. A whole-declaration `export type ... from` re-exports only types (erased at
+// compile time), so it is not a runtime db surface and is skipped.
+function reexportSpecifiers(text: string): string[] {
+  const specifiers = new Set<string>();
+  for (const match of text.matchAll(/\bexport\b([^;]*?)\bfrom\s*['"]([^'"]+)['"]/g)) {
+    if (/^\s+type\b/.test(match[1]!)) continue;
+    specifiers.add(match[2]!);
+  }
+  return [...specifiers];
+}
+
 export interface UiSegmentEvidence {
   segment: string;
   componentFiles: number;
@@ -236,9 +248,9 @@ function importableSpecifier(
 }
 
 /**
- * Infer this repo's db-client markers: the known libraries plus first-party wrappers that instantiate a
- * client. Each wrapper yields a specifier marker (direct imports) and a leaf-path marker (so barrel
- * re-exports are caught once the detector resolves the barrel to the wrapper file).
+ * Infer this repo's db-client markers: the known libraries plus first-party wrappers that instantiate OR
+ * re-export a client. Each wrapper yields a specifier marker (direct imports) and a leaf-path marker (so
+ * barrel re-exports are caught once the detector resolves the barrel to the wrapper file).
  */
 export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
   const appRoot = normalize(path.resolve(appDir));
@@ -278,6 +290,15 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
         KNOWN_DB_LIBRARIES.some((lib) => lib.test(specifier)),
       )
     ) {
+      wrapperFiles.push(file);
+    } else if (
+      reexportSpecifiers(text).some((specifier) =>
+        KNOWN_DB_LIBRARIES.some((lib) => lib.test(specifier)),
+      )
+    ) {
+      // A first-party file that re-exports a known db library re-exposes the client under its own specifier;
+      // request entries importing it are importing the db client (e.g. `@/lib/db`, or a workspace-scoped
+      // `@scope/core/prisma-client`), which the constructor scan alone would miss.
       wrapperFiles.push(file);
     }
   }

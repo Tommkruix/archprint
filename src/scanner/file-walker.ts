@@ -1,6 +1,6 @@
 import { closeSync, openSync, readSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
-import { Project, type SourceFile } from 'ts-morph';
+import { type ImportDeclaration, Project, type SourceFile } from 'ts-morph';
 import { isBarrelFile, resolveToLeafFiles } from './barrel-resolver.js';
 import {
   classifyFile,
@@ -32,6 +32,23 @@ export interface ResolvedImport {
   valueLeafPaths: string[];
   /** Leaf modules reached by `import type` bindings (erased at compile time). */
   typeLeafPaths: string[];
+  /** True if the import brings in at least one runtime value binding (default, namespace, a non-type named
+   *  import, or a side-effect import). False for fully type-only imports, which are erased and are not a
+   *  runtime dependency. Syntactic, so it is available in fast (no-resolve) mode. */
+  hasValueBinding: boolean;
+}
+
+/** Whether an import contributes a runtime value binding, as opposed to a fully type-only import that is
+ *  erased at compile time. Syntactic only (no resolution), so it holds in fast mode. A bare `import "x"`
+ *  side-effect import counts as a value use. */
+function importHasValueBinding(importDeclaration: ImportDeclaration): boolean {
+  if (importDeclaration.isTypeOnly()) return false;
+  const named = importDeclaration.getNamedImports();
+  const hasValueNamed = named.some((namedImport) => !namedImport.isTypeOnly());
+  const hasDefault = importDeclaration.getDefaultImport() !== undefined;
+  const hasNamespace = importDeclaration.getNamespaceImport() !== undefined;
+  const sideEffectOnly = named.length === 0 && !hasDefault && !hasNamespace;
+  return hasValueNamed || hasDefault || hasNamespace || sideEffectOnly;
 }
 
 /**
@@ -148,6 +165,7 @@ export function createImportAnalyzer(
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
     return sourceFile.getImportDeclarations().map((importDeclaration) => {
       const specifier = importDeclaration.getModuleSpecifierValue();
+      const hasValueBinding = importHasValueBinding(importDeclaration);
       if (!resolve) {
         return {
           specifier,
@@ -155,6 +173,7 @@ export function createImportAnalyzer(
           throughBarrel: false,
           valueLeafPaths: [],
           typeLeafPaths: [],
+          hasValueBinding,
         };
       }
       const target = importDeclaration.getModuleSpecifierSourceFile();
@@ -199,6 +218,7 @@ export function createImportAnalyzer(
         throughBarrel,
         valueLeafPaths: [...valueLeaves],
         typeLeafPaths: [...typeLeaves],
+        hasValueBinding,
       };
     });
   };

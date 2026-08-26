@@ -1,4 +1,4 @@
-import { createImportAnalyzer, walkRepo } from '../scanner/file-walker.js';
+import { createImportAnalyzer, type ResolvedImport, walkRepo } from '../scanner/file-walker.js';
 import type { Role } from '../scanner/role-classifier.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 import {
@@ -65,10 +65,13 @@ const matchesAny = (text: string, markers: readonly RegExp[]): boolean =>
  * internal folders (e.g. next's `dist/client/components`) must not be read as our layers.
  */
 function forbiddenTargetReachedByValue(
-  imp: { specifier: string; valueLeafPaths: string[] },
+  imp: { specifier: string; valueLeafPaths: string[]; hasValueBinding: boolean },
   forbidden: readonly RegExp[],
 ): string | null {
-  if (matchesAny(imp.specifier, forbidden)) return imp.specifier;
+  // A fully type-only import is erased at compile time, so it is not a runtime dependency on the target.
+  // valueLeafPaths already excludes type-only leaves, so only the specifier match needs this guard, and it
+  // is the sole signal in fast mode (where no leaves are resolved).
+  if (imp.hasValueBinding && matchesAny(imp.specifier, forbidden)) return imp.specifier;
   const leaf = imp.valueLeafPaths.find(
     (path) => !NODE_MODULES.test(path) && matchesAny(path, forbidden),
   );
@@ -84,7 +87,7 @@ export function detectForbiddenImport(appDir: string, config: PatternConfig): De
   let confidenceSum = 0;
   for (const file of roleFiles) {
     confidenceSum += file.confidence;
-    let imports: { specifier: string; valueLeafPaths: string[] }[];
+    let imports: ResolvedImport[];
     try {
       imports = analyze(file.absolutePath);
     } catch {
@@ -154,7 +157,7 @@ export function detectForbiddenImports(
     confidenceSum: 0,
   }));
   for (const file of roleFiles) {
-    let imports: { specifier: string; valueLeafPaths: string[] }[];
+    let imports: ResolvedImport[];
     try {
       imports = analyze(file.absolutePath);
     } catch {
