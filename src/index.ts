@@ -52,6 +52,12 @@ export {
   type ImportCycle,
 } from './detector/cycle-detector.js';
 export {
+  detectOrphans,
+  type OrphanAnalysis,
+  type OrphanDetectorOptions,
+} from './detector/orphan-detector.js';
+export { buildImportGraph, type ImportGraph } from './scanner/import-graph.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,

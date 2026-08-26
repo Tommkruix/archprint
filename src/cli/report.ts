@@ -47,7 +47,6 @@ function layerLines(boundary: LayerBoundary): string[] {
   return lines;
 }
 
-/** Render a scan result as the terminal report. */
 export function renderReport(
   scan: ScanResult,
   version: string,
@@ -107,6 +106,23 @@ export function renderReport(
   } else if (scan.cycles.gate.status === 'AUTO') {
     lines.push(green('No circular dependencies (the no-cycles rule is enforceable).'), '');
   }
+  if (scan.orphans.orphans.length > 0) {
+    lines.push(
+      yellow(bold(`ORPHAN MODULES (${scan.orphans.orphans.length}, review before deleting)`)),
+    );
+    for (const orphan of scan.orphans.orphans.slice(0, 8)) {
+      lines.push(dim(`  ${orphan}`));
+    }
+    if (scan.orphans.orphans.length > 8) {
+      lines.push(dim(`  ... and ${scan.orphans.orphans.length - 8} more`));
+    }
+    lines.push(
+      dim(
+        '  Nothing imports these and they are not framework entries. Suggest only, not enforced.',
+      ),
+    );
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&
@@ -130,7 +146,6 @@ export function renderReport(
   return lines.join('\n');
 }
 
-/** Render the gate breakdown and exceptions for a single pattern (the `explain` command). */
 export function renderExplain(pattern: ScannedPattern): string {
   const { config, result } = pattern;
   const lines = [

@@ -4,6 +4,7 @@ import { listSourceFiles } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
 import { detectLayerBoundaries, type LayerBoundary } from '../detector/layer-detector.js';
+import { detectOrphans, type OrphanAnalysis } from '../detector/orphan-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -24,6 +25,7 @@ export interface ScanResult {
   patterns: ScannedPattern[];
   layerBoundaries: LayerBoundary[];
   cycles: CycleAnalysis;
+  orphans: OrphanAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -66,5 +68,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   // Cycle detection is graph-structural; the fast file-resolver is faithful to deep resolution, so it always
   // uses fast mode (avoids a slow, redundant third type-checked pass on --deep).
   const cycles = detectCycles(appDir, { resolve: false });
-  return { appDir, fileCount, aliasCount, patterns, layerBoundaries, cycles };
+  // Orphan detection is structural too; fast mode is faithful and avoids a redundant type-checked pass.
+  const orphans = detectOrphans(appDir, { resolve: false });
+  return { appDir, fileCount, aliasCount, patterns, layerBoundaries, cycles, orphans };
 }

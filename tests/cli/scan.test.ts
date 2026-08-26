@@ -8,6 +8,7 @@ import type {
   DetectedPattern,
   GenerationStatus,
   LayerBoundary,
+  OrphanAnalysis,
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
@@ -74,6 +75,10 @@ function withCycles(cycleFiles: string[][], fileCount: number): CycleAnalysis {
   };
 }
 
+function emptyOrphans(): OrphanAnalysis {
+  return { appDir: 'x', fileCount: 0, orphans: [] };
+}
+
 function fakeLayerBoundary(from: string, to: string, roleFileCount: number): LayerBoundary {
   const gate = evaluateGate({ roleFileCount, violatingFileCount: 0, roleConfidence: 1 });
   return {
@@ -130,6 +135,7 @@ describe('cli scan', () => {
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
       layerBoundaries: [],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -146,6 +152,7 @@ describe('cli scan', () => {
       patterns: [],
       layerBoundaries: [fakeLayerBoundary('shared', 'components', 40)],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
@@ -160,6 +167,7 @@ describe('cli scan', () => {
       patterns: [],
       layerBoundaries: [],
       cycles: withCycles([['a.ts', 'b.ts']], 10),
+      orphans: emptyOrphans(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
@@ -174,6 +182,7 @@ describe('cli scan', () => {
       patterns: [],
       layerBoundaries: [],
       cycles: withCycles([], 40),
+      orphans: emptyOrphans(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
@@ -186,6 +195,7 @@ describe('cli scan', () => {
       patterns: [],
       layerBoundaries: [],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -203,6 +213,7 @@ describe('cli scan', () => {
       patterns: [pattern],
       layerBoundaries: [],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -227,6 +238,7 @@ describe('cli generate', () => {
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
       layerBoundaries: [],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -243,6 +255,7 @@ describe('cli generate', () => {
       patterns: [],
       layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -262,6 +275,7 @@ describe('cli generate', () => {
       patterns: [],
       layerBoundaries: [],
       cycles: emptyCycles(),
+      orphans: emptyOrphans(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });

@@ -1,54 +1,5 @@
-import { existsSync } from 'node:fs';
-import * as path from 'node:path';
-import {
-  createImportAnalyzer,
-  type ResolvedImport,
-  walkRepo,
-  type WalkedFile,
-} from '../scanner/file-walker.js';
-import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { buildImportGraph } from '../scanner/import-graph.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
-
-interface AliasEntry {
-  prefix: string;
-  dir: string;
-}
-
-const buildAliasEntries = (appDir: string): AliasEntry[] =>
-  Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
-    prefix: key.replace(/\/?\*$/, ''),
-    dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
-  }));
-
-const FILE_CANDIDATES = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
-
-/** Resolve a base path (no extension) to an actual source file it maps to, or null. */
-function resolveBase(base: string): string | null {
-  if (/\.(ts|tsx)$/.test(base) && existsSync(base)) return base;
-  for (const suffix of FILE_CANDIDATES) {
-    const candidate = base + suffix;
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
-/** Resolve a value import to the first-party source file it targets (relative path or tsconfig alias), fast
- *  (no type checker). Returns null for externals, other packages, and unresolved specifiers. */
-function resolveImportFile(
-  specifier: string,
-  fromAbsPath: string,
-  aliases: readonly AliasEntry[],
-): string | null {
-  if (specifier.startsWith('.')) {
-    return resolveBase(path.resolve(path.dirname(fromAbsPath), specifier));
-  }
-  for (const { prefix, dir } of aliases) {
-    if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
-      return resolveBase(path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, '')));
-    }
-  }
-  return null;
-}
 
 export interface ImportCycle {
   /** The files that form the cycle (a strongly connected component of size > 1, or a self-import). */
@@ -132,40 +83,9 @@ function stronglyConnectedComponents(
  * cycles stays SUGGEST.
  */
 export function detectCycles(appDir: string, options: CycleDetectorOptions = {}): CycleAnalysis {
-  const resolve = options.resolve ?? false;
-  const root = path.resolve(appDir);
-  const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
-  const relByAbs = new Map<string, string>(
-    files.map((file) => [file.absolutePath, file.relativePath]),
-  );
-  const aliases = buildAliasEntries(root);
-  const analyze = createImportAnalyzer(root, { resolve });
-
-  const adjacency = new Map<string, string[]>();
-  for (const file of files) {
-    let imports: ResolvedImport[];
-    try {
-      imports = analyze(file.absolutePath);
-    } catch {
-      imports = [];
-    }
-    const targets = new Set<string>();
-    for (const imp of imports) {
-      if (!imp.hasValueBinding) continue;
-      if (resolve) {
-        for (const leaf of imp.valueLeafPaths) {
-          const rel = relByAbs.get(leaf);
-          if (rel !== undefined) targets.add(rel);
-        }
-      } else {
-        const abs = resolveImportFile(imp.specifier, file.absolutePath, aliases);
-        const rel = abs === null ? undefined : relByAbs.get(abs);
-        if (rel !== undefined) targets.add(rel);
-      }
-    }
-    adjacency.set(file.relativePath, [...targets]);
-  }
-
+  const { root, files, adjacency } = buildImportGraph(appDir, {
+    resolve: options.resolve ?? false,
+  });
   const nodes = files.map((file) => file.relativePath);
   const selfImports = new Set(nodes.filter((node) => adjacency.get(node)?.includes(node)));
   const cycles: ImportCycle[] = [];
