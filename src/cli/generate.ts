@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
+import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
@@ -43,5 +44,24 @@ export function writeLayerConfig(
   return [
     write('dependency-cruiser.archprint.json', dependencyCruiser),
     write('eslint-boundaries.archprint.json', toEslintBoundaries(scan.layerBoundaries, statuses)),
+  ];
+}
+
+/**
+ * Write the layer dependency graph as Mermaid and Graphviz DOT, so the inferred architecture can be viewed
+ * and pasted into docs. Visualizes every interacting layer pair (dominant flow plus leaks), returning the
+ * file paths written, or empty when there are no layers.
+ */
+export function writeGraph(scan: ScanResult, outDir: string): string[] {
+  if (scan.layerBoundaries.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const write = (name: string, content: string): string => {
+    const file = path.join(outDir, name);
+    writeFileSync(file, `${content}\n`);
+    return file;
+  };
+  return [
+    write('layer-graph.archprint.mmd', toMermaid(scan.layerBoundaries)),
+    write('layer-graph.archprint.dot', toGraphviz(scan.layerBoundaries)),
   ];
 }

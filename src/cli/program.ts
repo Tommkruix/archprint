@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
-import { emitOne, writeLayerConfig, writeRules } from './generate.js';
+import { emitOne, writeGraph, writeLayerConfig, writeRules } from './generate.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -93,18 +93,17 @@ export function buildProgram(version = readVersion()): Command {
       const outDir = path.resolve(options.out);
       const written = writeRules(scan, outDir, ['AUTO']);
       const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
-      if (written.length === 0 && layerFiles.length === 0) {
+      const graphFiles = writeGraph(scan, outDir);
+      if (written.length === 0 && layerFiles.length === 0 && graphFiles.length === 0) {
         console.log('No AUTO rules to generate.');
         return;
       }
-      for (const dir of written) {
-        const relative = path.relative(process.cwd(), dir);
-        console.log(`generated ${relative.startsWith('..') ? dir : relative}/`);
-      }
-      for (const file of layerFiles) {
-        const relative = path.relative(process.cwd(), file);
-        console.log(`generated ${relative.startsWith('..') ? file : relative}`);
-      }
+      const report = (target: string, suffix = ''): void => {
+        const relative = path.relative(process.cwd(), target);
+        console.log(`generated ${relative.startsWith('..') ? target : relative}${suffix}`);
+      };
+      for (const dir of written) report(dir, '/');
+      for (const file of layerFiles) report(file);
       if (layerFiles.length > 0) {
         const count = scan.layerBoundaries.filter(
           (boundary) => boundary.gate.status === 'AUTO',
@@ -112,6 +111,10 @@ export function buildProgram(version = readVersion()): Command {
         console.log(
           `  (${count} layer boundaries: dependency-cruiser and eslint-plugin-boundaries)`,
         );
+      }
+      for (const file of graphFiles) report(file);
+      if (graphFiles.length > 0) {
+        console.log('  (layer dependency graph: Mermaid and Graphviz DOT)');
       }
       if (options.fast) {
         console.log(

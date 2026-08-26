@@ -88,3 +88,9 @@ export {
   type EslintBoundariesElement,
   type EslintBoundariesRule,
 } from './generator/layer-emitters.js';
+export {
+  toMermaid,
+  toGraphviz,
+  layerGraphEdges,
+  type LayerGraphEdge,
+} from './generator/graph-emitters.js';

@@ -13,7 +13,7 @@ import type {
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
-import { writeLayerConfig, writeRules } from '../../src/cli/generate.js';
+import { writeGraph, writeLayerConfig, writeRules } from '../../src/cli/generate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'ui-infer');
@@ -312,5 +312,33 @@ describe('cli generate', () => {
       reachability: emptyReachability(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes the mermaid and dot graph whenever there are boundaries, none when there are not', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const withBoundaries: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      // A SUGGEST boundary (10 files) still yields a graph: the visualization is informational.
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 10)],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+    };
+    const files = writeGraph(withBoundaries, outDir);
+    expect(files.map((file) => path.basename(file)).sort()).toEqual([
+      'layer-graph.archprint.dot',
+      'layer-graph.archprint.mmd',
+    ]);
+    const dot = readFileSync(
+      files.find((file) => file.endsWith('.dot'))!,
+      'utf8',
+    );
+    expect(dot).toContain('digraph archprint');
+
+    const none: ScanResult = { ...withBoundaries, layerBoundaries: [] };
+    expect(writeGraph(none, outDir)).toEqual([]);
   });
 });
