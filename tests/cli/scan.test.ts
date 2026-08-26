@@ -182,12 +182,14 @@ describe('cli generate', () => {
       patterns: [],
       layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
     };
-    const file = writeLayerConfig(scan, outDir, ['AUTO']);
-    expect(file).not.toBeNull();
-    const config = JSON.parse(readFileSync(file!, 'utf8')) as {
+    const files = writeLayerConfig(scan, outDir, ['AUTO']);
+    expect(files.length).toBe(2);
+    const depCruiser = files.find((file) => file.endsWith('dependency-cruiser.archprint.json'))!;
+    const config = JSON.parse(readFileSync(depCruiser, 'utf8')) as {
       forbidden: { name: string }[];
     };
     expect(config.forbidden[0]!.name).toBe('no-utils-to-api');
+    expect(files.some((file) => file.endsWith('eslint-boundaries.archprint.json'))).toBe(true);
   });
 
   it('writes no layer config when there are no AUTO boundaries', () => {
@@ -198,6 +200,6 @@ describe('cli generate', () => {
       patterns: [],
       layerBoundaries: [],
     };
-    expect(writeLayerConfig(scan, outDir, ['AUTO'])).toBeNull();
+    expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });
 });

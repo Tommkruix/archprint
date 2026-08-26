@@ -44,3 +44,59 @@ export function toDependencyCruiser(
   }));
   return { forbidden };
 }
+
+export interface EslintBoundariesElement {
+  type: string;
+  pattern: string;
+}
+
+export interface EslintBoundariesRule {
+  from: string[];
+  disallow: string[];
+  message: string;
+}
+
+export interface EslintBoundariesConfig {
+  settings: { 'boundaries/elements': EslintBoundariesElement[] };
+  rules: {
+    'boundaries/element-types': ['error', { default: 'allow'; rules: EslintBoundariesRule[] }];
+  };
+}
+
+/**
+ * Emit inferred layer boundaries as an eslint-plugin-boundaries config: each layer becomes an element type,
+ * and each `from` layer disallows the set of layers it must not import. Only AUTO boundaries by default.
+ */
+export function toEslintBoundaries(
+  boundaries: readonly LayerBoundary[],
+  include: readonly GenerationStatus[] = ['AUTO'],
+): EslintBoundariesConfig {
+  const chosen = selected(boundaries, include);
+  const layers = [...new Set(chosen.flatMap((boundary) => [boundary.from, boundary.to]))].sort();
+  const elements = layers.map((layer) => ({ type: layer, pattern: `**/${layer}/**` }));
+
+  const disallowByFrom = new Map<string, Set<string>>();
+  for (const boundary of chosen) {
+    let targets = disallowByFrom.get(boundary.from);
+    if (targets === undefined) {
+      targets = new Set();
+      disallowByFrom.set(boundary.from, targets);
+    }
+    targets.add(boundary.to);
+  }
+  const rules = [...disallowByFrom.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([from, targets]) => {
+      const disallow = [...targets].sort();
+      return {
+        from: [from],
+        disallow,
+        message: `The "${from}" layer must not import: ${disallow.join(', ')} (inferred by Archprint from the observed import direction).`,
+      };
+    });
+
+  return {
+    settings: { 'boundaries/elements': elements },
+    rules: { 'boundaries/element-types': ['error', { default: 'allow', rules }] },
+  };
+}

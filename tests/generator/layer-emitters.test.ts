@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateGate, type LayerBoundary, toDependencyCruiser } from '../../src/index.js';
+import {
+  evaluateGate,
+  type LayerBoundary,
+  toDependencyCruiser,
+  toEslintBoundaries,
+} from '../../src/index.js';
 
 function boundary(from: string, to: string, roleFileCount: number): LayerBoundary {
   const gate = evaluateGate({ roleFileCount, violatingFileCount: 0, roleConfidence: 1 });
@@ -38,5 +43,22 @@ describe('toDependencyCruiser', () => {
     expect(list.map((entry) => entry.gate.status)).toEqual(['AUTO', 'SUGGEST']);
     expect(toDependencyCruiser(list).forbidden).toHaveLength(1);
     expect(toDependencyCruiser(list, ['AUTO', 'SUGGEST']).forbidden).toHaveLength(2);
+  });
+});
+
+describe('toEslintBoundaries', () => {
+  it('emits element types and per-layer disallow rules for AUTO boundaries', () => {
+    const config = toEslintBoundaries([
+      boundary('utils', 'api', 40),
+      boundary('utils', 'components', 40),
+      boundary('components', 'features', 40),
+    ]);
+    const elements = config.settings['boundaries/elements'].map((element) => element.type);
+    expect(elements).toEqual(['api', 'components', 'features', 'utils']);
+
+    const rules = config.rules['boundaries/element-types'][1].rules;
+    expect(config.rules['boundaries/element-types'][1].default).toBe('allow');
+    expect(rules.find((rule) => rule.from[0] === 'utils')!.disallow).toEqual(['api', 'components']);
+    expect(rules.find((rule) => rule.from[0] === 'components')!.disallow).toEqual(['features']);
   });
 });

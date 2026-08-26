@@ -92,8 +92,8 @@ export function buildProgram(version = readVersion()): Command {
       const scan = scanRepo(resolveApp(input), { deep: !options.fast });
       const outDir = path.resolve(options.out);
       const written = writeRules(scan, outDir, ['AUTO']);
-      const layerConfig = writeLayerConfig(scan, outDir, ['AUTO']);
-      if (written.length === 0 && layerConfig === null) {
+      const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
+      if (written.length === 0 && layerFiles.length === 0) {
         console.log('No AUTO rules to generate.');
         return;
       }
@@ -101,13 +101,16 @@ export function buildProgram(version = readVersion()): Command {
         const relative = path.relative(process.cwd(), dir);
         console.log(`generated ${relative.startsWith('..') ? dir : relative}/`);
       }
-      if (layerConfig !== null) {
-        const relative = path.relative(process.cwd(), layerConfig);
+      for (const file of layerFiles) {
+        const relative = path.relative(process.cwd(), file);
+        console.log(`generated ${relative.startsWith('..') ? file : relative}`);
+      }
+      if (layerFiles.length > 0) {
         const count = scan.layerBoundaries.filter(
           (boundary) => boundary.gate.status === 'AUTO',
         ).length;
         console.log(
-          `generated ${relative.startsWith('..') ? layerConfig : relative} (${count} layer boundaries, dependency-cruiser)`,
+          `  (${count} layer boundaries: dependency-cruiser and eslint-plugin-boundaries)`,
         );
       }
       if (options.fast) {

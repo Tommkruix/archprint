@@ -59,6 +59,10 @@ export {
 } from './generator/rule-generator.js';
 export {
   toDependencyCruiser,
+  toEslintBoundaries,
   type DependencyCruiserConfig,
   type DependencyCruiserRule,
+  type EslintBoundariesConfig,
+  type EslintBoundariesElement,
+  type EslintBoundariesRule,
 } from './generator/layer-emitters.js';
