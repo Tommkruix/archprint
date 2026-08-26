@@ -133,12 +133,13 @@ function stronglyConnectedComponents(
  */
 export function detectCycles(appDir: string, options: CycleDetectorOptions = {}): CycleAnalysis {
   const resolve = options.resolve ?? false;
-  const files = walkRepo(appDir).filter((file: WalkedFile) => file.role !== 'TEST');
+  const root = path.resolve(appDir);
+  const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
   const relByAbs = new Map<string, string>(
     files.map((file) => [file.absolutePath, file.relativePath]),
   );
-  const aliases = buildAliasEntries(appDir);
-  const analyze = createImportAnalyzer(appDir, { resolve });
+  const aliases = buildAliasEntries(root);
+  const analyze = createImportAnalyzer(root, { resolve });
 
   const adjacency = new Map<string, string[]>();
   for (const file of files) {
@@ -188,7 +189,7 @@ export function detectCycles(appDir: string, options: CycleDetectorOptions = {})
   });
 
   return {
-    appDir,
+    appDir: root,
     fileCount: nodes.length,
     cycles,
     filesInCycles: cyclicFiles.size,

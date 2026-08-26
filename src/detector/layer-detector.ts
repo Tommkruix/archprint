@@ -152,7 +152,8 @@ export function detectLayerBoundaries(
   const resolve = options.resolve ?? false;
   const minLayerFiles = options.minLayerFiles ?? 5;
 
-  const files = walkRepo(appDir).filter((file: WalkedFile) => file.role !== 'TEST');
+  const root = path.resolve(appDir);
+  const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
   const fileLayer = new Map<string, string>();
   const layerFileCount = new Map<string, number>();
   for (const file of files) {
@@ -162,8 +163,8 @@ export function detectLayerBoundaries(
     layerFileCount.set(layer, (layerFileCount.get(layer) ?? 0) + 1);
   }
 
-  const aliases = buildAliasEntries(appDir);
-  const analyze = createImportAnalyzer(appDir, { resolve });
+  const aliases = buildAliasEntries(root);
+  const analyze = createImportAnalyzer(root, { resolve });
 
   // "from>to" -> Map<sourceFile, exampleSpecifier>: source files that import the target layer as a value.
   const edges = new Map<string, Map<string, string>>();
@@ -178,7 +179,7 @@ export function detectLayerBoundaries(
     }
     for (const imp of imports) {
       if (!imp.hasValueBinding) continue;
-      for (const to of targetLayers(imp, file.absolutePath, appDir, aliases, resolve)) {
+      for (const to of targetLayers(imp, file.absolutePath, root, aliases, resolve)) {
         if (to === from) continue;
         const key = `${from}>${to}`;
         let sources = edges.get(key);
@@ -245,5 +246,5 @@ export function detectLayerBoundaries(
     .map(([layer, fileCount]) => ({ layer, fileCount }))
     .sort((x, y) => y.fileCount - x.fileCount);
 
-  return { appDir, layers: layerInfos, boundaries };
+  return { appDir: root, layers: layerInfos, boundaries };
 }

@@ -35,4 +35,9 @@ describe('detectCycles', () => {
     expect(deep.filesInCycles).toBe(fast.filesInCycles);
     expect(deep.cycles[0]!.files).toEqual(fast.cycles[0]!.files);
   });
+
+  it('is robust to a relative appDir', () => {
+    const relative = path.relative(process.cwd(), cyclesFixture);
+    expect(detectCycles(relative).cycles).toHaveLength(1);
+  });
 });

@@ -46,6 +46,12 @@ describe('detectLayerBoundaries', () => {
     expect(cf!.violations.map((v) => v.file)).toContain('components/list.ts');
   });
 
+  it('is robust to a relative appDir', () => {
+    const relative = path.relative(process.cwd(), fixture);
+    const analysis = detectLayerBoundaries(relative, { minLayerFiles: 3 });
+    expect(boundary(analysis, 'utils', 'components')).toBeDefined();
+  });
+
   it('fast and deep modes agree on the clean boundary', () => {
     const fast = boundary(
       detectLayerBoundaries(fixture, { minLayerFiles: 3, resolve: false }),
