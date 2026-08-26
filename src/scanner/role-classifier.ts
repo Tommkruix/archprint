@@ -69,6 +69,47 @@ const ROLE_RULES: readonly RoleRule[] = [
     test: /app\/.*\/actions?\.ts$/,
     confidence: 0.9,
   },
+  // SvelteKit: endpoints, server-only loads/actions, and server hooks are request entries; a universal
+  // load (`+page.ts`/`+layout.ts`) runs in the browser too, so it is a framework entry, not a server entry.
+  { role: 'API_HANDLER', id: 'sveltekit-endpoint', test: /(^|\/)\+server\.ts$/, confidence: 0.95 },
+  {
+    role: 'SERVER_ACTION',
+    id: 'sveltekit-page-server',
+    test: /(^|\/)\+(page|layout)\.server\.ts$/,
+    confidence: 0.9,
+  },
+  {
+    role: 'ROUTE_HANDLER',
+    id: 'sveltekit-hooks',
+    test: /(^|\/)hooks\.server\.ts$/,
+    confidence: 0.85,
+  },
+  {
+    role: 'ROUTE_ENTRY',
+    id: 'sveltekit-load',
+    test: /(^|\/)\+(page|layout)\.ts$/,
+    confidence: 0.8,
+  },
+  // Nuxt Nitro server handlers (server/api is caught here unless the earlier tRPC rule already matched).
+  {
+    role: 'API_HANDLER',
+    id: 'nuxt-nitro-server',
+    test: /(^|\/)server\/(api|routes|middleware|plugins)\/.*\.ts$/,
+    confidence: 0.85,
+  },
+  // Remix / React Router v7 file-based routes run loaders/actions and render UI: framework entries.
+  {
+    role: 'ROUTE_ENTRY',
+    id: 'remix-route',
+    test: /(^|\/)app\/routes\/.*\.tsx?$/,
+    confidence: 0.85,
+  },
+  {
+    role: 'ROUTE_ENTRY',
+    id: 'remix-root',
+    test: /(^|\/)app\/(root|entry\.(server|client))\.tsx?$/,
+    confidence: 0.85,
+  },
   { role: 'DB_MODULE', id: 'db-package', test: /packages\/(db|database)\//, confidence: 0.9 },
   { role: 'SHARED', id: 'shared-package', test: /packages\/shared\//, confidence: 0.9 },
   {
@@ -89,12 +130,18 @@ const ROLE_RULES: readonly RoleRule[] = [
 ];
 
 /**
- * Each role's path pattern, in first-match order. Single source of truth for tools that must mirror
- * classification (e.g. the rule generator embeds these into standalone rules) so the patterns can
- * never drift from ROLE_RULES.
+ * Every path pattern for each role, in first-match order (a role can be matched by several rules, e.g.
+ * API_HANDLER covers Next pages-api, SvelteKit endpoints, and Nuxt Nitro handlers). Single source of truth
+ * for tools that must mirror classification (e.g. the rule generator embeds these into standalone rules) so
+ * the patterns can never drift from ROLE_RULES.
  */
-export const ROLE_PATTERNS: ReadonlyMap<Role, RegExp> = new Map(
-  ROLE_RULES.map((rule) => [rule.role, rule.test]),
+export const ROLE_PATTERNS: ReadonlyMap<Role, readonly RegExp[]> = ROLE_RULES.reduce(
+  (map, rule) => {
+    const patterns = map.get(rule.role) ?? [];
+    patterns.push(rule.test);
+    return map.set(rule.role, patterns);
+  },
+  new Map<Role, RegExp[]>(),
 );
 
 /**

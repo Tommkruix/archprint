@@ -18,6 +18,21 @@ describe('classifyFile', () => {
     ['apps/web/pages/api/webhook.ts', 'API_HANDLER'],
     ['apps/web/pages/api/og.tsx', 'API_HANDLER'],
     ['apps/web/server/api/routers/user.ts', 'TRPC_ROUTER'],
+    // SvelteKit
+    ['src/routes/api/users/+server.ts', 'API_HANDLER'],
+    ['src/routes/dashboard/+page.server.ts', 'SERVER_ACTION'],
+    ['src/routes/+layout.server.ts', 'SERVER_ACTION'],
+    ['src/hooks.server.ts', 'ROUTE_HANDLER'],
+    ['src/routes/blog/+page.ts', 'ROUTE_ENTRY'],
+    // Nuxt Nitro server handlers
+    ['server/api/users.ts', 'API_HANDLER'],
+    ['server/middleware/auth.ts', 'API_HANDLER'],
+    // Remix / React Router file-based routes
+    ['app/routes/_index.tsx', 'ROUTE_ENTRY'],
+    ['app/routes/posts.$id.tsx', 'ROUTE_ENTRY'],
+    ['app/root.tsx', 'ROUTE_ENTRY'],
+    ['app/entry.server.tsx', 'ROUTE_ENTRY'],
+    // tRPC routers still win over the generic Nuxt server/api rule (earlier in the list)
     ['apps/web/app/dashboard/actions.ts', 'SERVER_ACTION'],
     ['apps/web/app/dashboard/action.ts', 'SERVER_ACTION'],
     ['apps/web/app/dashboard/page.tsx', 'ROUTE_ENTRY'],

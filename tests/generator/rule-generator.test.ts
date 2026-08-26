@@ -88,9 +88,9 @@ describe('rule generator — artifacts', () => {
     const { files } = generateRuleArtifacts(AP002, RESULT, 'p');
     // Every server-entry role's pattern and every non-entry role's pattern comes from ROLE_PATTERNS,
     // so a future classifier change cannot silently diverge from the emitted rule.
-    for (const [role, pattern] of ROLE_PATTERNS) {
+    for (const [role, patterns] of ROLE_PATTERNS) {
       if (role === 'COMPONENT') continue; // .tsx handled separately in the rule
-      expect(files.rule).toContain(pattern.source);
+      for (const pattern of patterns) expect(files.rule).toContain(pattern.source);
     }
   });
 

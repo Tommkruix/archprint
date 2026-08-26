@@ -15,13 +15,13 @@ const asRegexArray = (sources: readonly string[]): string =>
 /** Render the self-contained ESLint rule (plain ESLint, no @typescript-eslint runtime dependency). */
 function renderRule(config: PatternConfig, result: DetectedPattern): string {
   const entryPatterns = config.roles
-    .map((role) => ROLE_PATTERNS.get(role)?.source)
-    .filter((source): source is string => source !== undefined);
+    .flatMap((role) => ROLE_PATTERNS.get(role) ?? [])
+    .map((pattern) => pattern.source);
   // Non-entry roles (COMPONENT handled separately as .tsx): a "use server" file matching these keeps
   // its role, mirroring classifyFileWithDirective.
   const nonEntryPatterns = [...ROLE_PATTERNS]
     .filter(([role]) => !config.roles.includes(role) && role !== 'COMPONENT')
-    .map(([, pattern]) => pattern.source);
+    .flatMap(([, patterns]) => patterns.map((pattern) => pattern.source));
   const forbidden = config.forbidden.map((marker) => marker.source);
   const includesServerAction = config.roles.includes('SERVER_ACTION');
   const { ratio, roleFileCount, violatingFileCount } = result.stats;
