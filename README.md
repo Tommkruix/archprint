@@ -95,6 +95,7 @@ Every number is measured from the import graph, not estimated.
 | Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates, reported, never auto enforced) |
 | Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                  |
 | Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals    |
+| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other            |
 
 ## The confidence gate
 
@@ -114,7 +115,8 @@ The bias is deliberate and conservative: one wrong rule hurts credibility more t
 
 `archprint generate` writes into the formats your existing tools already read:
 
-- **dependency-cruiser** `forbidden` rulesets (layer boundaries and public-API deep-import rules)
+- **dependency-cruiser** `forbidden` rulesets (layer boundaries, public-API deep-import rules, and
+  feature-slice cross-slice rules)
 - **eslint-plugin-boundaries** element-types config
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
   failing fixture
@@ -164,7 +166,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (six detectors, four output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (seven detectors, four output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 
