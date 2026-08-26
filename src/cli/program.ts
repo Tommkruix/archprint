@@ -7,6 +7,7 @@ import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
 import {
   emitOne,
+  writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
   writePublicApiConfig,
@@ -100,11 +101,13 @@ export function buildProgram(version = readVersion()): Command {
       const written = writeRules(scan, outDir, ['AUTO']);
       const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
       const apiFiles = writePublicApiConfig(scan, outDir, ['AUTO']);
+      const sliceFiles = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
         layerFiles.length === 0 &&
         apiFiles.length === 0 &&
+        sliceFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -128,6 +131,13 @@ export function buildProgram(version = readVersion()): Command {
       if (apiFiles.length > 0) {
         const count = scan.publicApi.groups.filter((group) => group.gate.status === 'AUTO').length;
         console.log(`  (${count} public API boundaries: dependency-cruiser deep-import rules)`);
+      }
+      for (const file of sliceFiles) report(file);
+      if (sliceFiles.length > 0) {
+        const count = scan.featureSlices.groups.filter(
+          (group) => group.gate.status === 'AUTO',
+        ).length;
+        console.log(`  (${count} feature-slice boundaries: dependency-cruiser cross-slice rules)`);
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

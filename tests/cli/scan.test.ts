@@ -6,6 +6,7 @@ import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import type {
   CycleAnalysis,
   DetectedPattern,
+  FeatureSliceAnalysis,
   GenerationStatus,
   LayerBoundary,
   OrphanAnalysis,
@@ -15,6 +16,7 @@ import type {
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
+  writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
   writePublicApiConfig,
@@ -94,6 +96,10 @@ function emptyPublicApi(): PublicApiAnalysis {
   return { appDir: 'x', groups: [] };
 }
 
+function emptyFeatureSlices(): FeatureSliceAnalysis {
+  return { appDir: 'x', groups: [] };
+}
+
 function fakeApiGroup(dir: string, consumerCount: number, deepImporterCount: number) {
   return {
     dir,
@@ -103,6 +109,21 @@ function fakeApiGroup(dir: string, consumerCount: number, deepImporterCount: num
     gate: evaluateGate({
       roleFileCount: consumerCount,
       violatingFileCount: deepImporterCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function fakeSliceGroup(container: string, sliceFileCount: number, crossImporterCount: number) {
+  return {
+    container,
+    sliceCount: 3,
+    sliceFileCount,
+    crossImporterCount,
+    gate: evaluateGate({
+      roleFileCount: sliceFileCount,
+      violatingFileCount: crossImporterCount,
       roleConfidence: 1,
     }),
     violations: [],
@@ -168,6 +189,7 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -187,6 +209,7 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
@@ -208,10 +231,35 @@ describe('cli scan', () => {
         reaches: new Map([['utils', new Set(['api'])]]),
       },
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('Transitive leak');
     expect(report).toContain('utils reaches api through another layer');
+  });
+
+  it('renders enforceable and suggested feature-slice isolation', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 100,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
+      // 40 isolated slice files clears the floor (AUTO); 18/20 (0.90) is a thin-sample SUGGEST.
+      featureSlices: {
+        appDir: 'x',
+        groups: [fakeSliceGroup('src/features', 40, 0), fakeSliceGroup('src/modules', 20, 2)],
+      },
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('FEATURE SLICE ISOLATION (enforceable)');
+    expect(report).toContain('src/features (3 slices)');
+    expect(report).toContain('FEATURE SLICE ISOLATION (suggested)');
+    expect(report).toContain('Cross-slice imports: 2');
   });
 
   it('renders enforceable and suggested public API boundaries', () => {
@@ -229,6 +277,7 @@ describe('cli scan', () => {
         appDir: 'x',
         groups: [fakeApiGroup('features/auth', 40, 0), fakeApiGroup('features/billing', 20, 2)],
       },
+      featureSlices: emptyFeatureSlices(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('PUBLIC API BOUNDARIES (enforceable)');
@@ -249,6 +298,7 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
@@ -266,6 +316,7 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
@@ -281,6 +332,7 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -301,6 +353,7 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -328,6 +381,7 @@ describe('cli generate', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -347,6 +401,7 @@ describe('cli generate', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -370,6 +425,7 @@ describe('cli generate', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
+      featureSlices: emptyFeatureSlices(),
     };
     const files = writePublicApiConfig(scan, outDir, ['AUTO']);
     expect(files).toHaveLength(1);
@@ -378,6 +434,29 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, publicApi: emptyPublicApi() };
     expect(writePublicApiConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a feature-slice cross-slice config for AUTO groups, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
+      featureSlices: { appDir: 'x', groups: [fakeSliceGroup('src/features', 40, 0)] },
+    };
+    const files = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-cross-slice-src-features');
+
+    const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
+    expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
   });
 
   it('writes no layer config when there are no AUTO boundaries', () => {
@@ -391,6 +470,7 @@ describe('cli generate', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });
@@ -408,6 +488,7 @@ describe('cli generate', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
     };
     const files = writeGraph(withBoundaries, outDir);
     expect(files.map((file) => path.basename(file)).sort()).toEqual([

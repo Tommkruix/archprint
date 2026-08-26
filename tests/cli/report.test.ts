@@ -43,6 +43,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   orphans: { appDir: '/app', fileCount: 10, orphans: [] },
   reachability: { appDir: '/app', layers: [], reaches: new Map() },
   publicApi: { appDir: '/app', groups: [] },
+  featureSlices: { appDir: '/app', groups: [] },
   ...overrides,
 });
 

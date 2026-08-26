@@ -75,6 +75,13 @@ export {
   type PublicApiDetectorOptions,
 } from './detector/public-api-detector.js';
 export {
+  detectFeatureSliceIsolation,
+  type FeatureSliceAnalysis,
+  type FeatureSliceGroup,
+  type FeatureSliceViolation,
+  type FeatureSliceDetectorOptions,
+} from './detector/feature-slice-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -106,3 +113,8 @@ export {
   type DeepImportConfig,
   type DeepImportRule,
 } from './generator/public-api-emitters.js';
+export {
+  toDependencyCruiserFeatureSlice,
+  type CrossSliceConfig,
+  type CrossSliceRule,
+} from './generator/feature-slice-emitters.js';

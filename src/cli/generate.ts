@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
+import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -61,6 +62,23 @@ export function writePublicApiConfig(
   if (config.forbidden.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'dependency-cruiser.public-api.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+/**
+ * Write the inferred feature-slice isolation as a dependency-cruiser cross-slice ruleset. Returns the file
+ * paths written, empty when no container qualifies at the requested statuses.
+ */
+export function writeFeatureSliceConfig(
+  scan: ScanResult,
+  outDir: string,
+  statuses: readonly GenerationStatus[] = ['AUTO'],
+): string[] {
+  const config = toDependencyCruiserFeatureSlice(scan.featureSlices.groups, statuses);
+  if (config.forbidden.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'dependency-cruiser.feature-slice.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }

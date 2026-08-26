@@ -11,6 +11,10 @@ import {
   detectPublicApiBoundaries,
   type PublicApiAnalysis,
 } from '../detector/public-api-detector.js';
+import {
+  detectFeatureSliceIsolation,
+  type FeatureSliceAnalysis,
+} from '../detector/feature-slice-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -34,6 +38,7 @@ export interface ScanResult {
   orphans: OrphanAnalysis;
   reachability: ReachabilityAnalysis;
   publicApi: PublicApiAnalysis;
+  featureSlices: FeatureSliceAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -81,6 +86,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const orphans = detectOrphans(appDir, { graph });
   const reachability = computeLayerReachability(appDir, { graph });
   const publicApi = detectPublicApiBoundaries(appDir, { graph });
+  const featureSlices = detectFeatureSliceIsolation(appDir, { graph });
   return {
     appDir,
     fileCount,
@@ -91,5 +97,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     orphans,
     reachability,
     publicApi,
+    featureSlices,
   };
 }

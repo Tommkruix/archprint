@@ -1,5 +1,6 @@
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import type { PublicApiGroup } from '../detector/public-api-detector.js';
+import type { FeatureSliceGroup } from '../detector/feature-slice-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
@@ -59,6 +60,20 @@ function apiLines(group: PublicApiGroup): string[] {
   ];
   if (group.deepImporterCount > 0) {
     lines.push(dim(`          Deep imports: ${group.deepImporterCount}`));
+  }
+  return lines;
+}
+
+function sliceLines(group: FeatureSliceGroup): string[] {
+  const floor = `${(group.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+  const lines = [
+    `  ${bold(`${group.container} (${group.sliceCount} slices)`)}  slices must not import each other   confidence ${floor}`,
+    dim(
+      `          Evidence: ${group.sliceFileCount - group.crossImporterCount}/${group.sliceFileCount} slice files stay isolated`,
+    ),
+  ];
+  if (group.crossImporterCount > 0) {
+    lines.push(dim(`          Cross-slice imports: ${group.crossImporterCount}`));
   }
   return lines;
 }
@@ -161,6 +176,21 @@ export function renderReport(
     lines.push(yellow(bold('PUBLIC API BOUNDARIES (suggested)')));
     for (const g of suggestApi.slice(0, 8)) lines.push(...apiLines(g));
     if (suggestApi.length > 8) lines.push(dim(`          ... and ${suggestApi.length - 8} more`));
+    lines.push('');
+  }
+  const autoSlices = scan.featureSlices.groups.filter((g) => g.gate.status === 'AUTO');
+  const suggestSlices = scan.featureSlices.groups.filter((g) => g.gate.status === 'SUGGEST');
+  if (autoSlices.length > 0) {
+    lines.push(green(bold('FEATURE SLICE ISOLATION (enforceable)')));
+    for (const g of autoSlices) lines.push(...sliceLines(g));
+    lines.push('');
+  }
+  if (suggestSlices.length > 0) {
+    lines.push(yellow(bold('FEATURE SLICE ISOLATION (suggested)')));
+    for (const g of suggestSlices.slice(0, 8)) lines.push(...sliceLines(g));
+    if (suggestSlices.length > 8) {
+      lines.push(dim(`          ... and ${suggestSlices.length - 8} more`));
+    }
     lines.push('');
   }
   if (
