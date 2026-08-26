@@ -1,3 +1,4 @@
+import type { LayerBoundary } from '../detector/layer-detector.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
@@ -26,6 +27,22 @@ function patternLines(pattern: ScannedPattern): string[] {
   if (stats.violatingFileCount > 0) {
     const caution = infraCaution ? '  (caution: exceptions are infrastructure routes)' : '';
     lines.push(dim(`          Exceptions: ${stats.violatingFileCount}${caution}`));
+  }
+  return lines;
+}
+
+function layerLines(boundary: LayerBoundary): string[] {
+  const floor = `${(boundary.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+  const observed =
+    boundary.stats.ratio >= 1 ? '100%' : `${(boundary.stats.ratio * 100).toFixed(1)}%`;
+  const lines = [
+    `  ${bold(`${boundary.from} !-> ${boundary.to}`)}  layer boundary   confidence ${floor}`,
+    dim(
+      `          Evidence: ${boundary.stats.conformingFileCount}/${boundary.stats.roleFileCount} ${boundary.from} files conform (${observed}); ${boundary.reverseFlow} ${boundary.to} file(s) depend on ${boundary.from}`,
+    ),
+  ];
+  if (boundary.stats.violatingFileCount > 0) {
+    lines.push(dim(`          Exceptions: ${boundary.stats.violatingFileCount}`));
   }
   return lines;
 }
@@ -61,7 +78,41 @@ export function renderReport(
     }
     lines.push('');
   }
-  if (auto.length === 0 && suggest.length === 0) {
+  const autoLayers = scan.layerBoundaries.filter((boundary) => boundary.gate.status === 'AUTO');
+  const suggestLayers = scan.layerBoundaries.filter(
+    (boundary) => boundary.gate.status === 'SUGGEST',
+  );
+  if (autoLayers.length > 0) {
+    lines.push(green(bold('LAYER BOUNDARIES (enforceable)')));
+    for (const boundary of autoLayers) lines.push(...layerLines(boundary));
+    lines.push('');
+  }
+  if (suggestLayers.length > 0) {
+    lines.push(yellow(bold('LAYER BOUNDARIES (suggested)')));
+    for (const boundary of suggestLayers.slice(0, 8)) lines.push(...layerLines(boundary));
+    if (suggestLayers.length > 8) {
+      lines.push(dim(`          ... and ${suggestLayers.length - 8} more`));
+    }
+    lines.push('');
+  }
+  if (scan.cycles.cycles.length > 0) {
+    lines.push(yellow(bold(`CIRCULAR DEPENDENCIES (${scan.cycles.cycles.length})`)));
+    for (const cycle of scan.cycles.cycles.slice(0, 5)) {
+      lines.push(dim(`  ${cycle.files.join(' -> ')}`));
+    }
+    if (scan.cycles.cycles.length > 5) {
+      lines.push(dim(`  ... and ${scan.cycles.cycles.length - 5} more`));
+    }
+    lines.push('');
+  } else if (scan.cycles.gate.status === 'AUTO') {
+    lines.push(green('No circular dependencies (the no-cycles rule is enforceable).'), '');
+  }
+  if (
+    auto.length === 0 &&
+    suggest.length === 0 &&
+    autoLayers.length === 0 &&
+    suggestLayers.length === 0
+  ) {
     lines.push(dim('No pattern met the confidence gate (conservative by design).'));
     lines.push('');
   }

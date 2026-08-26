@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
-import { emitOne, writeRules } from './generate.js';
+import { emitOne, writeLayerConfig, writeRules } from './generate.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -55,10 +56,24 @@ export function buildProgram(version = readVersion()): Command {
     .argument('[path]', 'app directory (contains tsconfig.json)', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
     .action((input: string, options: { deep?: boolean }) => {
-      const appDir = resolveApp(input);
+      const root = path.resolve(input);
+      const appDirs = discoverAppDirs(root);
+      if (appDirs.length === 0) {
+        throw new Error(
+          `No tsconfig.json found under ${root}. Point archprint at an app directory (a directory with a tsconfig.json); a monorepo root is fine.`,
+        );
+      }
       const started = performance.now();
-      const scan = scanRepo(appDir, { deep: options.deep });
-      console.log(renderReport(scan, version, performance.now() - started, options.deep));
+      const reports = appDirs.map((appDir) => {
+        const scan = scanRepo(appDir, { deep: options.deep });
+        const label = appDirs.length > 1 ? `### ${path.relative(root, appDir) || '.'}\n` : '';
+        return label + renderReport(scan, version, undefined, options.deep);
+      });
+      console.log(reports.join('\n\n'));
+      if (appDirs.length > 1) {
+        const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+        console.log(`\nScanned ${appDirs.length} app directories in ${elapsed}s.`);
+      }
     });
 
   program
@@ -75,14 +90,28 @@ export function buildProgram(version = readVersion()): Command {
     .action((input: string, options: { out: string; fast?: boolean }) => {
       // Generation is the commitment point, so it gates on the full graph by default; --fast opts out.
       const scan = scanRepo(resolveApp(input), { deep: !options.fast });
-      const written = writeRules(scan, path.resolve(options.out), ['AUTO']);
-      if (written.length === 0) {
-        console.log('No AUTO patterns to generate.');
+      const outDir = path.resolve(options.out);
+      const written = writeRules(scan, outDir, ['AUTO']);
+      const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
+      if (written.length === 0 && layerFiles.length === 0) {
+        console.log('No AUTO rules to generate.');
         return;
       }
       for (const dir of written) {
         const relative = path.relative(process.cwd(), dir);
         console.log(`generated ${relative.startsWith('..') ? dir : relative}/`);
+      }
+      for (const file of layerFiles) {
+        const relative = path.relative(process.cwd(), file);
+        console.log(`generated ${relative.startsWith('..') ? file : relative}`);
+      }
+      if (layerFiles.length > 0) {
+        const count = scan.layerBoundaries.filter(
+          (boundary) => boundary.gate.status === 'AUTO',
+        ).length;
+        console.log(
+          `  (${count} layer boundaries: dependency-cruiser and eslint-plugin-boundaries)`,
+        );
       }
       if (options.fast) {
         console.log(

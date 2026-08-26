@@ -51,10 +51,12 @@ const ROLE_RULES: readonly RoleRule[] = [
   {
     role: 'ROUTE_HANDLER',
     id: 'next-app-router-route',
-    test: /app\/api\/.*\/route\.ts$/,
+    // .tsx is valid for route handlers (e.g. next/og ImageResponse routes use JSX); matching only .ts would
+    // misclassify those as UI components and hide request-entry boundary violations.
+    test: /app\/api\/.*\/route\.tsx?$/,
     confidence: 0.95,
   },
-  { role: 'API_HANDLER', id: 'next-pages-api', test: /pages\/api\/.*\.ts$/, confidence: 0.95 },
+  { role: 'API_HANDLER', id: 'next-pages-api', test: /pages\/api\/.*\.tsx?$/, confidence: 0.95 },
   {
     role: 'TRPC_ROUTER',
     id: 'trpc-router',
