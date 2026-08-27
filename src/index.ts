@@ -115,6 +115,12 @@ export {
   type RoleLayeringOptions,
 } from './detector/role-layering-detector.js';
 export {
+  detectEntryPurity,
+  type EntryPurityAnalysis,
+  type EntryImportViolation,
+  type EntryPurityOptions,
+} from './detector/entry-purity-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -171,3 +177,8 @@ export {
   type RoleLayeringConfig,
   type RoleLayeringRule,
 } from './generator/role-layering-emitters.js';
+export {
+  toDependencyCruiserEntryPurity,
+  type EntryPurityConfig,
+  type EntryPurityRule,
+} from './generator/entry-purity-emitters.js';

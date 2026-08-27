@@ -31,6 +31,7 @@ import {
   detectRoleLayering,
   type RoleLayeringAnalysis,
 } from '../detector/role-layering-detector.js';
+import { detectEntryPurity, type EntryPurityAnalysis } from '../detector/entry-purity-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -59,6 +60,7 @@ export interface ScanResult {
   appIsolation: AppIsolationAnalysis;
   dependencyInternals: DependencyInternalsAnalysis;
   roleLayering: RoleLayeringAnalysis;
+  entryPurity: EntryPurityAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -104,6 +106,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const featureSlices = detectFeatureSliceIsolation(appDir, { graph });
   const appIsolation = detectAppIsolation(appDir, { graph });
   const roleLayering = detectRoleLayering(appDir, { graph });
+  const entryPurity = detectEntryPurity(appDir, { graph });
   const testIsolation = detectTestIsolation(appDir);
   const dependencyInternals = detectDependencyInternals(appDir);
   return {
@@ -121,5 +124,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     appIsolation,
     dependencyInternals,
     roleLayering,
+    entryPurity,
   };
 }

@@ -8,6 +8,7 @@ import { toDependencyCruiserTestIsolation } from '../generator/test-isolation-em
 import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emitters.js';
 import { toDependencyCruiserDependencyInternals } from '../generator/dependency-internals-emitters.js';
 import { toDependencyCruiserRoleLayering } from '../generator/role-layering-emitters.js';
+import { toDependencyCruiserEntryPurity } from '../generator/entry-purity-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -105,6 +106,15 @@ export function writeRoleLayeringConfig(
   if (config.forbidden.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'dependency-cruiser.role-layering.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+export function writeEntryPurityConfig(scan: ScanResult, outDir: string): string[] {
+  const config = toDependencyCruiserEntryPurity(scan.entryPurity);
+  if (config.forbidden.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'dependency-cruiser.entry-purity.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }

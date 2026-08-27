@@ -293,6 +293,23 @@ export function renderReport(
     }
     lines.push('');
   }
+  const entry = scan.entryPurity;
+  if (entry.entryCount > 0 && (entry.gate.status === 'AUTO' || entry.gate.status === 'SUGGEST')) {
+    const label = entry.gate.status === 'AUTO' ? green : yellow;
+    const suffix = entry.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(entry.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`ENTRY PURITY ${suffix}`)));
+    lines.push(`  framework entries must not be imported by other code   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${entry.entryCount - entry.offenderCount}/${entry.entryCount} framework entries are imported by nothing`,
+      ),
+    );
+    if (entry.offenderCount > 0) {
+      lines.push(dim(`          Imported entries: ${entry.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

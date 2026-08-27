@@ -8,6 +8,7 @@ import type {
   CycleAnalysis,
   DependencyInternalsAnalysis,
   DetectedPattern,
+  EntryPurityAnalysis,
   FeatureSliceAnalysis,
   GenerationStatus,
   LayerBoundary,
@@ -23,6 +24,7 @@ import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
   writeAppIsolationConfig,
   writeDependencyInternalsConfig,
+  writeEntryPurityConfig,
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
@@ -148,6 +150,24 @@ function emptyRoleLayering(): RoleLayeringAnalysis {
   return { appDir: 'x', boundaries: [] };
 }
 
+function fakeEntryPurity(entryCount: number, offenderCount: number): EntryPurityAnalysis {
+  return {
+    appDir: 'x',
+    entryCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: entryCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyEntryPurity(): EntryPurityAnalysis {
+  return fakeEntryPurity(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -164,6 +184,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     appIsolation: emptyAppIsolation(),
     dependencyInternals: emptyDependencyInternals(),
     roleLayering: emptyRoleLayering(),
+    entryPurity: emptyEntryPurity(),
     ...overrides,
   };
 }
@@ -375,6 +396,15 @@ describe('cli scan', () => {
     expect(none).not.toContain('TEST ISOLATION');
   });
 
+  it('renders enforceable and suggested entry purity, hidden when there are no entries', () => {
+    const auto = renderReport(emptyScan({ entryPurity: fakeEntryPurity(40, 0) }), '1.0.0');
+    expect(auto).toContain('ENTRY PURITY (enforceable)');
+    const suggest = renderReport(emptyScan({ entryPurity: fakeEntryPurity(20, 2) }), '1.0.0');
+    expect(suggest).toContain('ENTRY PURITY (suggested)');
+    expect(suggest).toContain('Imported entries: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('ENTRY PURITY');
+  });
+
   it('renders enforceable and suggested role layering', () => {
     const scan = emptyScan({
       fileCount: 100,
@@ -549,6 +579,18 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes an entry-purity config when entries are pure, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const files = writeEntryPurityConfig(
+      emptyScan({ entryPurity: fakeEntryPurity(40, 0) }),
+      outDir,
+    );
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-import-framework-entry');
+    expect(writeEntryPurityConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a role-layering config for AUTO boundaries, none otherwise', () => {

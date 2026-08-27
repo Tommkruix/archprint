@@ -16,6 +16,7 @@ const testIsolationAuto = fixture('test-isolation-auto');
 const appIsolationAuto = fixture('app-isolation-auto');
 const depInternalsAuto = fixture('dependency-internals-auto');
 const roleLayeringAuto = fixture('role-layering-auto');
+const entryPurityAuto = fixture('entry-purity-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -121,6 +122,12 @@ describe('cli program', () => {
       true,
     );
     expect(output()).toContain('role-layering boundaries');
+  });
+
+  it('generate writes the entry-purity config when framework entries are pure', async () => {
+    await run(['generate', entryPurityAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.entry-purity.archprint.json'))).toBe(true);
+    expect(output()).toContain('entry purity');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

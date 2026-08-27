@@ -9,6 +9,7 @@ import {
   emitOne,
   writeAppIsolationConfig,
   writeDependencyInternalsConfig,
+  writeEntryPurityConfig,
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
@@ -108,6 +109,7 @@ export function buildProgram(version = readVersion()): Command {
       const appFiles = writeAppIsolationConfig(scan, outDir, ['AUTO']);
       const testIsoFiles = writeTestIsolationConfig(scan, outDir);
       const depFiles = writeDependencyInternalsConfig(scan, outDir);
+      const entryFiles = writeEntryPurityConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
@@ -118,6 +120,7 @@ export function buildProgram(version = readVersion()): Command {
         appFiles.length === 0 &&
         testIsoFiles.length === 0 &&
         depFiles.length === 0 &&
+        entryFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -168,6 +171,10 @@ export function buildProgram(version = readVersion()): Command {
       for (const file of depFiles) report(file);
       if (depFiles.length > 0) {
         console.log('  (dependency hygiene: dependency-cruiser no-internals rule)');
+      }
+      for (const file of entryFiles) report(file);
+      if (entryFiles.length > 0) {
+        console.log('  (entry purity: dependency-cruiser no-import-entry rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

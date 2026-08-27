@@ -100,6 +100,7 @@ Every number is measured from the import graph, not estimated.
 | App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                                |
 | Dependency hygiene               | Import third-party packages by their public entry, not their build/impl internals (`lodash/dist/...`)                |
 | Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) |
+| Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            |
 
 ## The confidence gate
 
@@ -119,8 +120,9 @@ The bias is deliberate and conservative: one wrong rule hurts credibility more t
 
 `archprint generate` writes into the formats your existing tools already read:
 
-- **dependency-cruiser** `forbidden` rulesets (layer boundaries, public-API deep-import rules, feature-slice
-  cross-slice rules, and test-isolation rules)
+- **dependency-cruiser** `forbidden` rulesets for every enforceable boundary Archprint infers (layer,
+  role-layering, public-API deep-import, feature-slice, app-isolation, test-isolation, dependency-internals,
+  and entry-purity)
 - **eslint-plugin-boundaries** element-types config
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
   failing fixture
@@ -170,7 +172,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (eleven detectors, four output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (twelve detectors, four output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

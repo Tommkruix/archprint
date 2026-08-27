@@ -60,6 +60,13 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
     violations: [],
   },
   roleLayering: { appDir: '/app', boundaries: [] },
+  entryPurity: {
+    appDir: '/app',
+    entryCount: 0,
+    offenderCount: 0,
+    gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
+    violations: [],
+  },
   ...overrides,
 });
 
