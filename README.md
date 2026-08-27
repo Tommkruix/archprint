@@ -57,7 +57,16 @@ archprint explain AP-002 apps/web
 
 # Generate a provisional (SUGGEST) rule after reviewing it
 archprint approve AP-001 apps/web
+
+# Recommend a rule set from the evidence and the detected stack (fresh repos too)
+archprint recommend apps/web
 ```
+
+`recommend` sorts every rule family into three tiers: rules your code already
+follows (enforce now), rules with thin evidence (review and adopt), and rules that
+suit your stack but are not yet evidenced (adopt from day one). On a fresh repo,
+where there is little code to infer from, the last tier carries the stack-aware
+baseline so you can start enforcing on day one.
 
 ## Example
 
@@ -166,6 +175,7 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 | `archprint generate [path]`     | Write the enforceable (AUTO) rules and tool configs. `--out <dir>`, `--fast`.                            |
 | `archprint explain <id> [path]` | Show the full gate breakdown for one rule id.                                                            |
 | `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                               |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).            |
 
 ## Fast and deep modes
 

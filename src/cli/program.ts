@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
-import { renderExplain, renderReport } from './report.js';
+import { renderExplain, renderReport, renderRecommendations } from './report.js';
+import { buildRecommendations, detectStack } from './recommend.js';
 import {
   emitOne,
   writeAppIsolationConfig,
@@ -243,6 +244,17 @@ export function buildProgram(version = readVersion()): Command {
           'Warning: generated from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
         );
       }
+    });
+
+  program
+    .command('recommend')
+    .description('Recommend a rule set for this repo (or a fresh one) from its stack and evidence')
+    .argument('[path]', 'app directory', '.')
+    .action((input: string) => {
+      const appDir = resolveApp(input);
+      const scan = scanRepo(appDir, { deep: false });
+      const recommendations = buildRecommendations(scan, detectStack(appDir));
+      console.log(renderRecommendations(recommendations, version));
     });
 
   program

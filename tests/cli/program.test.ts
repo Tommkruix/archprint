@@ -197,6 +197,12 @@ describe('cli program', () => {
     expect(output()).toContain('Scanned 2 app directories');
   });
 
+  it('recommend prints a rule set for the repo and its stack', async () => {
+    await run(['recommend', layerAuto]);
+    expect(output()).toContain('recommendations');
+    expect(output()).toContain('ENFORCE NOW');
+  });
+
   it('explain shows the gate breakdown', async () => {
     await run(['explain', 'AP-002', auto]);
     expect(output()).toContain('Gate:');

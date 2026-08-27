@@ -5,6 +5,7 @@ import type { AppIsolationGroup } from '../detector/app-isolation-detector.js';
 import type { RoleBoundary } from '../detector/role-layering-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
+import type { Recommendations } from './recommend.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
 const paint =
@@ -505,6 +506,33 @@ export function renderExplain(pattern: ScannedPattern): string {
     }
     if (result.violations.length > 10)
       lines.push(dim(`  ... and ${result.violations.length - 10} more`));
+  }
+  return lines.join('\n');
+}
+
+export function renderRecommendations(rec: Recommendations, version: string): string {
+  const lines = [
+    bold(`Archprint v${version}  recommendations`),
+    `Detected stack: ${rec.stack.length > 0 ? rec.stack.join(', ') : 'none detected'}`,
+    '',
+  ];
+  if (rec.enforceNow.length > 0) {
+    lines.push(green(bold('ENFORCE NOW (your code already follows these)')));
+    for (const title of rec.enforceNow) lines.push(green(`  + ${title}`));
+    lines.push(dim('  Run: archprint generate'), '');
+  }
+  if (rec.review.length > 0) {
+    lines.push(yellow(bold('REVIEW AND ADOPT (close, thin evidence)')));
+    for (const title of rec.review) lines.push(yellow(`  ~ ${title}`));
+    lines.push('');
+  }
+  if (rec.adopt.length > 0) {
+    lines.push(bold('ADOPT FROM DAY ONE (recommended for your stack, not yet evidenced)'));
+    for (const title of rec.adopt) lines.push(dim(`  - ${title}`));
+    lines.push('');
+  }
+  if (rec.enforceNow.length === 0 && rec.review.length === 0 && rec.adopt.length === 0) {
+    lines.push(dim('No recommendations: no stack detected and no code to learn from yet.'));
   }
   return lines.join('\n');
 }
