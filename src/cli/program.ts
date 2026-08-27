@@ -8,6 +8,7 @@ import { renderExplain, renderReport } from './report.js';
 import {
   emitOne,
   writeAppIsolationConfig,
+  writeDependencyInternalsConfig,
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
@@ -106,6 +107,7 @@ export function buildProgram(version = readVersion()): Command {
       const sliceFiles = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
       const appFiles = writeAppIsolationConfig(scan, outDir, ['AUTO']);
       const testIsoFiles = writeTestIsolationConfig(scan, outDir);
+      const depFiles = writeDependencyInternalsConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
@@ -114,6 +116,7 @@ export function buildProgram(version = readVersion()): Command {
         sliceFiles.length === 0 &&
         appFiles.length === 0 &&
         testIsoFiles.length === 0 &&
+        depFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -155,6 +158,10 @@ export function buildProgram(version = readVersion()): Command {
       for (const file of testIsoFiles) report(file);
       if (testIsoFiles.length > 0) {
         console.log('  (test isolation: dependency-cruiser not-to-test rule)');
+      }
+      for (const file of depFiles) report(file);
+      if (depFiles.length > 0) {
+        console.log('  (dependency hygiene: dependency-cruiser no-internals rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

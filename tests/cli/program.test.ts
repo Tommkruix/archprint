@@ -14,6 +14,7 @@ const publicApiAuto = fixture('public-api-auto'); // a barrel with 36 clean cons
 const featureSliceAuto = fixture('feature-slice-auto'); // two isolated slices (40 files) gate AUTO
 const testIsolationAuto = fixture('test-isolation-auto'); // 36 clean production files + 3 tests gate AUTO
 const appIsolationAuto = fixture('app-isolation-auto'); // two isolated apps (40 files) gate AUTO
+const depInternalsAuto = fixture('dependency-internals-auto'); // 36 files import react by root, gate AUTO
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -103,6 +104,14 @@ describe('cli program', () => {
       true,
     );
     expect(output()).toContain('app boundaries');
+  });
+
+  it('generate writes the dependency-internals config when packages are imported cleanly', async () => {
+    await run(['generate', depInternalsAuto, '--fast', '--out', out]);
+    expect(
+      existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
+    ).toBe(true);
+    expect(output()).toContain('dependency hygiene');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

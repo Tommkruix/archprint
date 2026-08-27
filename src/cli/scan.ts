@@ -23,6 +23,10 @@ import {
   detectAppIsolation,
   type AppIsolationAnalysis,
 } from '../detector/app-isolation-detector.js';
+import {
+  detectDependencyInternals,
+  type DependencyInternalsAnalysis,
+} from '../detector/dependency-internals-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -49,6 +53,7 @@ export interface ScanResult {
   featureSlices: FeatureSliceAnalysis;
   testIsolation: TestIsolationAnalysis;
   appIsolation: AppIsolationAnalysis;
+  dependencyInternals: DependencyInternalsAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -100,6 +105,8 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const appIsolation = detectAppIsolation(appDir, { graph });
   // Test isolation reasons about imports to test files, which the shared graph excludes, so it builds its own.
   const testIsolation = detectTestIsolation(appDir);
+  // Dependency-internals reasons about external specifiers, which the first-party graph discards.
+  const dependencyInternals = detectDependencyInternals(appDir);
   return {
     appDir,
     fileCount,
@@ -113,5 +120,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     featureSlices,
     testIsolation,
     appIsolation,
+    dependencyInternals,
   };
 }

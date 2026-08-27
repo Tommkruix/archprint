@@ -102,6 +102,12 @@ export {
   type SiblingIsolationOptions,
 } from './detector/sibling-isolation.js';
 export {
+  detectDependencyInternals,
+  type DependencyInternalsAnalysis,
+  type DependencyInternalViolation,
+  type DependencyInternalsOptions,
+} from './detector/dependency-internals-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -148,3 +154,8 @@ export {
   type CrossAppConfig,
   type CrossAppRule,
 } from './generator/app-isolation-emitters.js';
+export {
+  toDependencyCruiserDependencyInternals,
+  type NoInternalsConfig,
+  type NoInternalsRule,
+} from './generator/dependency-internals-emitters.js';

@@ -243,6 +243,28 @@ export function renderReport(
     }
     lines.push('');
   }
+  const deps = scan.dependencyInternals;
+  if (
+    deps.externalImporterCount > 0 &&
+    (deps.gate.status === 'AUTO' || deps.gate.status === 'SUGGEST')
+  ) {
+    const label = deps.gate.status === 'AUTO' ? green : yellow;
+    const suffix = deps.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(deps.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`DEPENDENCY HYGIENE ${suffix}`)));
+    lines.push(
+      `  import dependencies by their public entry, not their internals   confidence ${floor}`,
+    );
+    lines.push(
+      dim(
+        `          Evidence: ${deps.externalImporterCount - deps.offenderCount}/${deps.externalImporterCount} files importing packages avoid their build/impl dirs`,
+      ),
+    );
+    if (deps.offenderCount > 0) {
+      lines.push(dim(`          Internal imports: ${deps.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

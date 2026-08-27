@@ -6,6 +6,7 @@ import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.j
 import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
 import { toDependencyCruiserTestIsolation } from '../generator/test-isolation-emitters.js';
 import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emitters.js';
+import { toDependencyCruiserDependencyInternals } from '../generator/dependency-internals-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -111,6 +112,19 @@ export function writeTestIsolationConfig(scan: ScanResult, outDir: string): stri
   if (config.forbidden.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'dependency-cruiser.test-isolation.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+/**
+ * Write the inferred dependency-internals rule as a dependency-cruiser `forbidden` ruleset. Returns the file
+ * path written, empty unless the rule is enforceable (AUTO) and the app imports external packages.
+ */
+export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string): string[] {
+  const config = toDependencyCruiserDependencyInternals(scan.dependencyInternals);
+  if (config.forbidden.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'dependency-cruiser.dependency-internals.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }
