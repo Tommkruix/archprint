@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import type {
+  AppIsolationAnalysis,
   CycleAnalysis,
   DetectedPattern,
   FeatureSliceAnalysis,
@@ -17,6 +18,7 @@ import type {
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
+  writeAppIsolationConfig,
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
@@ -109,6 +111,25 @@ function emptyTestIsolation(): TestIsolationAnalysis {
     testFileCount: 0,
     offenderCount: 0,
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
+    violations: [],
+  };
+}
+
+function emptyAppIsolation(): AppIsolationAnalysis {
+  return { appDir: 'x', groups: [] };
+}
+
+function fakeAppGroup(container: string, appFileCount: number, crossImporterCount: number) {
+  return {
+    container,
+    appCount: 3,
+    appFileCount,
+    crossImporterCount,
+    gate: evaluateGate({
+      roleFileCount: appFileCount,
+      violatingFileCount: crossImporterCount,
+      roleConfidence: 1,
+    }),
     violations: [],
   };
 }
@@ -223,6 +244,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -244,6 +266,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
@@ -267,6 +290,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('Transitive leak');
@@ -285,6 +309,7 @@ describe('cli scan', () => {
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
+      appIsolation: emptyAppIsolation(),
     };
     const auto = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 3) }, '1.0.0');
     expect(auto).toContain('TEST ISOLATION (enforceable)');
@@ -297,6 +322,31 @@ describe('cli scan', () => {
     // No test files: the rule is meaningless and is not rendered.
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
+  });
+
+  it('renders enforceable and suggested app isolation', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 100,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
+      testIsolation: emptyTestIsolation(),
+      appIsolation: {
+        appDir: 'x',
+        groups: [fakeAppGroup('apps', 40, 0), fakeAppGroup('services', 20, 2)],
+      },
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('APP ISOLATION (enforceable)');
+    expect(report).toContain('apps (3 apps)');
+    expect(report).toContain('APP ISOLATION (suggested)');
+    expect(report).toContain('Cross-app imports: 2');
   });
 
   it('renders enforceable and suggested feature-slice isolation', () => {
@@ -316,6 +366,7 @@ describe('cli scan', () => {
         groups: [fakeSliceGroup('src/features', 40, 0), fakeSliceGroup('src/modules', 20, 2)],
       },
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('FEATURE SLICE ISOLATION (enforceable)');
@@ -341,6 +392,7 @@ describe('cli scan', () => {
       },
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('PUBLIC API BOUNDARIES (enforceable)');
@@ -363,6 +415,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
@@ -382,6 +435,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
@@ -399,6 +453,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -421,6 +476,7 @@ describe('cli scan', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -450,6 +506,7 @@ describe('cli generate', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -471,6 +528,7 @@ describe('cli generate', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -496,6 +554,7 @@ describe('cli generate', () => {
       publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const files = writePublicApiConfig(scan, outDir, ['AUTO']);
     expect(files).toHaveLength(1);
@@ -520,6 +579,7 @@ describe('cli generate', () => {
       publicApi: emptyPublicApi(),
       featureSlices: { appDir: 'x', groups: [fakeSliceGroup('src/features', 40, 0)] },
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const files = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
     expect(files).toHaveLength(1);
@@ -528,6 +588,31 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes an app-isolation cross-app config for AUTO groups, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
+      testIsolation: emptyTestIsolation(),
+      appIsolation: { appDir: 'x', groups: [fakeAppGroup('apps', 40, 0)] },
+    };
+    const files = writeAppIsolationConfig(scan, outDir, ['AUTO']);
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-cross-app-apps');
+
+    const none: ScanResult = { ...scan, appIsolation: emptyAppIsolation() };
+    expect(writeAppIsolationConfig(none, outDir, ['AUTO'])).toEqual([]);
   });
 
   it('writes a test-isolation config when the repo cleanly isolates tests, none otherwise', () => {
@@ -544,6 +629,7 @@ describe('cli generate', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: fakeTestIsolation(40, 0, 3),
+      appIsolation: emptyAppIsolation(),
     };
     const files = writeTestIsolationConfig(scan, outDir);
     expect(files).toHaveLength(1);
@@ -567,6 +653,7 @@ describe('cli generate', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });
@@ -586,6 +673,7 @@ describe('cli generate', () => {
       publicApi: emptyPublicApi(),
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
     };
     const files = writeGraph(withBoundaries, outDir);
     expect(files.map((file) => path.basename(file)).sort()).toEqual([

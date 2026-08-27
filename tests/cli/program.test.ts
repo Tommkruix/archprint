@@ -13,6 +13,7 @@ const multiApp = fixture('multi-app'); // two sibling app dirs under one root
 const publicApiAuto = fixture('public-api-auto'); // a barrel with 36 clean consumers gates AUTO
 const featureSliceAuto = fixture('feature-slice-auto'); // two isolated slices (40 files) gate AUTO
 const testIsolationAuto = fixture('test-isolation-auto'); // 36 clean production files + 3 tests gate AUTO
+const appIsolationAuto = fixture('app-isolation-auto'); // two isolated apps (40 files) gate AUTO
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -94,6 +95,14 @@ describe('cli program', () => {
       true,
     );
     expect(output()).toContain('test isolation');
+  });
+
+  it('generate writes the app-isolation config for AUTO app isolation', async () => {
+    await run(['generate', appIsolationAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(
+      true,
+    );
+    expect(output()).toContain('app boundaries');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

@@ -19,6 +19,10 @@ import {
   detectTestIsolation,
   type TestIsolationAnalysis,
 } from '../detector/test-isolation-detector.js';
+import {
+  detectAppIsolation,
+  type AppIsolationAnalysis,
+} from '../detector/app-isolation-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -44,6 +48,7 @@ export interface ScanResult {
   publicApi: PublicApiAnalysis;
   featureSlices: FeatureSliceAnalysis;
   testIsolation: TestIsolationAnalysis;
+  appIsolation: AppIsolationAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -92,6 +97,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const reachability = computeLayerReachability(appDir, { graph });
   const publicApi = detectPublicApiBoundaries(appDir, { graph });
   const featureSlices = detectFeatureSliceIsolation(appDir, { graph });
+  const appIsolation = detectAppIsolation(appDir, { graph });
   // Test isolation reasons about imports to test files, which the shared graph excludes, so it builds its own.
   const testIsolation = detectTestIsolation(appDir);
   return {
@@ -106,5 +112,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     publicApi,
     featureSlices,
     testIsolation,
+    appIsolation,
   };
 }

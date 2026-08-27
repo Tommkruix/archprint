@@ -97,6 +97,7 @@ Every number is measured from the import graph, not estimated.
 | Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals    |
 | Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other            |
 | Test isolation                   | Production (non-test) code must not import test or spec files                                                  |
+| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                          |
 
 ## The confidence gate
 
@@ -167,7 +168,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (eight detectors, four output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (nine detectors, four output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

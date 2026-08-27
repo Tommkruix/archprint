@@ -5,6 +5,7 @@ import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emit
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
 import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
 import { toDependencyCruiserTestIsolation } from '../generator/test-isolation-emitters.js';
+import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -80,6 +81,23 @@ export function writeFeatureSliceConfig(
   if (config.forbidden.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'dependency-cruiser.feature-slice.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+/**
+ * Write the inferred app isolation as a dependency-cruiser cross-app ruleset. Returns the file paths written,
+ * empty when no container qualifies at the requested statuses.
+ */
+export function writeAppIsolationConfig(
+  scan: ScanResult,
+  outDir: string,
+  statuses: readonly GenerationStatus[] = ['AUTO'],
+): string[] {
+  const config = toDependencyCruiserAppIsolation(scan.appIsolation.groups, statuses);
+  if (config.forbidden.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'dependency-cruiser.app-isolation.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }

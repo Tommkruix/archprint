@@ -1,6 +1,7 @@
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import type { PublicApiGroup } from '../detector/public-api-detector.js';
 import type { FeatureSliceGroup } from '../detector/feature-slice-detector.js';
+import type { AppIsolationGroup } from '../detector/app-isolation-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
@@ -74,6 +75,20 @@ function sliceLines(group: FeatureSliceGroup): string[] {
   ];
   if (group.crossImporterCount > 0) {
     lines.push(dim(`          Cross-slice imports: ${group.crossImporterCount}`));
+  }
+  return lines;
+}
+
+function appLines(group: AppIsolationGroup): string[] {
+  const floor = `${(group.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+  const lines = [
+    `  ${bold(`${group.container} (${group.appCount} apps)`)}  apps must not import each other   confidence ${floor}`,
+    dim(
+      `          Evidence: ${group.appFileCount - group.crossImporterCount}/${group.appFileCount} app files stay isolated`,
+    ),
+  ];
+  if (group.crossImporterCount > 0) {
+    lines.push(dim(`          Cross-app imports: ${group.crossImporterCount}`));
   }
   return lines;
 }
@@ -190,6 +205,21 @@ export function renderReport(
     for (const g of suggestSlices.slice(0, 8)) lines.push(...sliceLines(g));
     if (suggestSlices.length > 8) {
       lines.push(dim(`          ... and ${suggestSlices.length - 8} more`));
+    }
+    lines.push('');
+  }
+  const autoApps = scan.appIsolation.groups.filter((g) => g.gate.status === 'AUTO');
+  const suggestApps = scan.appIsolation.groups.filter((g) => g.gate.status === 'SUGGEST');
+  if (autoApps.length > 0) {
+    lines.push(green(bold('APP ISOLATION (enforceable)')));
+    for (const g of autoApps) lines.push(...appLines(g));
+    lines.push('');
+  }
+  if (suggestApps.length > 0) {
+    lines.push(yellow(bold('APP ISOLATION (suggested)')));
+    for (const g of suggestApps.slice(0, 8)) lines.push(...appLines(g));
+    if (suggestApps.length > 8) {
+      lines.push(dim(`          ... and ${suggestApps.length - 8} more`));
     }
     lines.push('');
   }

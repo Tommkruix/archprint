@@ -7,6 +7,7 @@ import { hasTsConfig, scanRepo, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport } from './report.js';
 import {
   emitOne,
+  writeAppIsolationConfig,
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
@@ -103,6 +104,7 @@ export function buildProgram(version = readVersion()): Command {
       const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
       const apiFiles = writePublicApiConfig(scan, outDir, ['AUTO']);
       const sliceFiles = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
+      const appFiles = writeAppIsolationConfig(scan, outDir, ['AUTO']);
       const testIsoFiles = writeTestIsolationConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
@@ -110,6 +112,7 @@ export function buildProgram(version = readVersion()): Command {
         layerFiles.length === 0 &&
         apiFiles.length === 0 &&
         sliceFiles.length === 0 &&
+        appFiles.length === 0 &&
         testIsoFiles.length === 0 &&
         graphFiles.length === 0
       ) {
@@ -141,6 +144,13 @@ export function buildProgram(version = readVersion()): Command {
           (group) => group.gate.status === 'AUTO',
         ).length;
         console.log(`  (${count} feature-slice boundaries: dependency-cruiser cross-slice rules)`);
+      }
+      for (const file of appFiles) report(file);
+      if (appFiles.length > 0) {
+        const count = scan.appIsolation.groups.filter(
+          (group) => group.gate.status === 'AUTO',
+        ).length;
+        console.log(`  (${count} app boundaries: dependency-cruiser cross-app rules)`);
       }
       for (const file of testIsoFiles) report(file);
       if (testIsoFiles.length > 0) {

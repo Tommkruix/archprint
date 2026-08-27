@@ -89,6 +89,19 @@ export {
   type TestIsolationDetectorOptions,
 } from './detector/test-isolation-detector.js';
 export {
+  detectAppIsolation,
+  type AppIsolationAnalysis,
+  type AppIsolationGroup,
+  type AppImportViolation,
+  type AppIsolationDetectorOptions,
+} from './detector/app-isolation-detector.js';
+export {
+  detectSiblingIsolation,
+  type SiblingGroup,
+  type SiblingViolation,
+  type SiblingIsolationOptions,
+} from './detector/sibling-isolation.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -130,3 +143,8 @@ export {
   type NotToTestConfig,
   type NotToTestRule,
 } from './generator/test-isolation-emitters.js';
+export {
+  toDependencyCruiserAppIsolation,
+  type CrossAppConfig,
+  type CrossAppRule,
+} from './generator/app-isolation-emitters.js';
