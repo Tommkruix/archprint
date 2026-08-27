@@ -46,6 +46,10 @@ import {
   type ConsoleIsolationAnalysis,
 } from '../detector/console-isolation-detector.js';
 import { detectEnvAccess, type EnvAccessAnalysis } from '../detector/env-access-detector.js';
+import {
+  detectWorkspacePackageApi,
+  type WorkspacePackageAnalysis,
+} from '../detector/workspace-package-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -79,6 +83,7 @@ export interface ScanResult {
   deepRelative: DeepRelativeAnalysis;
   consoleIsolation: ConsoleIsolationAnalysis;
   envAccess: EnvAccessAnalysis;
+  workspacePackageApi: WorkspacePackageAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -132,6 +137,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const usage = scanUsage(appDir);
   const consoleIsolation = detectConsoleIsolation(appDir, { usage });
   const envAccess = detectEnvAccess(appDir, { usage });
+  const workspacePackageApi = detectWorkspacePackageApi(appDir);
   return {
     appDir,
     fileCount,
@@ -152,5 +158,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     deepRelative,
     consoleIsolation,
     envAccess,
+    workspacePackageApi,
   };
 }

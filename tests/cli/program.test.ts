@@ -21,6 +21,7 @@ const phantomDepsAuto = fixture('phantom-deps-auto');
 const deepRelativeAuto = fixture('deep-relative-auto');
 const consoleAuto = fixture('console-isolation-auto');
 const envAuto = fixture('env-access-auto');
+const wpkgAuto = fixture('workspace-package-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -156,6 +157,12 @@ describe('cli program', () => {
     await run(['generate', envAuto, '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.env-access.archprint.json'))).toBe(true);
     expect(output()).toContain('env access');
+  });
+
+  it('generate writes the workspace-package eslint config when packages import by name', async () => {
+    await run(['generate', wpkgAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.workspace-package.archprint.json'))).toBe(true);
+    expect(output()).toContain('workspace package API');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

@@ -146,6 +146,12 @@ export {
 } from './detector/env-access-detector.js';
 export { scanUsage, type UsageScan, type FileUsage } from './scanner/usage-scanner.js';
 export {
+  detectWorkspacePackageApi,
+  type WorkspacePackageAnalysis,
+  type WorkspacePackageViolation,
+  type WorkspacePackageOptions,
+} from './detector/workspace-package-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -222,3 +228,4 @@ export {
   type EslintFlatConfigBlock,
 } from './generator/console-isolation-emitters.js';
 export { toEslintEnvAccess } from './generator/env-access-emitters.js';
+export { toEslintWorkspacePackageApi } from './generator/workspace-package-emitters.js';

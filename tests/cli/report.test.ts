@@ -95,6 +95,14 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
     violations: [],
   },
+  workspacePackageApi: {
+    appDir: '/app',
+    packages: [],
+    consumerCount: 0,
+    offenderCount: 0,
+    gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
+    violations: [],
+  },
   ...overrides,
 });
 

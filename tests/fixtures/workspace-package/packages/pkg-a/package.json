@@ -1,0 +1,1 @@
+{ "name": "@scope/pkg-a", "dependencies": { "@scope/pkg-b": "*" } }

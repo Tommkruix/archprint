@@ -13,6 +13,7 @@ import { toDependencyCruiserPhantomDependencies } from '../generator/phantom-dep
 import { toEslintDeepRelative } from '../generator/deep-relative-emitters.js';
 import { toEslintConsoleIsolation } from '../generator/console-isolation-emitters.js';
 import { toEslintEnvAccess } from '../generator/env-access-emitters.js';
+import { toEslintWorkspacePackageApi } from '../generator/workspace-package-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -128,6 +129,15 @@ export function writeConsoleIsolationConfig(scan: ScanResult, outDir: string): s
   if (config === null) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'eslint.console-isolation.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+export function writeWorkspacePackageConfig(scan: ScanResult, outDir: string): string[] {
+  const config = toEslintWorkspacePackageApi(scan.workspacePackageApi);
+  if (config === null) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint.workspace-package.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }

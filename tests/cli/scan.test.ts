@@ -22,6 +22,7 @@ import type {
   RoleBoundary,
   RoleLayeringAnalysis,
   TestIsolationAnalysis,
+  WorkspacePackageAnalysis,
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
@@ -40,6 +41,7 @@ import {
   writeRoleLayeringConfig,
   writeRules,
   writeTestIsolationConfig,
+  writeWorkspacePackageConfig,
 } from '../../src/cli/generate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -254,6 +256,25 @@ function emptyEnv(): EnvAccessAnalysis {
   return fakeEnv(0, 0);
 }
 
+function fakeWpkg(consumerCount: number, offenderCount: number): WorkspacePackageAnalysis {
+  return {
+    appDir: 'x',
+    packages: consumerCount > 0 ? ['@scope/pkg'] : [],
+    consumerCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: consumerCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyWpkg(): WorkspacePackageAnalysis {
+  return fakeWpkg(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -275,6 +296,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     deepRelative: emptyDeepRelative(),
     consoleIsolation: emptyConsole(),
     envAccess: emptyEnv(),
+    workspacePackageApi: emptyWpkg(),
     ...overrides,
   };
 }
@@ -484,6 +506,16 @@ describe('cli scan', () => {
 
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
+  });
+
+  it('renders workspace package API, hidden when there are no workspace consumers', () => {
+    expect(renderReport(emptyScan({ workspacePackageApi: fakeWpkg(40, 0) }), '1.0.0')).toContain(
+      'WORKSPACE PACKAGE API (enforceable)',
+    );
+    const suggest = renderReport(emptyScan({ workspacePackageApi: fakeWpkg(20, 2) }), '1.0.0');
+    expect(suggest).toContain('WORKSPACE PACKAGE API (suggested)');
+    expect(suggest).toContain('Deep package imports: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('WORKSPACE PACKAGE API');
   });
 
   it('renders console isolation and env access, hidden when their population is empty', () => {
@@ -703,6 +735,14 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a workspace-package eslint config when packages are imported by name, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    expect(
+      writeWorkspacePackageConfig(emptyScan({ workspacePackageApi: fakeWpkg(40, 0) }), outDir),
+    ).toHaveLength(1);
+    expect(writeWorkspacePackageConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes eslint configs for console isolation and env access when clean, none otherwise', () => {

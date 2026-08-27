@@ -21,6 +21,7 @@ import {
   writeRoleLayeringConfig,
   writeRules,
   writeTestIsolationConfig,
+  writeWorkspacePackageConfig,
 } from './generate.js';
 
 export function readVersion(): string {
@@ -118,6 +119,7 @@ export function buildProgram(version = readVersion()): Command {
       const deepRelFiles = writeDeepRelativeConfig(scan, outDir);
       const consoleFiles = writeConsoleIsolationConfig(scan, outDir);
       const envFiles = writeEnvAccessConfig(scan, outDir);
+      const wpkgFiles = writeWorkspacePackageConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
@@ -133,6 +135,7 @@ export function buildProgram(version = readVersion()): Command {
         deepRelFiles.length === 0 &&
         consoleFiles.length === 0 &&
         envFiles.length === 0 &&
+        wpkgFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -203,6 +206,10 @@ export function buildProgram(version = readVersion()): Command {
       for (const file of envFiles) report(file);
       if (envFiles.length > 0) {
         console.log('  (env access: eslint no-restricted-properties rule)');
+      }
+      for (const file of wpkgFiles) report(file);
+      if (wpkgFiles.length > 0) {
+        console.log('  (workspace package API: eslint no-restricted-imports rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

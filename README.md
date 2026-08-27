@@ -105,6 +105,7 @@ Every number is measured from the import graph, not estimated.
 | Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    |
 | Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     |
 | Env access                       | Read `process.env` only in the config/env layer                                                                      |
+| Workspace package API            | Import a monorepo workspace package by its name, not a deep path into its source                                     |
 
 ## The confidence gate
 
@@ -177,7 +178,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (sixteen detectors, five output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (seventeen detectors, five output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

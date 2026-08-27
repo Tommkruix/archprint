@@ -381,6 +381,23 @@ export function renderReport(
       lines.push(dim(`          Reads outside config: ${env.offenderCount}`));
     lines.push('');
   }
+  const wpkg = scan.workspacePackageApi;
+  if (wpkg.consumerCount > 0 && (wpkg.gate.status === 'AUTO' || wpkg.gate.status === 'SUGGEST')) {
+    const label = wpkg.gate.status === 'AUTO' ? green : yellow;
+    const suffix = wpkg.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(wpkg.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`WORKSPACE PACKAGE API ${suffix}`)));
+    lines.push(`  import workspace packages by name, not a deep path   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${wpkg.consumerCount - wpkg.offenderCount}/${wpkg.consumerCount} consumers import packages by name`,
+      ),
+    );
+    if (wpkg.offenderCount > 0) {
+      lines.push(dim(`          Deep package imports: ${wpkg.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&
