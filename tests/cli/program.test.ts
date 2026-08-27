@@ -12,6 +12,7 @@ const layerAuto = fixture('layer-auto'); // gates a helpers !-> views layer boun
 const multiApp = fixture('multi-app'); // two sibling app dirs under one root
 const publicApiAuto = fixture('public-api-auto'); // a barrel with 36 clean consumers gates AUTO
 const featureSliceAuto = fixture('feature-slice-auto'); // two isolated slices (40 files) gate AUTO
+const testIsolationAuto = fixture('test-isolation-auto'); // 36 clean production files + 3 tests gate AUTO
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -85,6 +86,14 @@ describe('cli program', () => {
       true,
     );
     expect(output()).toContain('feature-slice boundaries');
+  });
+
+  it('generate writes the test-isolation config when tests are cleanly isolated', async () => {
+    await run(['generate', testIsolationAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
+      true,
+    );
+    expect(output()).toContain('test isolation');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

@@ -1,6 +1,6 @@
 /**
  * Architectural role inferred from a file's path/name. Roles cover NestJS, Next.js App Router
- * and Pages Router, tRPC, and common monorepo package conventions.
+ * and Pages Router, tRPC, SvelteKit, Nuxt, Remix, and common monorepo package conventions.
  */
 export type Role =
   | 'CONTROLLER'

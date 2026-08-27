@@ -12,6 +12,7 @@ import {
   writeLayerConfig,
   writePublicApiConfig,
   writeRules,
+  writeTestIsolationConfig,
 } from './generate.js';
 
 export function readVersion(): string {
@@ -102,12 +103,14 @@ export function buildProgram(version = readVersion()): Command {
       const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
       const apiFiles = writePublicApiConfig(scan, outDir, ['AUTO']);
       const sliceFiles = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
+      const testIsoFiles = writeTestIsolationConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
         layerFiles.length === 0 &&
         apiFiles.length === 0 &&
         sliceFiles.length === 0 &&
+        testIsoFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -138,6 +141,10 @@ export function buildProgram(version = readVersion()): Command {
           (group) => group.gate.status === 'AUTO',
         ).length;
         console.log(`  (${count} feature-slice boundaries: dependency-cruiser cross-slice rules)`);
+      }
+      for (const file of testIsoFiles) report(file);
+      if (testIsoFiles.length > 0) {
+        console.log('  (test isolation: dependency-cruiser not-to-test rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

@@ -44,6 +44,14 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   reachability: { appDir: '/app', layers: [], reaches: new Map() },
   publicApi: { appDir: '/app', groups: [] },
   featureSlices: { appDir: '/app', groups: [] },
+  testIsolation: {
+    appDir: '/app',
+    productionFileCount: 0,
+    testFileCount: 0,
+    offenderCount: 0,
+    gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
+    violations: [],
+  },
   ...overrides,
 });
 

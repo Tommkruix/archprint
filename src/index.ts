@@ -60,6 +60,7 @@ export {
   buildImportGraph,
   stronglyConnectedComponents,
   type ImportGraph,
+  type ImportGraphOptions,
 } from './scanner/import-graph.js';
 export {
   computeLayerReachability,
@@ -81,6 +82,12 @@ export {
   type FeatureSliceViolation,
   type FeatureSliceDetectorOptions,
 } from './detector/feature-slice-detector.js';
+export {
+  detectTestIsolation,
+  type TestIsolationAnalysis,
+  type TestImportViolation,
+  type TestIsolationDetectorOptions,
+} from './detector/test-isolation-detector.js';
 export {
   evaluateGate,
   GATE_THRESHOLDS,
@@ -118,3 +125,8 @@ export {
   type CrossSliceConfig,
   type CrossSliceRule,
 } from './generator/feature-slice-emitters.js';
+export {
+  toDependencyCruiserTestIsolation,
+  type NotToTestConfig,
+  type NotToTestRule,
+} from './generator/test-isolation-emitters.js';

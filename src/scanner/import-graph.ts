@@ -50,10 +50,17 @@ function resolveImportFile(
 
 export interface ImportGraph {
   root: string;
-  /** Non-test source files in the app. */
+  /** Source files in the app (non-test, unless `includeTests` was set). */
   files: WalkedFile[];
   /** repo-relative path -> the repo-relative first-party files it imports as values. */
   adjacency: Map<string, string[]>;
+}
+
+export interface ImportGraphOptions {
+  /** Resolve the graph with the type checker (deep). Default false: fast file resolution. */
+  resolve?: boolean;
+  /** Keep test files as nodes (for detectors that reason about imports to/from tests). Default false. */
+  includeTests?: boolean;
 }
 
 /**
@@ -61,10 +68,12 @@ export interface ImportGraph {
  * resolves each specifier to a file syntactically. Shared by the cycle and orphan detectors so the graph is
  * built one way. `appDir` is normalized to an absolute path.
  */
-export function buildImportGraph(appDir: string, options: { resolve?: boolean } = {}): ImportGraph {
+export function buildImportGraph(appDir: string, options: ImportGraphOptions = {}): ImportGraph {
   const resolve = options.resolve ?? false;
   const root = path.resolve(appDir);
-  const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
+  const files = options.includeTests
+    ? walkRepo(root)
+    : walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
   const relByAbs = new Map<string, string>(
     files.map((file) => [file.absolutePath, file.relativePath]),
   );

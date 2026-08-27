@@ -193,6 +193,26 @@ export function renderReport(
     }
     lines.push('');
   }
+  const testIso = scan.testIsolation;
+  if (
+    testIso.testFileCount > 0 &&
+    (testIso.gate.status === 'AUTO' || testIso.gate.status === 'SUGGEST')
+  ) {
+    const label = testIso.gate.status === 'AUTO' ? green : yellow;
+    const suffix = testIso.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(testIso.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`TEST ISOLATION ${suffix}`)));
+    lines.push(`  production code must not import test files   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${testIso.productionFileCount - testIso.offenderCount}/${testIso.productionFileCount} production files stay clean of ${testIso.testFileCount} test file(s)`,
+      ),
+    );
+    if (testIso.offenderCount > 0) {
+      lines.push(dim(`          Test imports: ${testIso.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&
