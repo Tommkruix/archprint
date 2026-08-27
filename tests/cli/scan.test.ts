@@ -21,6 +21,7 @@ import type {
   ReachabilityAnalysis,
   RoleBoundary,
   RoleLayeringAnalysis,
+  StoriesIsolationAnalysis,
   TestIsolationAnalysis,
   WorkspacePackageAnalysis,
 } from '../../src/index.js';
@@ -40,6 +41,7 @@ import {
   writePublicApiConfig,
   writeRoleLayeringConfig,
   writeRules,
+  writeStoriesIsolationConfig,
   writeTestIsolationConfig,
   writeWorkspacePackageConfig,
 } from '../../src/cli/generate.js';
@@ -275,6 +277,24 @@ function emptyWpkg(): WorkspacePackageAnalysis {
   return fakeWpkg(0, 0);
 }
 
+function fakeStories(storyCount: number, offenderCount: number): StoriesIsolationAnalysis {
+  return {
+    appDir: 'x',
+    storyCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: storyCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyStories(): StoriesIsolationAnalysis {
+  return fakeStories(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -297,6 +317,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     consoleIsolation: emptyConsole(),
     envAccess: emptyEnv(),
     workspacePackageApi: emptyWpkg(),
+    storiesIsolation: emptyStories(),
     ...overrides,
   };
 }
@@ -506,6 +527,16 @@ describe('cli scan', () => {
 
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
+  });
+
+  it('renders stories isolation, hidden when there are no stories', () => {
+    expect(renderReport(emptyScan({ storiesIsolation: fakeStories(40, 0) }), '1.0.0')).toContain(
+      'STORIES ISOLATION (enforceable)',
+    );
+    const suggest = renderReport(emptyScan({ storiesIsolation: fakeStories(20, 2) }), '1.0.0');
+    expect(suggest).toContain('STORIES ISOLATION (suggested)');
+    expect(suggest).toContain('Imported stories: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('STORIES ISOLATION');
   });
 
   it('renders workspace package API, hidden when there are no workspace consumers', () => {
@@ -735,6 +766,18 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a stories-isolation config when stories are unimported, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const files = writeStoriesIsolationConfig(
+      emptyScan({ storiesIsolation: fakeStories(40, 0) }),
+      outDir,
+    );
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-import-stories');
+    expect(writeStoriesIsolationConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a workspace-package eslint config when packages are imported by name, none otherwise', () => {

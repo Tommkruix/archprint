@@ -50,6 +50,10 @@ import {
   detectWorkspacePackageApi,
   type WorkspacePackageAnalysis,
 } from '../detector/workspace-package-detector.js';
+import {
+  detectStoriesIsolation,
+  type StoriesIsolationAnalysis,
+} from '../detector/stories-isolation-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -84,6 +88,7 @@ export interface ScanResult {
   consoleIsolation: ConsoleIsolationAnalysis;
   envAccess: EnvAccessAnalysis;
   workspacePackageApi: WorkspacePackageAnalysis;
+  storiesIsolation: StoriesIsolationAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -138,6 +143,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const consoleIsolation = detectConsoleIsolation(appDir, { usage });
   const envAccess = detectEnvAccess(appDir, { usage });
   const workspacePackageApi = detectWorkspacePackageApi(appDir);
+  const storiesIsolation = detectStoriesIsolation(appDir, { graph });
   return {
     appDir,
     fileCount,
@@ -159,5 +165,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     consoleIsolation,
     envAccess,
     workspacePackageApi,
+    storiesIsolation,
   };
 }

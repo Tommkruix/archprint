@@ -22,6 +22,7 @@ const deepRelativeAuto = fixture('deep-relative-auto');
 const consoleAuto = fixture('console-isolation-auto');
 const envAuto = fixture('env-access-auto');
 const wpkgAuto = fixture('workspace-package-auto');
+const storiesAuto = fixture('stories-isolation-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -163,6 +164,14 @@ describe('cli program', () => {
     await run(['generate', wpkgAuto, '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.workspace-package.archprint.json'))).toBe(true);
     expect(output()).toContain('workspace package API');
+  });
+
+  it('generate writes the stories-isolation config when stories are unimported', async () => {
+    await run(['generate', storiesAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.stories-isolation.archprint.json'))).toBe(
+      true,
+    );
+    expect(output()).toContain('stories isolation');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

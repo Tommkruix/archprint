@@ -398,6 +398,26 @@ export function renderReport(
     }
     lines.push('');
   }
+  const stories = scan.storiesIsolation;
+  if (
+    stories.storyCount > 0 &&
+    (stories.gate.status === 'AUTO' || stories.gate.status === 'SUGGEST')
+  ) {
+    const label = stories.gate.status === 'AUTO' ? green : yellow;
+    const suffix = stories.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(stories.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`STORIES ISOLATION ${suffix}`)));
+    lines.push(`  Storybook stories must not be imported by other code   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${stories.storyCount - stories.offenderCount}/${stories.storyCount} stories are imported by nothing`,
+      ),
+    );
+    if (stories.offenderCount > 0) {
+      lines.push(dim(`          Imported stories: ${stories.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

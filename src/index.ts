@@ -152,6 +152,12 @@ export {
   type WorkspacePackageOptions,
 } from './detector/workspace-package-detector.js';
 export {
+  detectStoriesIsolation,
+  type StoriesIsolationAnalysis,
+  type StoryImportViolation,
+  type StoriesIsolationOptions,
+} from './detector/stories-isolation-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -229,3 +235,8 @@ export {
 } from './generator/console-isolation-emitters.js';
 export { toEslintEnvAccess } from './generator/env-access-emitters.js';
 export { toEslintWorkspacePackageApi } from './generator/workspace-package-emitters.js';
+export {
+  toDependencyCruiserStoriesIsolation,
+  type StoriesIsolationConfig,
+  type StoriesIsolationRule,
+} from './generator/stories-isolation-emitters.js';
