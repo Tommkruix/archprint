@@ -164,6 +164,12 @@ export {
   type UiDataIsolationOptions,
 } from './detector/ui-data-isolation-detector.js';
 export {
+  detectServerClientBoundary,
+  type ServerClientAnalysis,
+  type ServerClientViolation,
+  type ServerClientOptions,
+} from './detector/server-client-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -251,3 +257,9 @@ export {
   type UiDataConfig,
   type UiDataRule,
 } from './generator/ui-data-isolation-emitters.js';
+export {
+  toDependencyCruiserServerClient,
+  type ServerClientConfig,
+  type ServerClientRule,
+} from './generator/server-client-emitters.js';
+export { hasUseServerDirective, hasUseClientDirective } from './scanner/role-classifier.js';

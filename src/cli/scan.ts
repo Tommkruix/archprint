@@ -58,6 +58,10 @@ import {
   detectUiDataIsolation,
   type UiDataIsolationAnalysis,
 } from '../detector/ui-data-isolation-detector.js';
+import {
+  detectServerClientBoundary,
+  type ServerClientAnalysis,
+} from '../detector/server-client-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -94,6 +98,7 @@ export interface ScanResult {
   workspacePackageApi: WorkspacePackageAnalysis;
   storiesIsolation: StoriesIsolationAnalysis;
   uiDataIsolation: UiDataIsolationAnalysis;
+  serverClient: ServerClientAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -150,6 +155,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const workspacePackageApi = detectWorkspacePackageApi(appDir);
   const storiesIsolation = detectStoriesIsolation(appDir, { graph });
   const uiDataIsolation = detectUiDataIsolation(appDir, { graph });
+  const serverClient = detectServerClientBoundary(appDir, { graph });
   return {
     appDir,
     fileCount,
@@ -173,5 +179,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     workspacePackageApi,
     storiesIsolation,
     uiDataIsolation,
+    serverClient,
   };
 }

@@ -137,16 +137,17 @@ export function classifyFile(relativePath: string): RoleClassification {
 }
 
 const USE_SERVER_LITERAL = /^["']use server["']/;
+const USE_CLIENT_LITERAL = /^["']use client["']/;
 const isWhitespace = (c: string): boolean =>
   c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 
 /**
- * True when the first statement is a module-level `"use server"` / `'use server'` directive, allowing
- * leading whitespace and comments. Scans linearly (skipping whitespace, line comments, and block comments)
- * rather than one backtracking regex: a head full of comment tokens must never cause catastrophic
- * backtracking (ReDoS). Only the final fixed-literal check uses a regex.
+ * Test the leading module directive against `literal`, allowing leading whitespace and comments. Scans
+ * linearly (skipping whitespace, line comments, and block comments) rather than one backtracking regex: a
+ * head full of comment tokens must never cause catastrophic backtracking (ReDoS). Only the final fixed-literal
+ * check uses a regex.
  */
-export function hasUseServerDirective(sourceHead: string): boolean {
+function hasLeadingDirective(sourceHead: string, literal: RegExp): boolean {
   let i = 0;
   const n = sourceHead.length;
   for (;;) {
@@ -163,7 +164,15 @@ export function hasUseServerDirective(sourceHead: string): boolean {
       break;
     }
   }
-  return USE_SERVER_LITERAL.test(sourceHead.slice(i));
+  return literal.test(sourceHead.slice(i));
+}
+
+export function hasUseServerDirective(sourceHead: string): boolean {
+  return hasLeadingDirective(sourceHead, USE_SERVER_LITERAL);
+}
+
+export function hasUseClientDirective(sourceHead: string): boolean {
+  return hasLeadingDirective(sourceHead, USE_CLIENT_LITERAL);
 }
 
 export function classifyFileWithDirective(

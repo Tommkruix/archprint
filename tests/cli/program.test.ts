@@ -24,6 +24,7 @@ const envAuto = fixture('env-access-auto');
 const wpkgAuto = fixture('workspace-package-auto');
 const storiesAuto = fixture('stories-isolation-auto');
 const uiDataAuto = fixture('ui-data-auto');
+const serverClientAuto = fixture('server-client-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -179,6 +180,14 @@ describe('cli program', () => {
     await run(['generate', uiDataAuto, '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.ui-data.archprint.json'))).toBe(true);
     expect(output()).toContain('UI / data separation');
+  });
+
+  it('generate writes the server-client config when client code avoids server-only', async () => {
+    await run(['generate', serverClientAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.server-client.archprint.json'))).toBe(
+      true,
+    );
+    expect(output()).toContain('server / client boundary');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

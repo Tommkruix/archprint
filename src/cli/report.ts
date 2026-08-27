@@ -438,6 +438,23 @@ export function renderReport(
     }
     lines.push('');
   }
+  const sc = scan.serverClient;
+  if (sc.clientCount > 0 && (sc.gate.status === 'AUTO' || sc.gate.status === 'SUGGEST')) {
+    const label = sc.gate.status === 'AUTO' ? green : yellow;
+    const suffix = sc.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(sc.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`SERVER / CLIENT BOUNDARY ${suffix}`)));
+    lines.push(`  "use client" modules must not import server-only code   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${sc.clientCount - sc.offenderCount}/${sc.clientCount} client modules avoid server-only imports`,
+      ),
+    );
+    if (sc.offenderCount > 0) {
+      lines.push(dim(`          Server-only imports in client code: ${sc.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

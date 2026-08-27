@@ -21,6 +21,7 @@ import type {
   ReachabilityAnalysis,
   RoleBoundary,
   RoleLayeringAnalysis,
+  ServerClientAnalysis,
   StoriesIsolationAnalysis,
   TestIsolationAnalysis,
   UiDataIsolationAnalysis,
@@ -42,6 +43,7 @@ import {
   writePublicApiConfig,
   writeRoleLayeringConfig,
   writeRules,
+  writeServerClientConfig,
   writeStoriesIsolationConfig,
   writeTestIsolationConfig,
   writeUiDataConfig,
@@ -315,6 +317,24 @@ function emptyUiData(): UiDataIsolationAnalysis {
   return fakeUiData(0, 0);
 }
 
+function fakeServerClient(clientCount: number, offenderCount: number): ServerClientAnalysis {
+  return {
+    appDir: 'x',
+    clientCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: clientCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyServerClient(): ServerClientAnalysis {
+  return fakeServerClient(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -339,6 +359,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     workspacePackageApi: emptyWpkg(),
     storiesIsolation: emptyStories(),
     uiDataIsolation: emptyUiData(),
+    serverClient: emptyServerClient(),
     ...overrides,
   };
 }
@@ -548,6 +569,16 @@ describe('cli scan', () => {
 
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
+  });
+
+  it('renders server/client boundary, hidden when there are no client modules', () => {
+    expect(renderReport(emptyScan({ serverClient: fakeServerClient(40, 0) }), '1.0.0')).toContain(
+      'SERVER / CLIENT BOUNDARY (enforceable)',
+    );
+    const suggest = renderReport(emptyScan({ serverClient: fakeServerClient(20, 2) }), '1.0.0');
+    expect(suggest).toContain('SERVER / CLIENT BOUNDARY (suggested)');
+    expect(suggest).toContain('Server-only imports in client code: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('SERVER / CLIENT BOUNDARY');
   });
 
   it('renders UI/data separation, hidden when there are no components', () => {
@@ -797,6 +828,18 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a server-client config when client modules avoid server-only, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const files = writeServerClientConfig(
+      emptyScan({ serverClient: fakeServerClient(40, 0) }),
+      outDir,
+    );
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-server-only-in-client');
+    expect(writeServerClientConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a ui-data config when components avoid the data layer, none otherwise', () => {
