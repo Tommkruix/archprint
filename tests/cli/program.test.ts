@@ -17,6 +17,7 @@ const appIsolationAuto = fixture('app-isolation-auto');
 const depInternalsAuto = fixture('dependency-internals-auto');
 const roleLayeringAuto = fixture('role-layering-auto');
 const entryPurityAuto = fixture('entry-purity-auto');
+const phantomDepsAuto = fixture('phantom-deps-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -128,6 +129,12 @@ describe('cli program', () => {
     await run(['generate', entryPurityAuto, '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.entry-purity.archprint.json'))).toBe(true);
     expect(output()).toContain('entry purity');
+  });
+
+  it('generate writes the phantom-dependency config when imports are all declared', async () => {
+    await run(['generate', phantomDepsAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.phantom-deps.archprint.json'))).toBe(true);
+    expect(output()).toContain('dependency declaration');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

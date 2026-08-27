@@ -13,6 +13,7 @@ import type {
   GenerationStatus,
   LayerBoundary,
   OrphanAnalysis,
+  PhantomDependencyAnalysis,
   PublicApiAnalysis,
   ReachabilityAnalysis,
   RoleBoundary,
@@ -28,6 +29,7 @@ import {
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
+  writePhantomDependencyConfig,
   writePublicApiConfig,
   writeRoleLayeringConfig,
   writeRules,
@@ -168,6 +170,27 @@ function emptyEntryPurity(): EntryPurityAnalysis {
   return fakeEntryPurity(0, 0);
 }
 
+function fakePhantom(
+  externalImporterCount: number,
+  offenderCount: number,
+): PhantomDependencyAnalysis {
+  return {
+    appDir: 'x',
+    externalImporterCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: externalImporterCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyPhantom(): PhantomDependencyAnalysis {
+  return fakePhantom(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -185,6 +208,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     dependencyInternals: emptyDependencyInternals(),
     roleLayering: emptyRoleLayering(),
     entryPurity: emptyEntryPurity(),
+    phantomDependencies: emptyPhantom(),
     ...overrides,
   };
 }
@@ -396,6 +420,15 @@ describe('cli scan', () => {
     expect(none).not.toContain('TEST ISOLATION');
   });
 
+  it('renders enforceable and suggested dependency declaration, hidden with no externals', () => {
+    const auto = renderReport(emptyScan({ phantomDependencies: fakePhantom(40, 0) }), '1.0.0');
+    expect(auto).toContain('DEPENDENCY DECLARATION (enforceable)');
+    const suggest = renderReport(emptyScan({ phantomDependencies: fakePhantom(20, 2) }), '1.0.0');
+    expect(suggest).toContain('DEPENDENCY DECLARATION (suggested)');
+    expect(suggest).toContain('Undeclared (phantom) imports: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('DEPENDENCY DECLARATION');
+  });
+
   it('renders enforceable and suggested entry purity, hidden when there are no entries', () => {
     const auto = renderReport(emptyScan({ entryPurity: fakeEntryPurity(40, 0) }), '1.0.0');
     expect(auto).toContain('ENTRY PURITY (enforceable)');
@@ -579,6 +612,18 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a phantom-dependency config when all imports are declared, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const files = writePhantomDependencyConfig(
+      emptyScan({ phantomDependencies: fakePhantom(40, 0) }),
+      outDir,
+    );
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-phantom-dependencies');
+    expect(writePhantomDependencyConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes an entry-purity config when entries are pure, none otherwise', () => {

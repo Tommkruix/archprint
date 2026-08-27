@@ -121,6 +121,12 @@ export {
   type EntryPurityOptions,
 } from './detector/entry-purity-detector.js';
 export {
+  detectPhantomDependencies,
+  type PhantomDependencyAnalysis,
+  type PhantomDependencyViolation,
+  type PhantomDependencyOptions,
+} from './detector/phantom-dependency-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -182,3 +188,8 @@ export {
   type EntryPurityConfig,
   type EntryPurityRule,
 } from './generator/entry-purity-emitters.js';
+export {
+  toDependencyCruiserPhantomDependencies,
+  type PhantomDependencyConfig,
+  type PhantomDependencyRule,
+} from './generator/phantom-dependency-emitters.js';

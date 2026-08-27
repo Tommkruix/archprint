@@ -310,6 +310,26 @@ export function renderReport(
     }
     lines.push('');
   }
+  const phantom = scan.phantomDependencies;
+  if (
+    phantom.externalImporterCount > 0 &&
+    (phantom.gate.status === 'AUTO' || phantom.gate.status === 'SUGGEST')
+  ) {
+    const label = phantom.gate.status === 'AUTO' ? green : yellow;
+    const suffix = phantom.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(phantom.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`DEPENDENCY DECLARATION ${suffix}`)));
+    lines.push(`  import only packages declared in package.json   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${phantom.externalImporterCount - phantom.offenderCount}/${phantom.externalImporterCount} files import only declared packages`,
+      ),
+    );
+    if (phantom.offenderCount > 0) {
+      lines.push(dim(`          Undeclared (phantom) imports: ${phantom.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&
