@@ -23,6 +23,7 @@ const consoleAuto = fixture('console-isolation-auto');
 const envAuto = fixture('env-access-auto');
 const wpkgAuto = fixture('workspace-package-auto');
 const storiesAuto = fixture('stories-isolation-auto');
+const uiDataAuto = fixture('ui-data-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -172,6 +173,12 @@ describe('cli program', () => {
       true,
     );
     expect(output()).toContain('stories isolation');
+  });
+
+  it('generate writes the ui-data config when components avoid the data layer', async () => {
+    await run(['generate', uiDataAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.ui-data.archprint.json'))).toBe(true);
+    expect(output()).toContain('UI / data separation');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

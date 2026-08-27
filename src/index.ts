@@ -158,6 +158,12 @@ export {
   type StoriesIsolationOptions,
 } from './detector/stories-isolation-detector.js';
 export {
+  detectUiDataIsolation,
+  type UiDataIsolationAnalysis,
+  type UiDataViolation,
+  type UiDataIsolationOptions,
+} from './detector/ui-data-isolation-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -240,3 +246,8 @@ export {
   type StoriesIsolationConfig,
   type StoriesIsolationRule,
 } from './generator/stories-isolation-emitters.js';
+export {
+  toDependencyCruiserUiData,
+  type UiDataConfig,
+  type UiDataRule,
+} from './generator/ui-data-isolation-emitters.js';

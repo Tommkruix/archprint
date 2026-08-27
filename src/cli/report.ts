@@ -418,6 +418,26 @@ export function renderReport(
     }
     lines.push('');
   }
+  const uiData = scan.uiDataIsolation;
+  if (
+    uiData.componentCount > 0 &&
+    (uiData.gate.status === 'AUTO' || uiData.gate.status === 'SUGGEST')
+  ) {
+    const label = uiData.gate.status === 'AUTO' ? green : yellow;
+    const suffix = uiData.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(uiData.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`UI / DATA SEPARATION ${suffix}`)));
+    lines.push(`  UI components must not import the data layer directly   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${uiData.componentCount - uiData.offenderCount}/${uiData.componentCount} components reach data only through services`,
+      ),
+    );
+    if (uiData.offenderCount > 0) {
+      lines.push(dim(`          Direct data imports: ${uiData.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

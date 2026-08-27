@@ -107,6 +107,7 @@ Every number is measured from the import graph, not estimated.
 | Env access                       | Read `process.env` only in the config/env layer                                                                      |
 | Workspace package API            | Import a monorepo workspace package by its name, not a deep path into its source                                     |
 | Stories isolation                | Storybook `.stories` files must not be imported by other code                                                        |
+| UI / data separation             | Reusable UI components must not import the DB/data layer directly                                                    |
 
 ## The confidence gate
 
@@ -179,7 +180,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (eighteen detectors, five output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (nineteen detectors, five output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

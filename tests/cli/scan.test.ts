@@ -23,6 +23,7 @@ import type {
   RoleLayeringAnalysis,
   StoriesIsolationAnalysis,
   TestIsolationAnalysis,
+  UiDataIsolationAnalysis,
   WorkspacePackageAnalysis,
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
@@ -43,6 +44,7 @@ import {
   writeRules,
   writeStoriesIsolationConfig,
   writeTestIsolationConfig,
+  writeUiDataConfig,
   writeWorkspacePackageConfig,
 } from '../../src/cli/generate.js';
 
@@ -295,6 +297,24 @@ function emptyStories(): StoriesIsolationAnalysis {
   return fakeStories(0, 0);
 }
 
+function fakeUiData(componentCount: number, offenderCount: number): UiDataIsolationAnalysis {
+  return {
+    appDir: 'x',
+    componentCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: componentCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyUiData(): UiDataIsolationAnalysis {
+  return fakeUiData(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -318,6 +338,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     envAccess: emptyEnv(),
     workspacePackageApi: emptyWpkg(),
     storiesIsolation: emptyStories(),
+    uiDataIsolation: emptyUiData(),
     ...overrides,
   };
 }
@@ -527,6 +548,16 @@ describe('cli scan', () => {
 
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
+  });
+
+  it('renders UI/data separation, hidden when there are no components', () => {
+    expect(renderReport(emptyScan({ uiDataIsolation: fakeUiData(40, 0) }), '1.0.0')).toContain(
+      'UI / DATA SEPARATION (enforceable)',
+    );
+    const suggest = renderReport(emptyScan({ uiDataIsolation: fakeUiData(20, 2) }), '1.0.0');
+    expect(suggest).toContain('UI / DATA SEPARATION (suggested)');
+    expect(suggest).toContain('Direct data imports: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('UI / DATA SEPARATION');
   });
 
   it('renders stories isolation, hidden when there are no stories', () => {
@@ -766,6 +797,15 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a ui-data config when components avoid the data layer, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const files = writeUiDataConfig(emptyScan({ uiDataIsolation: fakeUiData(40, 0) }), outDir);
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-ui-to-data');
+    expect(writeUiDataConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a stories-isolation config when stories are unimported, none otherwise', () => {

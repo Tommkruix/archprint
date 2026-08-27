@@ -22,6 +22,7 @@ import {
   writeRules,
   writeStoriesIsolationConfig,
   writeTestIsolationConfig,
+  writeUiDataConfig,
   writeWorkspacePackageConfig,
 } from './generate.js';
 
@@ -122,6 +123,7 @@ export function buildProgram(version = readVersion()): Command {
       const envFiles = writeEnvAccessConfig(scan, outDir);
       const wpkgFiles = writeWorkspacePackageConfig(scan, outDir);
       const storiesFiles = writeStoriesIsolationConfig(scan, outDir);
+      const uiDataFiles = writeUiDataConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
@@ -139,6 +141,7 @@ export function buildProgram(version = readVersion()): Command {
         envFiles.length === 0 &&
         wpkgFiles.length === 0 &&
         storiesFiles.length === 0 &&
+        uiDataFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -217,6 +220,10 @@ export function buildProgram(version = readVersion()): Command {
       for (const file of storiesFiles) report(file);
       if (storiesFiles.length > 0) {
         console.log('  (stories isolation: dependency-cruiser no-import-stories rule)');
+      }
+      for (const file of uiDataFiles) report(file);
+      if (uiDataFiles.length > 0) {
+        console.log('  (UI / data separation: dependency-cruiser no-ui-to-data rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {
