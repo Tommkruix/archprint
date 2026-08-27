@@ -108,6 +108,13 @@ export {
   type DependencyInternalsOptions,
 } from './detector/dependency-internals-detector.js';
 export {
+  detectRoleLayering,
+  type RoleLayeringAnalysis,
+  type RoleBoundary,
+  type RoleBoundaryViolation,
+  type RoleLayeringOptions,
+} from './detector/role-layering-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -159,3 +166,8 @@ export {
   type NoInternalsConfig,
   type NoInternalsRule,
 } from './generator/dependency-internals-emitters.js';
+export {
+  toDependencyCruiserRoleLayering,
+  type RoleLayeringConfig,
+  type RoleLayeringRule,
+} from './generator/role-layering-emitters.js';

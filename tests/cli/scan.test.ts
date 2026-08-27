@@ -14,6 +14,8 @@ import type {
   OrphanAnalysis,
   PublicApiAnalysis,
   ReachabilityAnalysis,
+  RoleBoundary,
+  RoleLayeringAnalysis,
   TestIsolationAnalysis,
 } from '../../src/index.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
@@ -25,6 +27,7 @@ import {
   writeGraph,
   writeLayerConfig,
   writePublicApiConfig,
+  writeRoleLayeringConfig,
   writeRules,
   writeTestIsolationConfig,
 } from '../../src/cli/generate.js';
@@ -139,6 +142,30 @@ function fakeDependencyInternals(
 
 function emptyDependencyInternals(): DependencyInternalsAnalysis {
   return fakeDependencyInternals(0, 0);
+}
+
+function emptyRoleLayering(): RoleLayeringAnalysis {
+  return { appDir: 'x', boundaries: [] };
+}
+
+function fakeRoleBoundary(
+  from: RoleBoundary['from'],
+  to: RoleBoundary['to'],
+  roleFileCount: number,
+  violating = 0,
+): RoleBoundary {
+  const gate = evaluateGate({ roleFileCount, violatingFileCount: violating, roleConfidence: 1 });
+  return {
+    from,
+    to,
+    roleFileCount,
+    conformingFileCount: roleFileCount - violating,
+    violatingFileCount: violating,
+    reverseFlow: 20,
+    roleConfidence: 1,
+    gate,
+    violations: [],
+  };
 }
 
 function fakeAppGroup(container: string, appFileCount: number, crossImporterCount: number) {
@@ -268,6 +295,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('GENERATED RULES');
@@ -291,6 +319,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('LAYER BOUNDARIES');
@@ -316,6 +345,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('Transitive leak');
@@ -336,6 +366,7 @@ describe('cli scan', () => {
       featureSlices: emptyFeatureSlices(),
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
+      roleLayering: emptyRoleLayering(),
     };
     const auto = renderReport(
       { ...base, dependencyInternals: fakeDependencyInternals(40, 0) },
@@ -371,6 +402,7 @@ describe('cli scan', () => {
       featureSlices: emptyFeatureSlices(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const auto = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 3) }, '1.0.0');
     expect(auto).toContain('TEST ISOLATION (enforceable)');
@@ -381,6 +413,36 @@ describe('cli scan', () => {
 
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
+  });
+
+  it('renders enforceable and suggested role layering', () => {
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 100,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
+      testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
+      dependencyInternals: emptyDependencyInternals(),
+      roleLayering: {
+        appDir: 'x',
+        boundaries: [
+          fakeRoleBoundary('REPOSITORY', 'SERVICE', 40, 0),
+          fakeRoleBoundary('SERVICE', 'CONTROLLER', 20, 2),
+        ],
+      },
+    };
+    const report = renderReport(scan, '1.0.0');
+    expect(report).toContain('ROLE LAYERING (enforceable)');
+    expect(report).toContain('REPOSITORY !-> SERVICE');
+    expect(report).toContain('ROLE LAYERING (suggested)');
+    expect(report).toContain('SERVICE !-> CONTROLLER');
   });
 
   it('renders enforceable and suggested app isolation', () => {
@@ -401,6 +463,7 @@ describe('cli scan', () => {
         groups: [fakeAppGroup('apps', 40, 0), fakeAppGroup('services', 20, 2)],
       },
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('APP ISOLATION (enforceable)');
@@ -427,6 +490,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('FEATURE SLICE ISOLATION (enforceable)');
@@ -453,6 +517,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('PUBLIC API BOUNDARIES (enforceable)');
@@ -477,6 +542,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
@@ -498,6 +564,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
   });
@@ -517,6 +584,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const report = renderReport(empty, '1.0.0', 12, true);
     expect(report).toContain('No pattern met the confidence gate');
@@ -541,6 +609,7 @@ describe('cli scan', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     expect(renderReport(scan, '1.0.0')).toContain('caution: exceptions are infrastructure routes');
   });
@@ -572,6 +641,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const written = writeRules(scan, outDir, ['AUTO']);
     expect(written).toHaveLength(1);
@@ -595,6 +665,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writeLayerConfig(scan, outDir, ['AUTO']);
     expect(files.length).toBe(2);
@@ -622,6 +693,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writePublicApiConfig(scan, outDir, ['AUTO']);
     expect(files).toHaveLength(1);
@@ -648,6 +720,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
     expect(files).toHaveLength(1);
@@ -656,6 +729,33 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a role-layering config for AUTO boundaries, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan: ScanResult = {
+      appDir: 'x',
+      fileCount: 10,
+      aliasCount: 1,
+      patterns: [],
+      layerBoundaries: [],
+      cycles: emptyCycles(),
+      orphans: emptyOrphans(),
+      reachability: emptyReachability(),
+      publicApi: emptyPublicApi(),
+      featureSlices: emptyFeatureSlices(),
+      testIsolation: emptyTestIsolation(),
+      appIsolation: emptyAppIsolation(),
+      dependencyInternals: emptyDependencyInternals(),
+      roleLayering: { appDir: 'x', boundaries: [fakeRoleBoundary('REPOSITORY', 'SERVICE', 40, 0)] },
+    };
+    const files = writeRoleLayeringConfig(scan, outDir, ['AUTO']);
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
+    expect(config.forbidden[0]!.name).toBe('no-repository-to-service');
+
+    const none: ScanResult = { ...scan, roleLayering: emptyRoleLayering() };
+    expect(writeRoleLayeringConfig(none, outDir, ['AUTO'])).toEqual([]);
   });
 
   it('writes a dependency-internals config when packages are imported cleanly, none otherwise', () => {
@@ -674,6 +774,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: fakeDependencyInternals(40, 0),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writeDependencyInternalsConfig(scan, outDir);
     expect(files).toHaveLength(1);
@@ -700,6 +801,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: { appDir: 'x', groups: [fakeAppGroup('apps', 40, 0)] },
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writeAppIsolationConfig(scan, outDir, ['AUTO']);
     expect(files).toHaveLength(1);
@@ -726,6 +828,7 @@ describe('cli generate', () => {
       testIsolation: fakeTestIsolation(40, 0, 3),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writeTestIsolationConfig(scan, outDir);
     expect(files).toHaveLength(1);
@@ -751,6 +854,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
   });
@@ -771,6 +875,7 @@ describe('cli generate', () => {
       testIsolation: emptyTestIsolation(),
       appIsolation: emptyAppIsolation(),
       dependencyInternals: emptyDependencyInternals(),
+      roleLayering: emptyRoleLayering(),
     };
     const files = writeGraph(withBoundaries, outDir);
     expect(files.map((file) => path.basename(file)).sort()).toEqual([

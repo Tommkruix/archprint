@@ -15,6 +15,7 @@ const featureSliceAuto = fixture('feature-slice-auto');
 const testIsolationAuto = fixture('test-isolation-auto');
 const appIsolationAuto = fixture('app-isolation-auto');
 const depInternalsAuto = fixture('dependency-internals-auto');
+const roleLayeringAuto = fixture('role-layering-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -112,6 +113,14 @@ describe('cli program', () => {
       existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
     ).toBe(true);
     expect(output()).toContain('dependency hygiene');
+  });
+
+  it('generate writes the role-layering config for AUTO role boundaries', async () => {
+    await run(['generate', roleLayeringAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.role-layering.archprint.json'))).toBe(
+      true,
+    );
+    expect(output()).toContain('role-layering boundaries');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

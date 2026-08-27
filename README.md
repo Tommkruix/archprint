@@ -87,18 +87,19 @@ Every number is measured from the import graph, not estimated.
 
 ## What Archprint detects
 
-| Detector                         | Rule it can infer                                                                                              |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                    |
-| Layer boundaries                 | Files in one layer must not import another, inferred from the dominant dependency direction                    |
-| Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                   |
-| Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates, reported, never auto enforced) |
-| Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                  |
-| Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals    |
-| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other            |
-| Test isolation                   | Production (non-test) code must not import test or spec files                                                  |
-| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                          |
-| Dependency hygiene               | Import third-party packages by their public entry, not their build/impl internals (`lodash/dist/...`)          |
+| Detector                         | Rule it can infer                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          |
+| Layer boundaries                 | Files in one layer must not import another, inferred from the dominant dependency direction                          |
+| Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         |
+| Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates, reported, never auto enforced)       |
+| Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                        |
+| Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          |
+| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                  |
+| Test isolation                   | Production (non-test) code must not import test or spec files                                                        |
+| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                                |
+| Dependency hygiene               | Import third-party packages by their public entry, not their build/impl internals (`lodash/dist/...`)                |
+| Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) |
 
 ## The confidence gate
 
@@ -169,7 +170,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (ten detectors, four output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (eleven detectors, four output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

@@ -27,6 +27,10 @@ import {
   detectDependencyInternals,
   type DependencyInternalsAnalysis,
 } from '../detector/dependency-internals-detector.js';
+import {
+  detectRoleLayering,
+  type RoleLayeringAnalysis,
+} from '../detector/role-layering-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -54,6 +58,7 @@ export interface ScanResult {
   testIsolation: TestIsolationAnalysis;
   appIsolation: AppIsolationAnalysis;
   dependencyInternals: DependencyInternalsAnalysis;
+  roleLayering: RoleLayeringAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -98,6 +103,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const publicApi = detectPublicApiBoundaries(appDir, { graph });
   const featureSlices = detectFeatureSliceIsolation(appDir, { graph });
   const appIsolation = detectAppIsolation(appDir, { graph });
+  const roleLayering = detectRoleLayering(appDir, { graph });
   const testIsolation = detectTestIsolation(appDir);
   const dependencyInternals = detectDependencyInternals(appDir);
   return {
@@ -114,5 +120,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     testIsolation,
     appIsolation,
     dependencyInternals,
+    roleLayering,
   };
 }

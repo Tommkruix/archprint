@@ -2,6 +2,7 @@ import type { LayerBoundary } from '../detector/layer-detector.js';
 import type { PublicApiGroup } from '../detector/public-api-detector.js';
 import type { FeatureSliceGroup } from '../detector/feature-slice-detector.js';
 import type { AppIsolationGroup } from '../detector/app-isolation-detector.js';
+import type { RoleBoundary } from '../detector/role-layering-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
@@ -91,6 +92,20 @@ function appLines(group: AppIsolationGroup): string[] {
   return lines;
 }
 
+function roleLayerLines(boundary: RoleBoundary): string[] {
+  const floor = `${(boundary.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+  const lines = [
+    `  ${bold(`${boundary.from} !-> ${boundary.to}`)}  role layering   confidence ${floor}`,
+    dim(
+      `          Evidence: ${boundary.conformingFileCount}/${boundary.roleFileCount} ${boundary.from} files conform; ${boundary.reverseFlow} ${boundary.to} file(s) depend on ${boundary.from}`,
+    ),
+  ];
+  if (boundary.violatingFileCount > 0) {
+    lines.push(dim(`          Exceptions: ${boundary.violatingFileCount}`));
+  }
+  return lines;
+}
+
 export function renderReport(
   scan: ScanResult,
   version: string,
@@ -146,6 +161,21 @@ export function renderReport(
     for (const boundary of suggestLayers.slice(0, 8)) lines.push(...layerLines(boundary));
     if (suggestLayers.length > 8) {
       lines.push(dim(`          ... and ${suggestLayers.length - 8} more`));
+    }
+    lines.push('');
+  }
+  const autoRoles = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'AUTO');
+  const suggestRoles = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'SUGGEST');
+  if (autoRoles.length > 0) {
+    lines.push(green(bold('ROLE LAYERING (enforceable)')));
+    for (const boundary of autoRoles) lines.push(...roleLayerLines(boundary));
+    lines.push('');
+  }
+  if (suggestRoles.length > 0) {
+    lines.push(yellow(bold('ROLE LAYERING (suggested)')));
+    for (const boundary of suggestRoles.slice(0, 8)) lines.push(...roleLayerLines(boundary));
+    if (suggestRoles.length > 8) {
+      lines.push(dim(`          ... and ${suggestRoles.length - 8} more`));
     }
     lines.push('');
   }

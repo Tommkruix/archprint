@@ -13,6 +13,7 @@ import {
   writeGraph,
   writeLayerConfig,
   writePublicApiConfig,
+  writeRoleLayeringConfig,
   writeRules,
   writeTestIsolationConfig,
 } from './generate.js';
@@ -101,6 +102,7 @@ export function buildProgram(version = readVersion()): Command {
       const outDir = path.resolve(options.out);
       const written = writeRules(scan, outDir, ['AUTO']);
       const layerFiles = writeLayerConfig(scan, outDir, ['AUTO']);
+      const roleFiles = writeRoleLayeringConfig(scan, outDir, ['AUTO']);
       const apiFiles = writePublicApiConfig(scan, outDir, ['AUTO']);
       const sliceFiles = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
       const appFiles = writeAppIsolationConfig(scan, outDir, ['AUTO']);
@@ -110,6 +112,7 @@ export function buildProgram(version = readVersion()): Command {
       if (
         written.length === 0 &&
         layerFiles.length === 0 &&
+        roleFiles.length === 0 &&
         apiFiles.length === 0 &&
         sliceFiles.length === 0 &&
         appFiles.length === 0 &&
@@ -133,6 +136,11 @@ export function buildProgram(version = readVersion()): Command {
         console.log(
           `  (${count} layer boundaries: dependency-cruiser and eslint-plugin-boundaries)`,
         );
+      }
+      for (const file of roleFiles) report(file);
+      if (roleFiles.length > 0) {
+        const count = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'AUTO').length;
+        console.log(`  (${count} role-layering boundaries: dependency-cruiser rules)`);
       }
       for (const file of apiFiles) report(file);
       if (apiFiles.length > 0) {
