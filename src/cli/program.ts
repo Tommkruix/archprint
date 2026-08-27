@@ -8,8 +8,10 @@ import { renderExplain, renderReport } from './report.js';
 import {
   emitOne,
   writeAppIsolationConfig,
+  writeConsoleIsolationConfig,
   writeDeepRelativeConfig,
   writeDependencyInternalsConfig,
+  writeEnvAccessConfig,
   writeEntryPurityConfig,
   writeFeatureSliceConfig,
   writeGraph,
@@ -114,6 +116,8 @@ export function buildProgram(version = readVersion()): Command {
       const entryFiles = writeEntryPurityConfig(scan, outDir);
       const phantomFiles = writePhantomDependencyConfig(scan, outDir);
       const deepRelFiles = writeDeepRelativeConfig(scan, outDir);
+      const consoleFiles = writeConsoleIsolationConfig(scan, outDir);
+      const envFiles = writeEnvAccessConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
@@ -127,6 +131,8 @@ export function buildProgram(version = readVersion()): Command {
         entryFiles.length === 0 &&
         phantomFiles.length === 0 &&
         deepRelFiles.length === 0 &&
+        consoleFiles.length === 0 &&
+        envFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -189,6 +195,14 @@ export function buildProgram(version = readVersion()): Command {
       for (const file of deepRelFiles) report(file);
       if (deepRelFiles.length > 0) {
         console.log('  (import style: eslint no-restricted-imports rule)');
+      }
+      for (const file of consoleFiles) report(file);
+      if (consoleFiles.length > 0) {
+        console.log('  (console isolation: eslint no-console rule)');
+      }
+      for (const file of envFiles) report(file);
+      if (envFiles.length > 0) {
+        console.log('  (env access: eslint no-restricted-properties rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

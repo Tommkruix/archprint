@@ -350,6 +350,37 @@ export function renderReport(
     }
     lines.push('');
   }
+  const con = scan.consoleIsolation;
+  if (con.libraryFileCount > 0 && (con.gate.status === 'AUTO' || con.gate.status === 'SUGGEST')) {
+    const label = con.gate.status === 'AUTO' ? green : yellow;
+    const suffix = con.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(con.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`CONSOLE ISOLATION ${suffix}`)));
+    lines.push(`  library code must not use console   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${con.libraryFileCount - con.offenderCount}/${con.libraryFileCount} library files avoid console`,
+      ),
+    );
+    if (con.offenderCount > 0) lines.push(dim(`          Console usage: ${con.offenderCount}`));
+    lines.push('');
+  }
+  const env = scan.envAccess;
+  if (env.envUserCount > 0 && (env.gate.status === 'AUTO' || env.gate.status === 'SUGGEST')) {
+    const label = env.gate.status === 'AUTO' ? green : yellow;
+    const suffix = env.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(env.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`ENV ACCESS ${suffix}`)));
+    lines.push(`  read process.env only in the config layer   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${env.envUserCount - env.offenderCount}/${env.envUserCount} process.env reads are in the config layer`,
+      ),
+    );
+    if (env.offenderCount > 0)
+      lines.push(dim(`          Reads outside config: ${env.offenderCount}`));
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&

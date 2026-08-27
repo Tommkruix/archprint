@@ -40,6 +40,12 @@ import {
   detectDeepRelativeImports,
   type DeepRelativeAnalysis,
 } from '../detector/deep-relative-detector.js';
+import { scanUsage } from '../scanner/usage-scanner.js';
+import {
+  detectConsoleIsolation,
+  type ConsoleIsolationAnalysis,
+} from '../detector/console-isolation-detector.js';
+import { detectEnvAccess, type EnvAccessAnalysis } from '../detector/env-access-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -71,6 +77,8 @@ export interface ScanResult {
   entryPurity: EntryPurityAnalysis;
   phantomDependencies: PhantomDependencyAnalysis;
   deepRelative: DeepRelativeAnalysis;
+  consoleIsolation: ConsoleIsolationAnalysis;
+  envAccess: EnvAccessAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -121,6 +129,9 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const dependencyInternals = detectDependencyInternals(appDir);
   const phantomDependencies = detectPhantomDependencies(appDir);
   const deepRelative = detectDeepRelativeImports(appDir);
+  const usage = scanUsage(appDir);
+  const consoleIsolation = detectConsoleIsolation(appDir, { usage });
+  const envAccess = detectEnvAccess(appDir, { usage });
   return {
     appDir,
     fileCount,
@@ -139,5 +150,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     entryPurity,
     phantomDependencies,
     deepRelative,
+    consoleIsolation,
+    envAccess,
   };
 }

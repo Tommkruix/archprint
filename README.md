@@ -103,6 +103,8 @@ Every number is measured from the import graph, not estimated.
 | Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            |
 | Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   |
 | Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    |
+| Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     |
+| Env access                       | Read `process.env` only in the config/env layer                                                                      |
 
 ## The confidence gate
 
@@ -175,7 +177,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (fourteen detectors, five output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (sixteen detectors, five output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

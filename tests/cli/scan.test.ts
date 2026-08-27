@@ -5,10 +5,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import type {
   AppIsolationAnalysis,
+  ConsoleIsolationAnalysis,
   CycleAnalysis,
   DeepRelativeAnalysis,
   DependencyInternalsAnalysis,
   DetectedPattern,
+  EnvAccessAnalysis,
   EntryPurityAnalysis,
   FeatureSliceAnalysis,
   GenerationStatus,
@@ -25,9 +27,11 @@ import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/sc
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
   writeAppIsolationConfig,
+  writeConsoleIsolationConfig,
   writeDeepRelativeConfig,
   writeDependencyInternalsConfig,
   writeEntryPurityConfig,
+  writeEnvAccessConfig,
   writeFeatureSliceConfig,
   writeGraph,
   writeLayerConfig,
@@ -214,6 +218,42 @@ function emptyDeepRelative(): DeepRelativeAnalysis {
   return fakeDeepRelative(0, 0);
 }
 
+function fakeConsole(libraryFileCount: number, offenderCount: number): ConsoleIsolationAnalysis {
+  return {
+    appDir: 'x',
+    libraryFileCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: libraryFileCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyConsole(): ConsoleIsolationAnalysis {
+  return fakeConsole(0, 0);
+}
+
+function fakeEnv(envUserCount: number, offenderCount: number): EnvAccessAnalysis {
+  return {
+    appDir: 'x',
+    envUserCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: envUserCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyEnv(): EnvAccessAnalysis {
+  return fakeEnv(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -233,6 +273,8 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     entryPurity: emptyEntryPurity(),
     phantomDependencies: emptyPhantom(),
     deepRelative: emptyDeepRelative(),
+    consoleIsolation: emptyConsole(),
+    envAccess: emptyEnv(),
     ...overrides,
   };
 }
@@ -444,6 +486,22 @@ describe('cli scan', () => {
     expect(none).not.toContain('TEST ISOLATION');
   });
 
+  it('renders console isolation and env access, hidden when their population is empty', () => {
+    expect(renderReport(emptyScan({ consoleIsolation: fakeConsole(40, 0) }), '1.0.0')).toContain(
+      'CONSOLE ISOLATION (enforceable)',
+    );
+    const conSuggest = renderReport(emptyScan({ consoleIsolation: fakeConsole(20, 2) }), '1.0.0');
+    expect(conSuggest).toContain('CONSOLE ISOLATION (suggested)');
+    expect(conSuggest).toContain('Console usage: 2');
+    expect(renderReport(emptyScan({ envAccess: fakeEnv(40, 0) }), '1.0.0')).toContain(
+      'ENV ACCESS (enforceable)',
+    );
+    const envSuggest = renderReport(emptyScan({ envAccess: fakeEnv(20, 2) }), '1.0.0');
+    expect(envSuggest).toContain('Reads outside config: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('CONSOLE ISOLATION');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('ENV ACCESS');
+  });
+
   it('renders enforceable and suggested import style, hidden with no relative imports', () => {
     const auto = renderReport(emptyScan({ deepRelative: fakeDeepRelative(40, 0) }), '1.0.0');
     expect(auto).toContain('IMPORT STYLE (enforceable)');
@@ -645,6 +703,16 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes eslint configs for console isolation and env access when clean, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    expect(
+      writeConsoleIsolationConfig(emptyScan({ consoleIsolation: fakeConsole(40, 0) }), outDir),
+    ).toHaveLength(1);
+    expect(writeConsoleIsolationConfig(emptyScan(), outDir)).toEqual([]);
+    expect(writeEnvAccessConfig(emptyScan({ envAccess: fakeEnv(40, 0) }), outDir)).toHaveLength(1);
+    expect(writeEnvAccessConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a deep-relative eslint config when relative imports are shallow, none otherwise', () => {

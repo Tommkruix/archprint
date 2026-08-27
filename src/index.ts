@@ -133,6 +133,19 @@ export {
   type DeepRelativeOptions,
 } from './detector/deep-relative-detector.js';
 export {
+  detectConsoleIsolation,
+  type ConsoleIsolationAnalysis,
+  type ConsoleUsageViolation,
+  type ConsoleIsolationOptions,
+} from './detector/console-isolation-detector.js';
+export {
+  detectEnvAccess,
+  type EnvAccessAnalysis,
+  type EnvAccessViolation,
+  type EnvAccessOptions,
+} from './detector/env-access-detector.js';
+export { scanUsage, type UsageScan, type FileUsage } from './scanner/usage-scanner.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -204,3 +217,8 @@ export {
   type EslintNoRestrictedImportsConfig,
   type NoRestrictedImportsPattern,
 } from './generator/deep-relative-emitters.js';
+export {
+  toEslintConsoleIsolation,
+  type EslintFlatConfigBlock,
+} from './generator/console-isolation-emitters.js';
+export { toEslintEnvAccess } from './generator/env-access-emitters.js';

@@ -19,6 +19,8 @@ const roleLayeringAuto = fixture('role-layering-auto');
 const entryPurityAuto = fixture('entry-purity-auto');
 const phantomDepsAuto = fixture('phantom-deps-auto');
 const deepRelativeAuto = fixture('deep-relative-auto');
+const consoleAuto = fixture('console-isolation-auto');
+const envAuto = fixture('env-access-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -142,6 +144,18 @@ describe('cli program', () => {
     await run(['generate', deepRelativeAuto, '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.deep-relative.archprint.json'))).toBe(true);
     expect(output()).toContain('import style');
+  });
+
+  it('generate writes the console-isolation eslint config when library avoids console', async () => {
+    await run(['generate', consoleAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.console-isolation.archprint.json'))).toBe(true);
+    expect(output()).toContain('console isolation');
+  });
+
+  it('generate writes the env-access eslint config when env reads are centralized', async () => {
+    await run(['generate', envAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.env-access.archprint.json'))).toBe(true);
+    expect(output()).toContain('env access');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {
