@@ -1,0 +1,6 @@
+# Code owners for Archprint.
+# Every pull request requires review from an owner listed here. Combined with a branch
+# ruleset on main and develop ("Require a pull request" + "Require review from Code Owners"),
+# this means only an owner (or an actor on the ruleset bypass list) can merge.
+
+* @Tommkruix

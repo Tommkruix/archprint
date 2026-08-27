@@ -116,8 +116,8 @@ The bias is deliberate and conservative: one wrong rule hurts credibility more t
 
 `archprint generate` writes into the formats your existing tools already read:
 
-- **dependency-cruiser** `forbidden` rulesets (layer boundaries, public-API deep-import rules, and
-  feature-slice cross-slice rules)
+- **dependency-cruiser** `forbidden` rulesets (layer boundaries, public-API deep-import rules, feature-slice
+  cross-slice rules, and test-isolation rules)
 - **eslint-plugin-boundaries** element-types config
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
   failing fixture
