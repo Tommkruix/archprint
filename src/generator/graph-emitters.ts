@@ -1,19 +1,12 @@
 import type { LayerBoundary } from '../detector/layer-detector.js';
 
-/** A directed, weighted edge of the layer dependency graph: `from` imports `to` in `weight` files. */
 export interface LayerGraphEdge {
   from: string;
   to: string;
   weight: number;
-  /** True when this edge runs against an inferred boundary (the minority "leak" direction). */
   leak: boolean;
 }
 
-/**
- * Reconstruct the directed layer dependency graph from the inferred boundaries. Each boundary contributes the
- * dominant flow (`to` imports `from`, `reverseFlow` files) and, when present, the minority leak (`from`
- * imports `to`, the boundary violations). Edges are sorted for deterministic output.
- */
 export function layerGraphEdges(boundaries: readonly LayerBoundary[]): LayerGraphEdge[] {
   const edges: LayerGraphEdge[] = [];
   for (const boundary of boundaries) {
@@ -43,11 +36,6 @@ export function layerGraphEdges(boundaries: readonly LayerBoundary[]): LayerGrap
 const graphNodes = (edges: readonly LayerGraphEdge[]): string[] =>
   [...new Set(edges.flatMap((edge) => [edge.from, edge.to]))].sort();
 
-/**
- * Render the layer dependency graph as a Mermaid flowchart. Dominant dependencies are solid arrows; leaks
- * (imports that run against an inferred boundary) are dotted, so a reader sees both the architecture and where
- * it is violated.
- */
 export function toMermaid(boundaries: readonly LayerBoundary[]): string {
   const edges = layerGraphEdges(boundaries);
   const nodes = graphNodes(edges);
@@ -69,10 +57,6 @@ export function toMermaid(boundaries: readonly LayerBoundary[]): string {
 
 const dotId = (layer: string): string => `"${layer.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
-/**
- * Render the layer dependency graph as Graphviz DOT (the format dependency-cruiser and madge emit). Dominant
- * dependencies are solid; leaks are dashed and red.
- */
 export function toGraphviz(boundaries: readonly LayerBoundary[]): string {
   const edges = layerGraphEdges(boundaries);
   const nodes = graphNodes(edges);

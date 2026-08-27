@@ -8,8 +8,6 @@ import {
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { evaluateGate, type GateResult, type GenerationStatus } from './confidence-gate.js';
 
-// Directory segments that group modules structurally but are not themselves a layer, plus files (which carry
-// an extension), framework route groups `(group)`, dynamic segments `[param]`, and scope-like `@` dirs.
 const STRUCTURAL_SEGMENTS = new Set([
   'src',
   'app',
@@ -31,8 +29,6 @@ const isStructural = (segment: string): boolean =>
   /^\[.*\]$/.test(segment) ||
   segment.startsWith('@');
 
-/** The layer a repo-relative path belongs to: its first non-structural directory segment, or null for a
- *  root-level file that sits in no layer. */
 export function layerOfPath(relativePath: string): string | null {
   for (const segment of relativePath.split('/')) {
     if (!isStructural(segment)) return segment;
@@ -51,8 +47,6 @@ const buildAliasEntries = (appDir: string): AliasEntry[] =>
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
   }));
 
-/** Resolve an import specifier to the layer it targets, syntactically (relative path or tsconfig alias),
- *  without the type checker. Returns null for specifiers that leave this app-dir (other packages, externals). */
 function specifierToLayer(
   specifier: string,
   fileAbsPath: string,
@@ -75,7 +69,6 @@ function specifierToLayer(
   return rel.startsWith('..') ? null : layerOfPath(rel);
 }
 
-/** Target layers of one value import: from resolved leaves in deep mode, or the specifier in fast mode. */
 function targetLayers(
   imp: ResolvedImport,
   fileAbsPath: string,
@@ -106,7 +99,6 @@ export interface LayerInfo {
 export interface LayerBoundary {
   id: string;
   name: string;
-  /** The layer that must not import `to` (the minority direction, so the boundary the code respects). */
   from: string;
   to: string;
   description: string;
@@ -119,7 +111,6 @@ export interface LayerBoundary {
   };
   gate: GateResult;
   violations: { file: string; specifier: string }[];
-  /** Files in `to` that import `from`: the dominant flow that makes this direction the real boundary. */
   reverseFlow: number;
 }
 
@@ -130,21 +121,12 @@ export interface LayerAnalysis {
 }
 
 export interface LayerDetectorOptions {
-  /** Resolve the graph with the type checker (deep). Default false: fast specifier-level resolution. */
   resolve?: boolean;
-  /** Ignore layers with fewer than this many files. Default 5. */
   minLayerFiles?: number;
 }
 
 const STATUS_RANK: Record<GenerationStatus, number> = { AUTO: 0, SUGGEST: 1, REJECT: 2 };
 
-/**
- * Infer layer / dependency-direction boundaries for one app-dir. Each file is assigned a layer (its first
- * non-structural directory segment); value edges between layers are counted; for each interacting layer pair
- * the minority direction is taken as the candidate "must not import" boundary and run through the Wilson
- * confidence gate. Layer membership is deterministic, so roleConfidence is 1 and the gate discriminates on
- * conformance and sample size (a thin layer stays SUGGEST; a clean, well-observed boundary reaches AUTO).
- */
 export function detectLayerBoundaries(
   appDir: string,
   options: LayerDetectorOptions = {},
@@ -166,7 +148,6 @@ export function detectLayerBoundaries(
   const aliases = buildAliasEntries(root);
   const analyze = createImportAnalyzer(root, { resolve });
 
-  // "from>to" -> Map<sourceFile, exampleSpecifier>: source files that import the target layer as a value.
   const edges = new Map<string, Map<string, string>>();
   for (const file of files) {
     const from = fileLayer.get(file.relativePath);
@@ -208,7 +189,6 @@ export function detectLayerBoundaries(
       const ab = edgeSize(a, b);
       const ba = edgeSize(b, a);
       if (ab === 0 && ba === 0) continue;
-      // The candidate forbidden edge is the minority direction: the one the code already mostly respects.
       const [from, to, violating, reverseFlow] = ab <= ba ? [a, b, ab, ba] : [b, a, ba, ab];
       const roleFileCount = layerFileCount.get(from)!;
       const gate = evaluateGate({

@@ -8,21 +8,14 @@ import { layerOfPath } from './layer-detector.js';
 export interface ReachabilityAnalysis {
   appDir: string;
   layers: string[];
-  /** layer -> every layer a file in it can reach through one or more value imports (transitive closure). */
   reaches: Map<string, Set<string>>;
 }
 
 export interface ReachabilityOptions {
   resolve?: boolean;
-  /** A prebuilt graph to analyze, so a caller running several detectors builds the graph once. */
   graph?: ImportGraph;
 }
 
-/**
- * Compute transitive layer reachability. Files are condensed by strongly-connected component into a DAG, the
- * DAG's reachable-set is memoized, then lifted to layers: `reaches.get(A)` holds every layer some file in A
- * can reach through a chain of value imports. Files inside one cyclic component reach each other's layers.
- */
 export function computeLayerReachability(
   appDir: string,
   options: ReachabilityOptions = {},
@@ -95,7 +88,6 @@ export function computeLayerReachability(
   return { appDir: root, layers: [...layers].sort(), reaches };
 }
 
-/** Whether a file in `from` can reach `to` through a chain of value imports (transitively). */
 export function reachesLayer(analysis: ReachabilityAnalysis, from: string, to: string): boolean {
   return analysis.reaches.get(from)?.has(to) ?? false;
 }

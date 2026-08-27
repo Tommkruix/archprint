@@ -49,7 +49,6 @@ function findPattern(
   return { appDir, pattern };
 }
 
-/** Build the archprint CLI. Errors throw (the bin shim prints + exits); `.exitOverride()` lets tests drive it. */
 export function buildProgram(version = readVersion()): Command {
   const program = new Command();
   program
@@ -98,7 +97,6 @@ export function buildProgram(version = readVersion()): Command {
       'skip barrel/alias resolution (faster, may mint a rule the full graph rejects)',
     )
     .action((input: string, options: { out: string; fast?: boolean }) => {
-      // Generation is the commitment point, so it gates on the full graph by default; --fast opts out.
       const scan = scanRepo(resolveApp(input), { deep: !options.fast });
       const outDir = path.resolve(options.out);
       const written = writeRules(scan, outDir, ['AUTO']);

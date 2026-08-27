@@ -12,13 +12,10 @@ export interface RuleArtifacts {
 const asRegexArray = (sources: readonly string[]): string =>
   `[${sources.map((source) => `/${source}/`).join(', ')}]`;
 
-/** Render the self-contained ESLint rule (plain ESLint, no @typescript-eslint runtime dependency). */
 function renderRule(config: PatternConfig, result: DetectedPattern): string {
   const entryPatterns = config.roles
     .flatMap((role) => ROLE_PATTERNS.get(role) ?? [])
     .map((pattern) => pattern.source);
-  // Non-entry roles (COMPONENT handled separately as .tsx): a "use server" file matching these keeps
-  // its role, mirroring classifyFileWithDirective.
   const nonEntryPatterns = [...ROLE_PATTERNS]
     .filter(([role]) => !config.roles.includes(role) && role !== 'COMPONENT')
     .flatMap(([, patterns]) => patterns.map((pattern) => pattern.source));
@@ -95,7 +92,6 @@ export default rule;
 `;
 }
 
-/** Render the rule card: what the rule is, and the evidence that justified generating it. */
 function renderCard(config: PatternConfig, result: DetectedPattern, provenance: string): string {
   const { roleFileCount, violatingFileCount, ratio, roleConfidence } = result.stats;
   const example = result.violations[0];
@@ -174,7 +170,6 @@ export async function POST(): Promise<Response> {
 `;
 }
 
-/** Build the four artifacts for a detected pattern (pure; no filesystem writes). */
 export function generateRuleArtifacts(
   config: PatternConfig,
   result: DetectedPattern,
@@ -191,7 +186,6 @@ export function generateRuleArtifacts(
   };
 }
 
-/** Write the four artifacts to `<outDir>/<rule-name>/` and return the directory. */
 export function emitRuleArtifacts(
   config: PatternConfig,
   result: DetectedPattern,

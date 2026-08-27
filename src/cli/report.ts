@@ -18,8 +18,6 @@ const yellow = paint('33');
 function patternLines(pattern: ScannedPattern): string[] {
   const { config, result } = pattern;
   const { stats, infraCaution } = result;
-  // "confidence" is the Wilson lower bound (the statistical confidence), NOT the observed rate: 9/9 is
-  // 100% observed but only ~70% confident. Show both so the number is not misleading.
   const floor = `${(result.gate.conditions.confidence.value * 100).toFixed(0)}%`;
   const observed = stats.ratio >= 1 ? '100%' : `${(stats.ratio * 100).toFixed(1)}%`;
   const lines = [

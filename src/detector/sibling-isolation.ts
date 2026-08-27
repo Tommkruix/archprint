@@ -6,12 +6,9 @@ interface Membership {
   member: string;
 }
 
-/** The (container, member) a file belongs to: the first container segment with a member directory beneath it
- *  that itself contains the file. Returns null for files directly in a container or outside any container. */
 function memberOf(relativePath: string, containers: ReadonlySet<string>): Membership | null {
   const segments = relativePath.split('/');
   for (let i = 0; i < segments.length; i += 1) {
-    // segments[i] is a container, segments[i+1] is the member dir, and something lives beneath it.
     if (containers.has(segments[i]!) && i + 2 <= segments.length - 1) {
       return { container: segments.slice(0, i + 1).join('/'), member: segments[i + 1]! };
     }
@@ -20,20 +17,14 @@ function memberOf(relativePath: string, containers: ReadonlySet<string>): Member
 }
 
 export interface SiblingViolation {
-  /** The member file that imports a sibling member. */
   file: string;
-  /** The sibling-member file it imports. */
   target: string;
 }
 
 export interface SiblingGroup {
-  /** The container directory holding the members, e.g. `src/features` or `apps`. */
   container: string;
-  /** Distinct sibling members under the container. */
   memberCount: number;
-  /** Files living in any member of the container (the role sample). */
   memberFileCount: number;
-  /** Member files that import a different sibling member. */
   crossImporterCount: number;
   gate: GateResult;
   violations: SiblingViolation[];
@@ -44,12 +35,6 @@ export interface SiblingIsolationOptions {
   resolve?: boolean;
 }
 
-/**
- * Generic sibling-isolation detector: within each container directory, its immediate member directories should
- * not import one another. A member file that imports a different sibling member is a cross-import violation,
- * gated by the Wilson floor. Only containers with at least two members are considered. Shared by the
- * feature-slice and app-isolation detectors so the traversal and gating live in one place.
- */
 export function detectSiblingIsolation(
   appDir: string,
   containers: ReadonlySet<string>,

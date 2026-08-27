@@ -4,11 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { detectCycles } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// cycles fixture: a <-> b form a cycle; c imports a (not in the cycle); d is standalone.
 const cyclesFixture = path.join(here, '..', 'fixtures', 'cycles');
-// layers fixture is acyclic.
 const acyclicFixture = path.join(here, '..', 'fixtures', 'layers');
-// self-import fixture: one file imports itself (a self-loop).
 const selfImportFixture = path.join(here, '..', 'fixtures', 'self-import');
 
 describe('detectCycles', () => {
@@ -21,7 +18,6 @@ describe('detectCycles', () => {
   });
 
   it('gates no-circular-dependencies below AUTO when much of the repo is cyclic', () => {
-    // 2 of 4 files are in a cycle -> conformance 0.5 -> not enforceable
     expect(detectCycles(cyclesFixture).gate.status).not.toBe('AUTO');
   });
 

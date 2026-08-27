@@ -4,7 +4,6 @@ import type { LayerBoundary } from '../../src/detector/layer-detector.js';
 import { renderReport } from '../../src/cli/report.js';
 import type { ScanResult } from '../../src/cli/scan.js';
 
-// A SUGGEST layer boundary (thin sample: 100% observed but the Wilson floor is short of the gate).
 const suggestBoundary = (from: string, to: string, violating = 0): LayerBoundary => {
   const roleFileCount = 5;
   const gate = evaluateGate({ roleFileCount, violatingFileCount: violating, roleConfidence: 1 });
@@ -65,7 +64,6 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
 
 describe('renderReport suggested layer boundaries', () => {
   it('lists the first eight suggested boundaries, an exceptions line, and an overflow count', () => {
-    // Nine suggested boundaries (one with an exception) exercise the exceptions line and the "... more" cap.
     const boundaries = [
       suggestBoundary('a', 'z', 1),
       ...Array.from({ length: 8 }, (_, i) => suggestBoundary(`l${i}`, 'z')),

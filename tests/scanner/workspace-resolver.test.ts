@@ -13,7 +13,6 @@ describe('buildWorkspaceMap', () => {
 
     expect(map['@app']).toBe(path.resolve(dir, 'src'));
     expect(map['@db']).toBe(path.resolve(dir, 'packages/db/index.ts'));
-    // Every resolved target must be an absolute path.
     for (const target of Object.values(map)) {
       expect(path.isAbsolute(target)).toBe(true);
     }
@@ -30,7 +29,6 @@ describe('buildWorkspaceMap', () => {
     const dir = fixture('extends');
     const map = buildWorkspaceMap(dir);
 
-    // baseUrl "." in configs/base.json is relative to that file's directory.
     expect(map['@shared']).toBe(path.resolve(dir, 'configs', 'shared'));
   });
 

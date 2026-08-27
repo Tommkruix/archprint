@@ -4,11 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { computeLayerReachability, reachesLayer } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Fixture chain: api/handler -> service/svc -> db/client. api reaches db only through service (no direct
-// import). db reaches nothing.
 const fixture = path.join(here, '..', 'fixtures', 'reachability');
-// reach-cycle: alpha/a and beta/b import each other (a cross-layer cycle), so each layer reaches the other
-// and itself.
 const cycleFixture = path.join(here, '..', 'fixtures', 'reach-cycle');
 
 describe('computeLayerReachability', () => {

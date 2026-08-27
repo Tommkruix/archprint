@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { buildImportGraph } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// entry.ts imports a relative file, an aliased file, an external package, and a dynamic aliased import.
 const fixture = path.join(here, '..', 'fixtures', 'import-graph');
 
 const edgesFrom = (graph: ReturnType<typeof buildImportGraph>, file: string): string[] =>
@@ -18,7 +17,6 @@ describe('buildImportGraph', () => {
     expect(edges).toContain('rel.ts');
     expect(edges).toContain('aliased.ts');
     expect(edges).toContain('dynamic.ts');
-    // node:path is external and must not appear as a first-party edge.
     expect(edges.some((edge) => edge.includes('path'))).toBe(false);
   });
 

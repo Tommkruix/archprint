@@ -26,7 +26,6 @@ describe('detector presets', () => {
   it('detectDbClientInRequestEntry infers the pg wrapper and reports its gate', () => {
     const result = detectDbClientInRequestEntry(fixture('db-pg'));
     expect(result.inferredDb.wrappers).toContain('@/db/pool');
-    // db-pg has no request-entry files, so the gate rejects on insufficient evidence.
     expect(result.gate.status).toBe('REJECT');
     expect(result.stats.roleFileCount).toBe(0);
   });
@@ -34,7 +33,7 @@ describe('detector presets', () => {
   it('detectNoDbInRequestEntry classifies the request-entry files with the default markers', () => {
     const result = detectNoDbInRequestEntry(fixture('cli-auto'));
     expect(result.name).toBe('no-direct-db-in-request-entry');
-    expect(result.stats.roleFileCount).toBe(45); // cli-auto has 45 route handlers
+    expect(result.stats.roleFileCount).toBe(45);
     expect(Array.isArray(result.violations)).toBe(true);
   });
 });

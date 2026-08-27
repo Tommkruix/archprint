@@ -13,26 +13,21 @@ describe('classifyFile', () => {
     ['apps/api/src/users/users.repository.ts', 'REPOSITORY'],
     ['apps/api/src/users/users.repo.ts', 'REPOSITORY'],
     ['apps/web/app/api/billing/usage/route.ts', 'ROUTE_HANDLER'],
-    // .tsx route handlers are real (next/og ImageResponse routes use JSX); must not fall through to COMPONENT.
     ['apps/web/app/api/og/workout/route.tsx', 'ROUTE_HANDLER'],
     ['apps/web/pages/api/webhook.ts', 'API_HANDLER'],
     ['apps/web/pages/api/og.tsx', 'API_HANDLER'],
     ['apps/web/server/api/routers/user.ts', 'TRPC_ROUTER'],
-    // SvelteKit
     ['src/routes/api/users/+server.ts', 'API_HANDLER'],
     ['src/routes/dashboard/+page.server.ts', 'SERVER_ACTION'],
     ['src/routes/+layout.server.ts', 'SERVER_ACTION'],
     ['src/hooks.server.ts', 'ROUTE_HANDLER'],
     ['src/routes/blog/+page.ts', 'ROUTE_ENTRY'],
-    // Nuxt Nitro server handlers
     ['server/api/users.ts', 'API_HANDLER'],
     ['server/middleware/auth.ts', 'API_HANDLER'],
-    // Remix / React Router file-based routes
     ['app/routes/_index.tsx', 'ROUTE_ENTRY'],
     ['app/routes/posts.$id.tsx', 'ROUTE_ENTRY'],
     ['app/root.tsx', 'ROUTE_ENTRY'],
     ['app/entry.server.tsx', 'ROUTE_ENTRY'],
-    // tRPC routers still win over the generic Nuxt server/api rule (earlier in the list)
     ['apps/web/app/dashboard/actions.ts', 'SERVER_ACTION'],
     ['apps/web/app/dashboard/action.ts', 'SERVER_ACTION'],
     ['apps/web/app/dashboard/page.tsx', 'ROUTE_ENTRY'],
@@ -85,8 +80,6 @@ describe('use-server directive detection', () => {
     expect(hasUseServerDirective('// line comment, no newline, then EOF')).toBe(false);
   });
 
-  // Regression: the directive check must be LINEAR, a comment-heavy head must never blow up (ReDoS).
-  // The old backtracking regex took ~6s at 20 comment tokens; this must be instant at 200.
   it('is linear on a comment-heavy head (no catastrophic backtracking)', () => {
     const pathological = '/*x*/ '.repeat(200) + '!';
     const start = Date.now();
@@ -103,7 +96,6 @@ describe('classifyFileWithDirective', () => {
   });
 
   it('never upgrades a .tsx page/component, even with a directive', () => {
-    // A page.tsx with "use server" still renders UI and legitimately imports components.
     expect(classifyFileWithDirective('modules/x/settings/page.tsx', true).role).toBe('COMPONENT');
   });
 

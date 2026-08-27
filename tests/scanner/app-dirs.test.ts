@@ -26,8 +26,6 @@ describe('discoverAppDirs', () => {
   });
 
   it('falls back to any tsconfig dir with source when none clears the default size threshold', () => {
-    // The fixture holds far fewer than the default 25 files, so the size filter is empty and the fallback
-    // (every tsconfig dir owning at least one file) selects the app anyway.
     const root = fixture('dynamic-import');
     expect(discoverAppDirs(root)).toEqual([root]);
   });

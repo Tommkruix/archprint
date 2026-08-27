@@ -4,9 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { detectLayerBoundaries, evaluateGate, layerOfPath } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Fixture layers: utils (clean, imported by both), components (import utils; one file leaks a features
-// import), features (import components + utils). Expected clean boundaries: utils !-> components,
-// utils !-> features. Expected leaky boundary: components !-> features (1 violation from list.ts).
 const fixture = path.join(here, '..', 'fixtures', 'layers');
 const boundary = (analysis: ReturnType<typeof detectLayerBoundaries>, from: string, to: string) =>
   analysis.boundaries.find((b) => b.from === from && b.to === to);
@@ -53,9 +50,6 @@ describe('detectLayerBoundaries', () => {
   });
 
   it('gates a large, clean boundary to AUTO from relative imports (fast mode)', () => {
-    // layer-auto: 40 "helpers" leaves + 5 "views" that import them via RELATIVE specifiers. helpers never
-    // import views, so helpers !-> views is the clean minority direction, and 40 clean observations clear the
-    // Wilson floor. Exercises the relative-specifier resolution and the same-layer/type-only skips.
     const dir = path.join(here, '..', 'fixtures', 'layer-auto');
     const analysis = detectLayerBoundaries(dir, { resolve: false });
     const hv = boundary(analysis, 'helpers', 'views');

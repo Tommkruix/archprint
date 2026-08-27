@@ -9,7 +9,6 @@ import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import * as path from 'node:path';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 
-/** Directory names inside a published package that hold build output / implementation, never a public API. */
 const INTERNAL_DIRS = new Set([
   'dist',
   'src',
@@ -25,8 +24,6 @@ const BUILTINS = new Set(builtinModules);
 
 type SpecifierKind = 'first-party' | 'builtin' | 'external' | 'internal';
 
-/** Classify an import specifier. `internal` means it reaches into a third-party package's build/impl directory
- *  (e.g. `lodash/dist/...`, `@scope/pkg/src/...`) rather than its public entry or a documented subpath. */
 function classifySpecifier(specifier: string, aliasPrefixes: readonly string[]): SpecifierKind {
   if (specifier.startsWith('.')) return 'first-party';
   const bare = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
@@ -42,17 +39,13 @@ function classifySpecifier(specifier: string, aliasPrefixes: readonly string[]):
 }
 
 export interface DependencyInternalViolation {
-  /** The file that deep-imports a dependency's internals. */
   file: string;
-  /** The offending specifier, e.g. `lodash/dist/chunk`. */
   specifier: string;
 }
 
 export interface DependencyInternalsAnalysis {
   appDir: string;
-  /** Files that import at least one third-party package (the role sample). */
   externalImporterCount: number;
-  /** Files that import a dependency's internal build/impl path. */
   offenderCount: number;
   gate: GateResult;
   violations: DependencyInternalViolation[];
@@ -62,12 +55,6 @@ export interface DependencyInternalsOptions {
   resolve?: boolean;
 }
 
-/**
- * Infer the "import dependencies by their public entry" rule: a file should import a third-party package by
- * its name or a documented subpath, not by reaching into its build/impl directories (`dist`, `src`, `lib`,
- * ...). Counts files that import any external package (role sample) and those that deep-import an internal
- * path, then gates with the Wilson floor. Only meaningful when `externalImporterCount > 0`.
- */
 export function detectDependencyInternals(
   appDir: string,
   options: DependencyInternalsOptions = {},

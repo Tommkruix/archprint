@@ -10,8 +10,6 @@ import {
 } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Fixture: lib/db.ts is `export * from '@prisma/client'` (a re-export surface, no constructor call),
-// imported by a request entry as `@/lib/db`. The constructor scan alone would miss it.
 const fixture = path.join(here, '..', 'fixtures', 'db-reexport');
 
 describe('db-client marker inference follows re-exports of a known db library', () => {

@@ -1,5 +1,4 @@
 export const GATE_THRESHOLDS = {
-  /** Wilson lower-bound floor on the true conformance rate. */
   confidence: 0.9,
   exceptions: 3,
   roleConfidence: 0.8,
@@ -29,9 +28,7 @@ export interface GateResult {
     exceptions: GateCondition;
     roleConfidence: GateCondition;
   };
-  /** Observed conformance rate (conforming / observations). */
   observedConformance: number;
-  /** Followed + not-followed observations for this role: the confidence sample size. */
   observations: number;
   passes: boolean;
   status: GenerationStatus;
@@ -53,12 +50,6 @@ export function wilsonLowerBound(successes: number, n: number, z: number = Z_SCO
   return (centre - margin) / (1 + z2 / n);
 }
 
-/**
- * Gate a candidate rule. AUTO only when we are 95% confident the true conformance is at least 90% (Wilson
- * lower bound over the role's followed + not-followed observations), with at most a few exceptions and a
- * confidently-classified role. A pattern that looks like a rule (observed >= 80%) but lacks the evidence to
- * be confident becomes a provisional SUGGEST, so a thin repo is surfaced rather than silently rejected.
- */
 export function evaluateGate(input: GateInput): GateResult {
   const { roleFileCount, violatingFileCount, roleConfidence } = input;
   const conformingFileCount = roleFileCount - violatingFileCount;

@@ -5,14 +5,11 @@ import { listSourceFiles, walkRepo, type WalkedFile } from '../scanner/file-walk
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 
-// Route groups `(group)`, dynamic segments `[param]`, and framework roots hold many pages but are not
-// the shared UI layer.
 const STRUCTURAL_SEGMENT = /^(\(.*\)|\[.*\]|app|pages|src|dist|build)$/;
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const normalize = (filePath: string): string => filePath.replace(/\\/g, '/');
 
-// Heuristic specifier extraction for inference signals only; the detector resolves the graph via AST.
 function importSpecifiers(text: string): string[] {
   const specifiers = new Set<string>();
   for (const match of text.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g)) specifiers.add(match[1]!);
@@ -20,9 +17,6 @@ function importSpecifiers(text: string): string[] {
   return [...specifiers];
 }
 
-// Re-export declarations that re-expose a module's value bindings: `export * from '...'`,
-// `export { x } from '...'`. A whole-declaration `export type ... from` re-exports only types (erased at
-// compile time), so it is not a runtime db surface and is skipped.
 function reexportSpecifiers(text: string): string[] {
   const specifiers = new Set<string>();
   for (const match of text.matchAll(/\bexport\b([^;]*?)\bfrom\s*['"]([^'"]+)['"]/g)) {
@@ -46,14 +40,10 @@ export interface InferredMarkers {
   evidence: UiSegmentEvidence[];
 }
 
-// Tests and stories are scaffolding, not architecture. Excluding them keeps a component directory's purity
-// from being diluted by colocated tests (which would otherwise sink the real UI layer below the specificity
-// gate). `.d.ts` declarations are already dropped by the walker.
 function isScaffolding(file: WalkedFile): boolean {
   return file.role === 'TEST' || /\.stories\.(ts|tsx)$/.test(file.relativePath);
 }
 
-/** A `React.createElement` / `cloneElement` call, matched structurally (no parent nodes needed). */
 function isCreateElementCall(node: ts.CallExpression): boolean {
   const callee = node.expression;
   const name = ts.isPropertyAccessExpression(callee)
@@ -64,11 +54,6 @@ function isCreateElementCall(node: ts.CallExpression): boolean {
   return name === 'createElement' || name === 'cloneElement';
 }
 
-/**
- * A file renders JSX when it contains a JSX element/fragment or a `React.createElement` call: the
- * definitional "is a component" signal (react-docgen, eslint-plugin-react), far stronger than the `.tsx`
- * extension. Syntactic parse only (no type checker), so it stays cheap.
- */
 function rendersJsx(absolutePath: string): boolean {
   let text: string;
   try {
@@ -78,8 +63,6 @@ function rendersJsx(absolutePath: string): boolean {
     return false;
   }
   const isTsx = absolutePath.endsWith('.tsx');
-  // JSX syntax is valid only in `.tsx`; a `.ts` file can render only via createElement, so skip the parse
-  // when it cannot contain one.
   if (!isTsx && !text.includes('createElement') && !text.includes('cloneElement')) return false;
   const source = ts.createSourceFile(
     absolutePath,
@@ -106,18 +89,10 @@ function rendersJsx(absolutePath: string): boolean {
   return found;
 }
 
-/** A reusable UI component: a path-plausible file (component or unclassified `.ts`) that renders JSX. */
 function isUiComponent(file: WalkedFile): boolean {
   return (file.role === 'COMPONENT' || file.role === 'UNKNOWN') && rendersJsx(file.absolutePath);
 }
 
-/**
- * Infer this repo's UI-layer specifier marker from its own graph: among directories that are almost
- * exclusively components (specificity), the one holding the largest share of the repo's components
- * (coverage). A component is identified by rendered JSX (not the `.tsx` extension); route entries and
- * tests are already excluded. Coverage selects the encompassing UI layer over both insular feature
- * directories and heavily-imported primitive sub-libraries (e.g. components/ui), which fan-in wrongly favors.
- */
 export function inferUiLayerMarkers(appDir: string): InferredMarkers {
   const files = walkRepo(appDir).filter((file) => !isScaffolding(file));
   const components = files.filter(isUiComponent);
@@ -168,7 +143,6 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
   return { markers, segments, evidence: candidates.slice(0, 8) };
 }
 
-/** Known database-client libraries: package-level vocabulary, not a per-repo convention. */
 export const KNOWN_DB_LIBRARIES: readonly RegExp[] = [
   /@prisma\/(client|adapter-)/,
   /drizzle-orm/,
@@ -186,12 +160,9 @@ export const KNOWN_DB_LIBRARIES: readonly RegExp[] = [
   /better-sqlite3/,
 ];
 
-// Unambiguous ORM client constructors: a file containing one is a db wrapper.
 const DB_CLIENT_CONSTRUCTOR =
   /new PrismaClient\s*\(|\bdrizzle\s*\(|new DataSource\s*\(|new Sequelize\s*\(|new Kysely\s*\(|MikroORM\.init\s*\(|mongoose\.(connect|createConnection)\s*\(/;
 
-// Generic pool/driver constructors (pg, mysql, postgres.js). These also match non-db clients, so a file
-// is only a wrapper when it ALSO imports a known db library.
 const DB_CLIENT_CONSTRUCTOR_GENERIC =
   /new Pool\s*\(|new Client\s*\(|\bpostgres\s*\(|create(Pool|Connection)\s*\(|new Database\s*\(/;
 
@@ -218,7 +189,6 @@ export interface InferredDbMarkers {
   wrappers: string[];
 }
 
-/** Reverse-map a first-party file to the specifier importers use for it (workspace package or alias). */
 function importableSpecifier(
   absFile: string,
   aliases: [string, string][],
@@ -230,7 +200,7 @@ function importableSpecifier(
   let best: { spec: string; length: number } | null = null;
   for (const [pkg, dir] of packages) {
     const target = normalize(path.resolve(dir));
-    if (target === appRoot) continue; // the app's own package: internal files import via the alias
+    if (target === appRoot) continue;
     if (file === target || file.startsWith(`${target}/`)) {
       if (!best || target.length > best.length) best = { spec: pkg, length: target.length };
     }
@@ -247,18 +217,12 @@ function importableSpecifier(
   return best ? best.spec : null;
 }
 
-/**
- * Infer this repo's db-client markers: the known libraries plus first-party wrappers that instantiate OR
- * re-export a client. Each wrapper yields a specifier marker (direct imports) and a leaf-path marker (so
- * barrel re-exports are caught once the detector resolves the barrel to the wrapper file).
- */
 export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
   const appRoot = normalize(path.resolve(appDir));
   const repoRoot = normalize(path.resolve(findWorkspaceRoot(appDir)));
   const aliases = Object.entries(buildWorkspaceMap(appDir));
   const packages = Object.entries(buildWorkspacePackageMap(findWorkspaceRoot(appDir)));
 
-  // The db client may be instantiated in a sibling workspace package, so scan the app and every package.
   const scanRoots = [
     appRoot,
     ...packages.map(([, dir]) => normalize(path.resolve(dir))).filter((dir) => dir !== appRoot),
@@ -296,9 +260,6 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
         KNOWN_DB_LIBRARIES.some((lib) => lib.test(specifier)),
       )
     ) {
-      // A first-party file that re-exports a known db library re-exposes the client under its own specifier;
-      // request entries importing it are importing the db client (e.g. `@/lib/db`, or a workspace-scoped
-      // `@scope/core/prisma-client`), which the constructor scan alone would miss.
       wrapperFiles.push(file);
     }
   }
@@ -312,8 +273,6 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
       wrappers.add(specifier);
       wrapperMarkers.push(new RegExp(`${escapeRegExp(specifier)}($|[/.-])`));
     }
-    // Leaf-path marker: matches the wrapper's resolved leaf path, so a barrel import that the detector
-    // resolves to this file is flagged even though its specifier differs.
     if (abs.startsWith(`${repoRoot}/`)) {
       const relative = abs.slice(repoRoot.length + 1).replace(/\.(ts|tsx)$/, '');
       wrapperMarkers.push(new RegExp(`(^|/)${escapeRegExp(relative)}($|[/.-])`));

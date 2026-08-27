@@ -1,6 +1,5 @@
 import type { SourceFile } from 'ts-morph';
 
-/** A file that only re-exports other modules (`export * from './x'`) and declares no values. */
 export function isBarrelFile(sourceFile: SourceFile): boolean {
   const hasReExport = sourceFile
     .getExportDeclarations()
@@ -16,11 +15,6 @@ export function isBarrelFile(sourceFile: SourceFile): boolean {
   return !declaresLocalValues;
 }
 
-/**
- * Resolve a source file to its leaf (non-barrel) files, following re-export chains through
- * nested barrels. Cycles are guarded via `visited`; specifiers that do not resolve to a project
- * file (external packages, missing modules) are skipped. A non-barrel resolves to itself.
- */
 export function resolveToLeafFiles(
   sourceFile: SourceFile,
   visited: Set<string> = new Set(),

@@ -11,7 +11,6 @@ describe('wilsonLowerBound', () => {
   });
 
   it('rises with sample size at 100% observed (thin sample => low bound)', () => {
-    // The whole point: 100% observed is weak evidence when the sample is small.
     expect(wilsonLowerBound(9, 9)).toBeLessThan(0.8);
     expect(wilsonLowerBound(22, 22)).toBeLessThan(0.9);
     expect(wilsonLowerBound(45, 45)).toBeGreaterThanOrEqual(0.9);
@@ -24,7 +23,6 @@ describe('wilsonLowerBound', () => {
 
 describe('evaluateGate', () => {
   it('AUTO when the confidence floor clears 90% with few exceptions and a confident role', () => {
-    // 100 files, 1 violation: floor well above 0.90.
     const r = evaluateGate({ roleFileCount: 100, violatingFileCount: 1, roleConfidence: 0.95 });
     expect(r.status).toBe('AUTO');
     expect(r.passes).toBe(true);
@@ -32,8 +30,6 @@ describe('evaluateGate', () => {
   });
 
   it('SUGGEST (not AUTO) when the pattern is clean but the sample is too thin to be confident', () => {
-    // 9/9 conforming: observed 100% but the Wilson floor (~0.70) is below 0.90. This is the thin-repo
-    // case that used to be a silent REJECT.
     const r = evaluateGate({ roleFileCount: 9, violatingFileCount: 0, roleConfidence: 0.95 });
     expect(r.conditions.confidence.pass).toBe(false);
     expect(r.observedConformance).toBe(1);
@@ -41,7 +37,6 @@ describe('evaluateGate', () => {
   });
 
   it('SUGGEST on the exceptions cap even when the floor is high (large N)', () => {
-    // 1000 files, 15 violations: floor passes but 15 > 3 exceptions, so not AUTO.
     const r = evaluateGate({ roleFileCount: 1000, violatingFileCount: 15, roleConfidence: 0.95 });
     expect(r.conditions.confidence.pass).toBe(true);
     expect(r.conditions.exceptions.pass).toBe(false);
@@ -49,7 +44,6 @@ describe('evaluateGate', () => {
   });
 
   it('SUGGEST for a moderate observed rate (0.8..0.9) with a confident role', () => {
-    // 100 files, 15 violations: observed 0.85 (< 0.9) but >= 0.8.
     const r = evaluateGate({ roleFileCount: 100, violatingFileCount: 15, roleConfidence: 0.95 });
     expect(r.status).toBe('SUGGEST');
   });

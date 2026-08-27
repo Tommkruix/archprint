@@ -12,10 +12,6 @@ import { createImportAnalyzer } from '../../src/scanner/file-walker.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'type-only-entry');
 
-// Three request-entry routes import the same forbidden specifier: one as a runtime value
-// (`import { PrismaClient }`), one as a whole-declaration type-only import (`import type { User }`),
-// and one as an inline type-only named import (`import { type Prisma }`). Only the value import is a
-// runtime dependency; the two type-only imports are erased and must not count.
 const config: PatternConfig = {
   id: 'TEST',
   name: 'no-db-in-request-entry',
@@ -33,7 +29,6 @@ describe('type-only imports are not runtime dependencies', () => {
     ]);
   });
 
-  // Regression: the specifier-only fast scan previously flagged type-only imports as violations.
   it('flags only the value import in fast mode', () => {
     const [fast] = detectForbiddenImports(fixture, [config], { resolve: false });
     expect(fast!.stats.roleFileCount).toBe(3);

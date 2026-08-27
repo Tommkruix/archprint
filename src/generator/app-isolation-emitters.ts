@@ -13,9 +13,7 @@ export interface CrossAppRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  /** Files in an app; the `([^/]+)` captures the app name as $1. */
   from: { path: string };
-  /** Files in a different sibling app: same container, but not the captured app. */
   to: { path: string; pathNot: string };
 }
 
@@ -23,11 +21,6 @@ export interface CrossAppConfig {
   forbidden: CrossAppRule[];
 }
 
-/**
- * Emit inferred app isolation as a dependency-cruiser `forbidden` ruleset. For each container, a file in one
- * app may not import a different sibling app; the rule captures the source app with a group and forbids the
- * others via a `$1` back-reference. Only AUTO groups by default.
- */
 export function toDependencyCruiserAppIsolation(
   groups: readonly AppIsolationGroup[],
   include: readonly GenerationStatus[] = ['AUTO'],

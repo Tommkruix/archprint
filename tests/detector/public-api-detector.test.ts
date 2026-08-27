@@ -4,9 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { detectPublicApiBoundaries } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// features/auth is a barrel with internals login/session; app/good1+good2 import the barrel, app/bad
-// deep-imports login. features/auth/tokens is a nested barrel; app/usetoken imports its barrel, which must be
-// attributed to tokens (its nearest barrel), not counted as a deep import into auth.
 const fixture = path.join(here, '..', 'fixtures', 'public-api');
 const group = (analysis: ReturnType<typeof detectPublicApiBoundaries>, dir: string) =>
   analysis.groups.find((g) => g.dir === dir);
@@ -30,7 +27,6 @@ describe('detectPublicApiBoundaries', () => {
 
   it('attributes an import to the nearest enclosing barrel, not an outer one', () => {
     const analysis = detectPublicApiBoundaries(fixture);
-    // usetoken imports the tokens barrel: a conformer of tokens, and NOT a deep import of auth.
     const tokens = group(analysis, 'features/auth/tokens')!;
     expect(tokens.internalCount).toBe(1);
     expect(tokens.consumerCount).toBe(1);

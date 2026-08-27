@@ -29,7 +29,6 @@ describe('detectForbiddenImports (shared pass)', () => {
     expect(shared!.gate.status).toEqual(single.gate.status);
   });
 
-  // The route handler imports `@/db` (a barrel) which re-exports the instantiating `@/db/client`.
   it('deep resolution catches a barrel-hidden import that fast (specifier-level) misses', () => {
     const config = dbConfig();
     const [fast] = detectForbiddenImports(barrel, [config], { resolve: false });
@@ -50,7 +49,7 @@ describe('detectForbiddenImports (shared pass)', () => {
       { id: 'B', name: 'b', description: 'd', roles: ['SERVICE'], forbidden: [/never-matches/] },
     ];
     const [routes, services] = detectForbiddenImports(barrel, configs);
-    expect(routes!.stats.roleFileCount).toBeGreaterThan(0); // db-barrel has a route handler
-    expect(services!.stats.roleFileCount).toBe(0); // but no service
+    expect(routes!.stats.roleFileCount).toBeGreaterThan(0);
+    expect(services!.stats.roleFileCount).toBe(0);
   });
 });

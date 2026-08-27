@@ -17,7 +17,6 @@ export const REQUEST_ENTRY_ROLES: readonly Role[] = [
   'TRPC_ROUTER',
 ];
 
-/** Known db libraries only; first-party wrappers are inferred (see inferDbClientMarkers). */
 export const DEFAULT_DB_MARKERS: readonly RegExp[] = KNOWN_DB_LIBRARIES;
 
 const INFRA_PATH = /(^|\/)(health|seed|admin|webhook|webhooks|migration|migrations|cron)(\/|\.|$)/;
@@ -59,11 +58,6 @@ const NODE_MODULES = /[/\\]node_modules[/\\]/;
 const matchesAny = (text: string, markers: readonly RegExp[]): boolean =>
   markers.some((marker) => marker.test(text));
 
-/**
- * A value import hits a forbidden target when its specifier matches a marker, or when it resolves
- * to a first-party leaf that matches. Leaves under node_modules are excluded: a dependency's own
- * internal folders (e.g. next's `dist/client/components`) must not be read as our layers.
- */
 function forbiddenTargetReachedByValue(
   imp: { specifier: string; valueLeafPaths: string[]; hasValueBinding: boolean },
   forbidden: readonly RegExp[],
@@ -78,7 +72,6 @@ function forbiddenTargetReachedByValue(
   return leaf ?? null;
 }
 
-/** Detect whether files of the given roles import a forbidden target as a value, then run the gate. */
 export function detectForbiddenImport(appDir: string, config: PatternConfig): DetectedPattern {
   const roleFiles = walkRepo(appDir).filter((file) => config.roles.includes(file.role));
   const analyze = createImportAnalyzer(appDir);
@@ -136,11 +129,6 @@ function buildPattern(
   };
 }
 
-/**
- * Detect several patterns in one pass: walk the repo and resolve each role file's imports once, testing
- * every config's markers against the shared result. Much faster than calling detectForbiddenImport per
- * pattern, which re-resolves the same files each time.
- */
 export function detectForbiddenImports(
   appDir: string,
   configs: readonly PatternConfig[],
@@ -187,7 +175,6 @@ export function detectForbiddenImports(
   );
 }
 
-/** Detect the server-entry-to-UI boundary with the UI marker inferred from this repo's graph. */
 export function detectUiLayerInServerEntry(
   appDir: string,
 ): DetectedPattern & { inferredUi: InferredMarkers } {
@@ -200,14 +187,12 @@ export function detectUiLayerInServerEntry(
     roles: REQUEST_ENTRY_ROLES,
     forbidden: inferredUi.markers,
   });
-  // No identifiable UI layer: reject rather than emit a vacuous AUTO on zero markers.
   if (inferredUi.markers.length === 0) {
     result.gate = { ...result.gate, status: 'REJECT', passes: false };
   }
   return { ...result, inferredUi };
 }
 
-/** Detect the request-entry-to-db-client boundary with markers inferred from this repo's graph. */
 export function detectDbClientInRequestEntry(
   appDir: string,
 ): DetectedPattern & { inferredDb: InferredDbMarkers } {

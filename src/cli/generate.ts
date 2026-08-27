@@ -28,11 +28,6 @@ export function emitOne(pattern: ScannedPattern, appDir: string, outDir: string)
   return emitRuleArtifacts(pattern.config, pattern.result, outDir, `archprint scan ${appDir}`);
 }
 
-/**
- * Write the inferred layer boundaries as enforcement configs in each supported ecosystem format
- * (dependency-cruiser and eslint-plugin-boundaries). Returns the file paths written, empty when there are no
- * boundaries at the requested statuses.
- */
 export function writeLayerConfig(
   scan: ScanResult,
   outDir: string,
@@ -52,10 +47,6 @@ export function writeLayerConfig(
   ];
 }
 
-/**
- * Write the inferred public-API boundaries as a dependency-cruiser deep-import ruleset. Returns the file
- * paths written, empty when no group qualifies at the requested statuses.
- */
 export function writePublicApiConfig(
   scan: ScanResult,
   outDir: string,
@@ -69,10 +60,6 @@ export function writePublicApiConfig(
   return [file];
 }
 
-/**
- * Write the inferred feature-slice isolation as a dependency-cruiser cross-slice ruleset. Returns the file
- * paths written, empty when no container qualifies at the requested statuses.
- */
 export function writeFeatureSliceConfig(
   scan: ScanResult,
   outDir: string,
@@ -86,10 +73,6 @@ export function writeFeatureSliceConfig(
   return [file];
 }
 
-/**
- * Write the inferred app isolation as a dependency-cruiser cross-app ruleset. Returns the file paths written,
- * empty when no container qualifies at the requested statuses.
- */
 export function writeAppIsolationConfig(
   scan: ScanResult,
   outDir: string,
@@ -103,10 +86,6 @@ export function writeAppIsolationConfig(
   return [file];
 }
 
-/**
- * Write the inferred test isolation as a dependency-cruiser `not-to-test` ruleset. Returns the file path
- * written, empty unless the rule is enforceable (AUTO) and the app has test files.
- */
 export function writeTestIsolationConfig(scan: ScanResult, outDir: string): string[] {
   const config = toDependencyCruiserTestIsolation(scan.testIsolation);
   if (config.forbidden.length === 0) return [];
@@ -116,10 +95,6 @@ export function writeTestIsolationConfig(scan: ScanResult, outDir: string): stri
   return [file];
 }
 
-/**
- * Write the inferred dependency-internals rule as a dependency-cruiser `forbidden` ruleset. Returns the file
- * path written, empty unless the rule is enforceable (AUTO) and the app imports external packages.
- */
 export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string): string[] {
   const config = toDependencyCruiserDependencyInternals(scan.dependencyInternals);
   if (config.forbidden.length === 0) return [];
@@ -129,11 +104,6 @@ export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string)
   return [file];
 }
 
-/**
- * Write the layer dependency graph as Mermaid and Graphviz DOT, so the inferred architecture can be viewed
- * and pasted into docs. Visualizes every interacting layer pair (dominant flow plus leaks), returning the
- * file paths written, or empty when there are no layers.
- */
 export function writeGraph(scan: ScanResult, outDir: string): string[] {
   if (scan.layerBoundaries.length === 0) return [];
   mkdirSync(outDir, { recursive: true });

@@ -1,7 +1,3 @@
-/**
- * Architectural role inferred from a file's path/name. Roles cover NestJS, Next.js App Router
- * and Pages Router, tRPC, SvelteKit, Nuxt, Remix, and common monorepo package conventions.
- */
 export type Role =
   | 'CONTROLLER'
   | 'SERVICE'
@@ -22,9 +18,7 @@ export type Role =
 
 export interface RoleClassification {
   role: Role;
-  /** 0..1: how specifically the path signals the role (named suffix > structural path > `.tsx`). */
   confidence: number;
-  /** Id of the rule that matched, or null when unclassified. */
   matchedRule: string | null;
 }
 
@@ -51,8 +45,6 @@ const ROLE_RULES: readonly RoleRule[] = [
   {
     role: 'ROUTE_HANDLER',
     id: 'next-app-router-route',
-    // .tsx is valid for route handlers (e.g. next/og ImageResponse routes use JSX); matching only .ts would
-    // misclassify those as UI components and hide request-entry boundary violations.
     test: /app\/api\/.*\/route\.tsx?$/,
     confidence: 0.95,
   },
@@ -69,8 +61,6 @@ const ROLE_RULES: readonly RoleRule[] = [
     test: /app\/.*\/actions?\.ts$/,
     confidence: 0.9,
   },
-  // SvelteKit: endpoints, server-only loads/actions, and server hooks are request entries; a universal
-  // load (`+page.ts`/`+layout.ts`) runs in the browser too, so it is a framework entry, not a server entry.
   { role: 'API_HANDLER', id: 'sveltekit-endpoint', test: /(^|\/)\+server\.ts$/, confidence: 0.95 },
   {
     role: 'SERVER_ACTION',
@@ -90,14 +80,12 @@ const ROLE_RULES: readonly RoleRule[] = [
     test: /(^|\/)\+(page|layout)\.ts$/,
     confidence: 0.8,
   },
-  // Nuxt Nitro server handlers (server/api is caught here unless the earlier tRPC rule already matched).
   {
     role: 'API_HANDLER',
     id: 'nuxt-nitro-server',
     test: /(^|\/)server\/(api|routes|middleware|plugins)\/.*\.ts$/,
     confidence: 0.85,
   },
-  // Remix / React Router v7 file-based routes run loaders/actions and render UI: framework entries.
   {
     role: 'ROUTE_ENTRY',
     id: 'remix-route',
@@ -129,12 +117,6 @@ const ROLE_RULES: readonly RoleRule[] = [
   { role: 'COMPONENT', id: 'tsx-component', test: /\.tsx$/, confidence: 0.5 },
 ];
 
-/**
- * Every path pattern for each role, in first-match order (a role can be matched by several rules, e.g.
- * API_HANDLER covers Next pages-api, SvelteKit endpoints, and Nuxt Nitro handlers). Single source of truth
- * for tools that must mirror classification (e.g. the rule generator embeds these into standalone rules) so
- * the patterns can never drift from ROLE_RULES.
- */
 export const ROLE_PATTERNS: ReadonlyMap<Role, readonly RegExp[]> = ROLE_RULES.reduce(
   (map, rule) => {
     const patterns = map.get(rule.role) ?? [];
@@ -144,10 +126,6 @@ export const ROLE_PATTERNS: ReadonlyMap<Role, readonly RegExp[]> = ROLE_RULES.re
   new Map<Role, RegExp[]>(),
 );
 
-/**
- * Classify a repo-relative file path into an architectural role. Accepts either POSIX or
- * Windows separators. Returns UNKNOWN with confidence 0 when no rule matches.
- */
 export function classifyFile(relativePath: string): RoleClassification {
   const normalizedPath = relativePath.replace(/\\/g, '/');
   for (const rule of ROLE_RULES) {
@@ -188,12 +166,6 @@ export function hasUseServerDirective(sourceHead: string): boolean {
   return USE_SERVER_LITERAL.test(sourceHead.slice(i));
 }
 
-/**
- * Path-based role, upgraded to SERVER_ACTION when a `.ts` module declares a top-level `"use server"`
- * directive (a Next.js server-action module). `.tsx` files are never upgraded: a page/component with
- * a `"use server"` directive still renders UI and legitimately imports components, so treating it as
- * a server-entry would be wrong. A named path role (controller, route, test) also always wins.
- */
 export function classifyFileWithDirective(
   relativePath: string,
   hasServerDirective: boolean,

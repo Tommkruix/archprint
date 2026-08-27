@@ -34,7 +34,6 @@ const fixture = path.join(here, '..', 'fixtures', 'ui-infer');
 
 function fakePattern(id: string, status: GenerationStatus): ScannedPattern {
   const violatingFileCount = status === 'AUTO' ? 0 : 4;
-  // 50 observations clears the Wilson floor when clean (AUTO); 4 exceptions keeps it a SUGGEST.
   const gate = evaluateGate({ roleFileCount: 50, violatingFileCount, roleConfidence: 0.9 });
   const result: DetectedPattern = {
     id,
@@ -376,12 +375,10 @@ describe('cli scan', () => {
     const auto = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 3) }, '1.0.0');
     expect(auto).toContain('TEST ISOLATION (enforceable)');
 
-    // 18/20 (0.90) with 2 offenders is a thin-sample SUGGEST.
     const suggest = renderReport({ ...base, testIsolation: fakeTestIsolation(20, 2, 3) }, '1.0.0');
     expect(suggest).toContain('TEST ISOLATION (suggested)');
     expect(suggest).toContain('Test imports: 2');
 
-    // No test files: the rule is meaningless and is not rendered.
     const none = renderReport({ ...base, testIsolation: fakeTestIsolation(40, 0, 0) }, '1.0.0');
     expect(none).not.toContain('TEST ISOLATION');
   });
@@ -423,7 +420,6 @@ describe('cli scan', () => {
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
       publicApi: emptyPublicApi(),
-      // 40 isolated slice files clears the floor (AUTO); 18/20 (0.90) is a thin-sample SUGGEST.
       featureSlices: {
         appDir: 'x',
         groups: [fakeSliceGroup('src/features', 40, 0), fakeSliceGroup('src/modules', 20, 2)],
@@ -449,7 +445,6 @@ describe('cli scan', () => {
       cycles: emptyCycles(),
       orphans: emptyOrphans(),
       reachability: emptyReachability(),
-      // 40 clean consumers clears the Wilson floor (AUTO); 18/20 (0.90 observed) is a thin-sample SUGGEST.
       publicApi: {
         appDir: 'x',
         groups: [fakeApiGroup('features/auth', 40, 0), fakeApiGroup('features/billing', 20, 2)],
@@ -767,7 +762,6 @@ describe('cli generate', () => {
       fileCount: 10,
       aliasCount: 1,
       patterns: [],
-      // A SUGGEST boundary (10 files) still yields a graph: the visualization is informational.
       layerBoundaries: [fakeLayerBoundary('utils', 'api', 10)],
       cycles: emptyCycles(),
       orphans: emptyOrphans(),

@@ -4,7 +4,6 @@ import { listSourceFiles } from './file-walker.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.next', '.git']);
 
-/** Directories under `root` that hold a tsconfig.json (the candidate app / package roots). */
 function findTsconfigDirs(root: string): string[] {
   const dirs: string[] = [];
   const walk = (dir: string): void => {
@@ -26,7 +25,6 @@ function findTsconfigDirs(root: string): string[] {
   return dirs;
 }
 
-/** The deepest tsconfig dir that contains `file`: the app a file belongs to. */
 function deepestOwner(dirs: readonly string[], file: string): string | null {
   let best: string | null = null;
   for (const dir of dirs) {
@@ -40,13 +38,6 @@ function deepestOwner(dirs: readonly string[], file: string): string | null {
   return best;
 }
 
-/**
- * Discover the app directories to scan under `root`: the tsconfig dirs that own at least `minFiles` source
- * files (their own subtree, excluding any nested tsconfig dir). A monorepo yields one entry per app/package;
- * a single app yields just its own root. Falls back to any tsconfig dir with source when none clears the
- * threshold (small repos), and returns nothing when there is no tsconfig at all (Archprint needs one to
- * resolve aliases).
- */
 export function discoverAppDirs(root: string, minFiles = 25): string[] {
   const absRoot = path.resolve(root);
   const tsconfigDirs = findTsconfigDirs(absRoot);

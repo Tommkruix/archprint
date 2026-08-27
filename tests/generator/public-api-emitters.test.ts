@@ -27,9 +27,7 @@ describe('toDependencyCruiserPublicApi', () => {
     const rule = config.forbidden[0]!;
     expect(rule.name).toBe('no-deep-import-features-auth');
     expect(rule.severity).toBe('error');
-    // Consumers are the modules OUTSIDE the group.
     expect(rule.from.pathNot).toBe('^features/auth/');
-    // The target is the group's internals, but not its barrel.
     expect(rule.to.path).toBe('^features/auth/');
     expect(rule.to.pathNot).toBe('^features/auth/index\\.(ts|tsx)$');
   });

@@ -3,8 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { analyzeImports } from '../../src/scanner/file-walker.js';
 
-// Fixture: lib/index.ts is a barrel re-exporting BOTH format.ts (fmt, a value) and prisma.ts
-// (prisma value + Db type). This is the "barrel co-exports the db" trap.
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -18,9 +16,7 @@ describe('symbol-level, type-aware import attribution', () => {
     const imports = analyzeImports(fixture, path.join(fixture, 'good-route.ts'));
     const allValueLeaves = imports.flatMap((i) => i.valueLeafPaths);
 
-    // fmt resolves to format.ts (a real value dependency)...
     expect(endsWith(allValueLeaves, '/lib/format.ts')).toBe(true);
-    // ...and prisma.ts is NEVER a value dependency here, even though the barrel re-exports it.
     expect(endsWith(allValueLeaves, '/lib/prisma.ts')).toBe(false);
   });
 

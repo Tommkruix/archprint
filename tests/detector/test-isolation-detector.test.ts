@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { detectTestIsolation } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// src has four production files (math, good, bad, bad2) and one test (math.test). bad.ts and bad2.ts import
-// the test file: two violations. good.ts and math.ts stay clean.
 const fixture = path.join(here, '..', 'fixtures', 'test-isolation');
 
 describe('detectTestIsolation', () => {

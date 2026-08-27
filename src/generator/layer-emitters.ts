@@ -3,7 +3,6 @@ import type { LayerBoundary } from '../detector/layer-detector.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Path regex matching files in a layer (a directory of that name), for tools that match module paths. */
 const layerPath = (layer: string): string => `(^|/)${escapeRegExp(layer)}/`;
 
 const confidencePct = (boundary: LayerBoundary): string =>
@@ -26,11 +25,6 @@ export interface DependencyCruiserConfig {
   forbidden: DependencyCruiserRule[];
 }
 
-/**
- * Emit inferred layer boundaries as a dependency-cruiser `forbidden` ruleset: one rule per boundary, where a
- * file in the `from` layer must not depend on the `to` layer. Only AUTO boundaries by default (enforceable);
- * pass a wider `include` to also emit SUGGEST boundaries.
- */
 export function toDependencyCruiser(
   boundaries: readonly LayerBoundary[],
   include: readonly GenerationStatus[] = ['AUTO'],
@@ -63,10 +57,6 @@ export interface EslintBoundariesConfig {
   };
 }
 
-/**
- * Emit inferred layer boundaries as an eslint-plugin-boundaries config: each layer becomes an element type,
- * and each `from` layer disallows the set of layers it must not import. Only AUTO boundaries by default.
- */
 export function toEslintBoundaries(
   boundaries: readonly LayerBoundary[],
   include: readonly GenerationStatus[] = ['AUTO'],

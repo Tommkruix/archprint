@@ -13,9 +13,7 @@ export interface CrossSliceRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  /** Files in a slice; the `([^/]+)` captures the slice name as $1. */
   from: { path: string };
-  /** Files in a different sibling slice: same container, but not the captured slice. */
   to: { path: string; pathNot: string };
 }
 
@@ -23,11 +21,6 @@ export interface CrossSliceConfig {
   forbidden: CrossSliceRule[];
 }
 
-/**
- * Emit inferred feature-slice isolation as a dependency-cruiser `forbidden` ruleset. For each container, a
- * file in one slice may not import a different sibling slice; the rule captures the source slice with a group
- * and forbids the other slices via a `$1` back-reference. Only AUTO groups by default.
- */
 export function toDependencyCruiserFeatureSlice(
   groups: readonly FeatureSliceGroup[],
   include: readonly GenerationStatus[] = ['AUTO'],

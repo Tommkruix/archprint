@@ -39,7 +39,6 @@ describe('toDependencyCruiserTestIsolation', () => {
   });
 
   it('emits nothing when the rule is not enforceable (below AUTO)', () => {
-    // 3 of 5 offenders: observed 0.4, not AUTO.
     expect(toDependencyCruiserTestIsolation(analysis(5, 3, 2)).forbidden).toEqual([]);
   });
 });

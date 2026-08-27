@@ -14,8 +14,8 @@ function makeProject() {
   project.createSourceFile('a.ts', 'export function a() {}');
   project.createSourceFile('b.ts', 'export const b = 1;');
   project.createSourceFile('index.ts', "export * from './a';\nexport { b } from './b';");
-  project.createSourceFile('outer.ts', "export * from './index';"); // barrel of a barrel
-  project.createSourceFile('mixed.ts', "export * from './a';\nexport function extra() {}"); // not pure
+  project.createSourceFile('outer.ts', "export * from './index';");
+  project.createSourceFile('mixed.ts', "export * from './a';\nexport function extra() {}");
   return project;
 }
 
@@ -56,7 +56,6 @@ describe('resolveToLeafFiles', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile('x.ts', "export * from './y';");
     project.createSourceFile('y.ts', "export * from './x';");
-    // Both are pure barrels pointing at each other: resolves to [] without hanging.
     expect(leafNames(project, 'x.ts')).toEqual([]);
   });
 });

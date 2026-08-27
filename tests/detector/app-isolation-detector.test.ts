@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { detectAppIsolation } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// apps/web and apps/admin: admin/dash imports web/util and admin/panel imports web/page (two cross-app
-// violations). web stays clean.
 const fixture = path.join(here, '..', 'fixtures', 'app-isolation');
 
 describe('detectAppIsolation', () => {

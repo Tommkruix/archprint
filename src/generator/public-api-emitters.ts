@@ -12,9 +12,7 @@ export interface DeepImportRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  /** Modules whose path does NOT match this regex: the consumers outside the group. */
   from: { pathNot: string };
-  /** Modules inside the group but not its barrel: the internals a deep import reaches. */
   to: { path: string; pathNot: string };
 }
 
@@ -22,11 +20,6 @@ export interface DeepImportConfig {
   forbidden: DeepImportRule[];
 }
 
-/**
- * Emit inferred public-API boundaries as a dependency-cruiser `forbidden` ruleset: for each group, a module
- * outside `<dir>` may not import a file inside it other than the barrel. Only AUTO groups by default
- * (enforceable); pass a wider `include` to also emit SUGGEST groups.
- */
 export function toDependencyCruiserPublicApi(
   groups: readonly PublicApiGroup[],
   include: readonly GenerationStatus[] = ['AUTO'],

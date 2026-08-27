@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { analyzeImports, detectCycles } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// a.ts statically imports b; b.ts dynamically imports a via `import('@/a')`. The cycle closes only
-// through the dynamic import, which a static-only scan would miss.
 const fixture = path.join(here, '..', 'fixtures', 'dynamic-import');
 
 describe('dynamic import() support', () => {

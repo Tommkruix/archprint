@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 
-/** Map workspace-package name to its directory, from `package.json` workspaces or pnpm-workspace.yaml. */
 export function buildWorkspacePackageMap(rootDir: string): Record<string, string> {
   const map: Record<string, string> = {};
   for (const packageDir of expandGlobs(rootDir, readWorkspaceGlobs(rootDir))) {
@@ -17,10 +16,6 @@ export function buildWorkspacePackageMap(rootDir: string): Record<string, string
   return map;
 }
 
-/**
- * Walk up from a directory to the monorepo root (the nearest ancestor declaring workspaces).
- * Returns the start directory unchanged if no workspace root is found.
- */
 export function findWorkspaceRoot(startDir: string): string {
   let dir = path.resolve(startDir);
   for (;;) {
@@ -54,7 +49,6 @@ function readWorkspaceGlobs(rootDir: string): string[] {
       // fall through to pnpm
     }
   }
-  // pnpm-workspace.yaml: minimal parse of the top-level `packages:` list.
   const pnpmPath = path.join(rootDir, 'pnpm-workspace.yaml');
   if (existsSync(pnpmPath)) {
     const globs: string[] = [];
@@ -67,7 +61,7 @@ function readWorkspaceGlobs(rootDir: string): string[] {
       if (inPackages) {
         const captured = line.match(/^\s*-\s*["']?([^"'#]+?)["']?\s*$/)?.[1];
         if (captured !== undefined) globs.push(captured.trim());
-        else if (/^\S/.test(line)) break; // next top-level key ends the list
+        else if (/^\S/.test(line)) break;
       }
     }
     return globs;
@@ -85,10 +79,10 @@ function expandGlobs(rootDir: string, globs: string[]): string[] {
     }
   };
   for (const glob of globs) {
-    if (glob.startsWith('!')) continue; // negations ignored (kept simple)
+    if (glob.startsWith('!')) continue;
     if (glob.endsWith('/*')) oneLevel(glob.slice(0, -2));
     else if (glob.endsWith('/**')) oneLevel(glob.slice(0, -3));
-    else dirs.push(path.join(rootDir, glob)); // explicit path
+    else dirs.push(path.join(rootDir, glob));
   }
   return dirs;
 }

@@ -55,7 +55,6 @@ describe('toMermaid', () => {
     expect(mermaid.startsWith('graph LR')).toBe(true);
     expect(mermaid).toContain('["components"]');
     expect(mermaid).toContain('["utils"]');
-    // components depends on utils across 20 files: a solid arrow components -> utils.
     expect(mermaid).toMatch(/n\d+ -->\|20\| n\d+/);
   });
 

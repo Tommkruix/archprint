@@ -4,9 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { detectOrphans } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Fixture: page.tsx (framework entry) imports lib/widget.ts (so widget is used); lib/orphan.ts is imported by
-// nobody and is not an entry; app.config.ts has zero in-degree but is a config entry; widget.test.ts is a test
-// (excluded). Expected orphan: lib/orphan.ts only.
 const fixture = path.join(here, '..', 'fixtures', 'orphans');
 
 describe('detectOrphans', () => {
@@ -24,7 +21,6 @@ describe('detectOrphans', () => {
   it('excludes test files from the analysis entirely', () => {
     const analysis = detectOrphans(fixture);
     expect(analysis.orphans).not.toContain('lib/widget.test.ts');
-    // widget.test.ts is not counted as a source file at all.
     expect(analysis.fileCount).toBe(4);
   });
 

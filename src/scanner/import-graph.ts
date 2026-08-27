@@ -21,8 +21,6 @@ const buildAliasEntries = (appDir: string): AliasEntry[] =>
 
 const FILE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
 
-/** Resolve a value import to the first-party source file it targets (relative path or tsconfig alias), fast
- *  (no type checker). Returns null for externals, other packages, and unresolved specifiers. */
 function resolveImportFile(
   specifier: string,
   fromAbsPath: string,
@@ -50,24 +48,15 @@ function resolveImportFile(
 
 export interface ImportGraph {
   root: string;
-  /** Source files in the app (non-test, unless `includeTests` was set). */
   files: WalkedFile[];
-  /** repo-relative path -> the repo-relative first-party files it imports as values. */
   adjacency: Map<string, string[]>;
 }
 
 export interface ImportGraphOptions {
-  /** Resolve the graph with the type checker (deep). Default false: fast file resolution. */
   resolve?: boolean;
-  /** Keep test files as nodes (for detectors that reason about imports to/from tests). Default false. */
   includeTests?: boolean;
 }
 
-/**
- * Build the first-party value-import graph for an app-dir. Deep mode uses the type-resolved leaves; fast mode
- * resolves each specifier to a file syntactically. Shared by the cycle and orphan detectors so the graph is
- * built one way. `appDir` is normalized to an absolute path.
- */
 export function buildImportGraph(appDir: string, options: ImportGraphOptions = {}): ImportGraph {
   const resolve = options.resolve ?? false;
   const root = path.resolve(appDir);

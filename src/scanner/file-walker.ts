@@ -16,21 +16,16 @@ const SOURCE_FILE = /\.(ts|tsx)$/;
 
 export interface WalkedFile extends RoleClassification {
   absolutePath: string;
-  /** Repo-relative path with POSIX separators (what the classifier matched on). */
   relativePath: string;
 }
 
-/** Where an import points, architecturally. Heuristic labels for the import graph. */
 export type EdgeKind = 'relative' | 'alias' | 'workspace' | 'external' | 'unresolved';
 
 export interface ResolvedImport {
   specifier: string;
   edgeKind: EdgeKind;
-  /** True if the resolved target is a barrel we saw through. */
   throughBarrel: boolean;
-  /** Leaf modules reached by value bindings, resolved at the symbol level (not every barrel export). */
   valueLeafPaths: string[];
-  /** Leaf modules reached by `import type` bindings (erased at compile time). */
   typeLeafPaths: string[];
   /** True if the import brings in at least one runtime value binding (default, namespace, a non-type named
    *  import, or a side-effect import). False for fully type-only imports, which are erased and are not a
@@ -51,7 +46,6 @@ function importHasValueBinding(importDeclaration: ImportDeclaration): boolean {
   return hasValueNamed || hasDefault || hasNamespace || sideEffectOnly;
 }
 
-/** String specifiers of dynamic `import('...')` calls: runtime module loads the static scan would miss. */
 function dynamicImportSpecifiers(sourceFile: SourceFile): string[] {
   const specifiers: string[] = [];
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
@@ -64,11 +58,6 @@ function dynamicImportSpecifiers(sourceFile: SourceFile): string[] {
 
 const DYNAMIC_FILE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
 
-/**
- * Recursively list `.ts`/`.tsx` source files under a directory, skipping build/vendor and
- * dot-directories and `.d.ts` declarations. Pure filesystem walk (no parsing), so it stays fast
- * on large monorepos. Returns absolute paths.
- */
 export function listSourceFiles(rootDir: string): string[] {
   const files: string[] = [];
   const walk = (dir: string): void => {
@@ -86,7 +75,6 @@ export function listSourceFiles(rootDir: string): string[] {
   return files;
 }
 
-/** Read the first `bytes` of a file (enough to catch a leading `"use server"` directive). */
 function readHead(file: string, bytes = 512): string {
   const fd = openSync(file, 'r');
   try {
@@ -98,17 +86,10 @@ function readHead(file: string, bytes = 512): string {
   }
 }
 
-/**
- * Walk a directory and assign an architectural role to every source file. Path rules decide the
- * role; a file the path rules leave weakly classified is re-checked for a top-level `"use server"`
- * directive and upgraded to SERVER_ACTION, so server actions outside `app/**` are not missed.
- */
 export function walkRepo(rootDir: string): WalkedFile[] {
   return listSourceFiles(rootDir).map((absolutePath) => {
     const relativePath = path.relative(rootDir, absolutePath).split(path.sep).join('/');
     const base = classifyFile(relativePath);
-    // Only `.ts` files the path rules left UNKNOWN can be a server-action module; `.tsx` pages that
-    // carry a "use server" directive still render UI, so they stay COMPONENT (not a server entry).
     if (base.role === 'UNKNOWN' && !relativePath.endsWith('.tsx')) {
       let head: string;
       try {
@@ -125,11 +106,6 @@ export function walkRepo(rootDir: string): WalkedFile[] {
   });
 }
 
-/**
- * Import analyzer bound to one ts-morph Project; reuse across many files instead of one per file.
- * With `{ resolve: false }` it only reads each import's specifier (no module resolution or type
- * checker), which is far faster but drops barrel/leaf resolution.
- */
 export function createImportAnalyzer(
   appDir: string,
   options: { resolve?: boolean } = {},
@@ -147,7 +123,6 @@ export function createImportAnalyzer(
     prefix: key.replace(/\/?\*$/, ''),
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
   }));
-  // Resolve a dynamic-import specifier to a first-party source file (relative path or tsconfig alias), fast.
   const resolveDynamicFile = (specifier: string, containingFile: string): string | undefined => {
     let base: string | undefined;
     if (specifier.startsWith('.')) {
@@ -168,7 +143,6 @@ export function createImportAnalyzer(
     return undefined;
   };
 
-  // exported name -> leaf files that define it, following re-exports.
   const exportedLeafCache = new Map<string, Map<string, Set<string>>>();
   const exportedLeaves = (target: SourceFile): Map<string, Set<string>> => {
     const key = target.getFilePath();
@@ -193,7 +167,6 @@ export function createImportAnalyzer(
   const classifyEdge = (specifier: string, target: SourceFile | undefined): EdgeKind => {
     if (specifier.startsWith('.')) return 'relative';
     if (matchesPrefix(specifier, aliases)) return 'alias';
-    // internal even when resolved via a node_modules symlink
     if (matchesPrefix(specifier, workspacePackages)) return 'workspace';
     if (target === undefined) return 'unresolved';
     return target.getFilePath().includes('/node_modules/') ? 'external' : 'workspace';
@@ -227,8 +200,6 @@ export function createImportAnalyzer(
           const named = importDeclaration.getNamedImports();
           const namespaceImport = importDeclaration.getNamespaceImport();
           const defaultImport = importDeclaration.getDefaultImport();
-          // Only barrels need the type checker to trace where a re-exported name is defined; a
-          // non-barrel defines its own names, so the leaf is the target file itself.
           const exported = throughBarrel ? exportedLeaves(target) : null;
 
           const attribute = (name: string, isTypeOnly: boolean): void => {
@@ -281,7 +252,6 @@ export function createImportAnalyzer(
           valueLeaves.add(target.getFilePath());
         }
       }
-      // A dynamic import always loads the module at runtime: a value dependency.
       results.push({
         specifier,
         edgeKind: classifyEdge(specifier, target),
@@ -295,7 +265,6 @@ export function createImportAnalyzer(
   };
 }
 
-/** Convenience: analyze a single file (creates a one-off analyzer bound to `appDir`). */
 export function analyzeImports(appDir: string, absoluteFilePath: string): ResolvedImport[] {
   return createImportAnalyzer(appDir)(absoluteFilePath);
 }

@@ -36,7 +36,6 @@ describe('buildWorkspacePackageMap', () => {
   });
 
   it('stops the pnpm packages list at the next top-level yaml key', () => {
-    // `catalog:` after the list must end it, not be read as another package glob.
     const map = buildWorkspacePackageMap(fixture('ws-pnpm-nextkey'));
     expect(map['@y/p']).toBe(path.join(fixture('ws-pnpm-nextkey'), 'packages', 'p'));
   });
@@ -47,10 +46,8 @@ describe('edge classification with workspace-package awareness', () => {
     const imports = analyzeImports(webDir, path.join(webDir, 'route.ts'));
     const kindOf = (specifier: string) => imports.find((i) => i.specifier === specifier)?.edgeKind;
 
-    // @acme/db is an INTERNAL workspace boundary (would look "external"/"unresolved" without the map).
     expect(kindOf('@acme/db')).toBe('workspace');
     expect(kindOf('@/local')).toBe('alias');
-    // node builtin is NOT internal: external if @types/node is resolvable, else unresolved.
     expect(['external', 'unresolved']).toContain(kindOf('node:fs'));
   });
 });

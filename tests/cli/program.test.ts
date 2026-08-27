@@ -6,15 +6,15 @@ import { buildProgram, readVersion } from '../../src/cli/program.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => path.join(here, '..', 'fixtures', name);
-const auto = fixture('cli-auto'); // gates AP-002 AUTO
-const reject = fixture('ui-infer'); // nothing meets the gate
-const layerAuto = fixture('layer-auto'); // gates a helpers !-> views layer boundary AUTO
-const multiApp = fixture('multi-app'); // two sibling app dirs under one root
-const publicApiAuto = fixture('public-api-auto'); // a barrel with 36 clean consumers gates AUTO
-const featureSliceAuto = fixture('feature-slice-auto'); // two isolated slices (40 files) gate AUTO
-const testIsolationAuto = fixture('test-isolation-auto'); // 36 clean production files + 3 tests gate AUTO
-const appIsolationAuto = fixture('app-isolation-auto'); // two isolated apps (40 files) gate AUTO
-const depInternalsAuto = fixture('dependency-internals-auto'); // 36 files import react by root, gate AUTO
+const auto = fixture('cli-auto');
+const reject = fixture('ui-infer');
+const layerAuto = fixture('layer-auto');
+const multiApp = fixture('multi-app');
+const publicApiAuto = fixture('public-api-auto');
+const featureSliceAuto = fixture('feature-slice-auto');
+const testIsolationAuto = fixture('test-isolation-auto');
+const appIsolationAuto = fixture('app-isolation-auto');
+const depInternalsAuto = fixture('dependency-internals-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;

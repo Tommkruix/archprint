@@ -60,11 +60,6 @@ export function hasTsConfig(appDir: string): boolean {
   return existsSync(path.join(appDir, 'tsconfig.json'));
 }
 
-/**
- * Run the full pipeline on an app directory: infer this repo's markers, then detect + gate each pattern.
- * `deep` resolves imports through barrels/aliases (slower but catches barrel-hidden imports); the fast
- * default matches at the specifier level.
- */
 export function scanRepo(appDir: string, options: { deep?: boolean } = {}): ScanResult {
   const fileCount = listSourceFiles(appDir).length;
   const aliasCount = Object.keys(buildWorkspaceMap(appDir)).length;
@@ -103,9 +98,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const publicApi = detectPublicApiBoundaries(appDir, { graph });
   const featureSlices = detectFeatureSliceIsolation(appDir, { graph });
   const appIsolation = detectAppIsolation(appDir, { graph });
-  // Test isolation reasons about imports to test files, which the shared graph excludes, so it builds its own.
   const testIsolation = detectTestIsolation(appDir);
-  // Dependency-internals reasons about external specifiers, which the first-party graph discards.
   const dependencyInternals = detectDependencyInternals(appDir);
   return {
     appDir,
