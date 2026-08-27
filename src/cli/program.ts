@@ -8,6 +8,7 @@ import { renderExplain, renderReport } from './report.js';
 import {
   emitOne,
   writeAppIsolationConfig,
+  writeDeepRelativeConfig,
   writeDependencyInternalsConfig,
   writeEntryPurityConfig,
   writeFeatureSliceConfig,
@@ -112,6 +113,7 @@ export function buildProgram(version = readVersion()): Command {
       const depFiles = writeDependencyInternalsConfig(scan, outDir);
       const entryFiles = writeEntryPurityConfig(scan, outDir);
       const phantomFiles = writePhantomDependencyConfig(scan, outDir);
+      const deepRelFiles = writeDeepRelativeConfig(scan, outDir);
       const graphFiles = writeGraph(scan, outDir);
       if (
         written.length === 0 &&
@@ -124,6 +126,7 @@ export function buildProgram(version = readVersion()): Command {
         depFiles.length === 0 &&
         entryFiles.length === 0 &&
         phantomFiles.length === 0 &&
+        deepRelFiles.length === 0 &&
         graphFiles.length === 0
       ) {
         console.log('No AUTO rules to generate.');
@@ -182,6 +185,10 @@ export function buildProgram(version = readVersion()): Command {
       for (const file of phantomFiles) report(file);
       if (phantomFiles.length > 0) {
         console.log('  (dependency declaration: dependency-cruiser no-phantom-deps rule)');
+      }
+      for (const file of deepRelFiles) report(file);
+      if (deepRelFiles.length > 0) {
+        console.log('  (import style: eslint no-restricted-imports rule)');
       }
       for (const file of graphFiles) report(file);
       if (graphFiles.length > 0) {

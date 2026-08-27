@@ -127,6 +127,12 @@ export {
   type PhantomDependencyOptions,
 } from './detector/phantom-dependency-detector.js';
 export {
+  detectDeepRelativeImports,
+  type DeepRelativeAnalysis,
+  type DeepRelativeViolation,
+  type DeepRelativeOptions,
+} from './detector/deep-relative-detector.js';
+export {
   evaluateGate,
   GATE_THRESHOLDS,
   type GateInput,
@@ -193,3 +199,8 @@ export {
   type PhantomDependencyConfig,
   type PhantomDependencyRule,
 } from './generator/phantom-dependency-emitters.js';
+export {
+  toEslintDeepRelative,
+  type EslintNoRestrictedImportsConfig,
+  type NoRestrictedImportsPattern,
+} from './generator/deep-relative-emitters.js';

@@ -36,6 +36,10 @@ import {
   detectPhantomDependencies,
   type PhantomDependencyAnalysis,
 } from '../detector/phantom-dependency-detector.js';
+import {
+  detectDeepRelativeImports,
+  type DeepRelativeAnalysis,
+} from '../detector/deep-relative-detector.js';
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
@@ -66,6 +70,7 @@ export interface ScanResult {
   roleLayering: RoleLayeringAnalysis;
   entryPurity: EntryPurityAnalysis;
   phantomDependencies: PhantomDependencyAnalysis;
+  deepRelative: DeepRelativeAnalysis;
 }
 
 export function hasTsConfig(appDir: string): boolean {
@@ -115,6 +120,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const testIsolation = detectTestIsolation(appDir);
   const dependencyInternals = detectDependencyInternals(appDir);
   const phantomDependencies = detectPhantomDependencies(appDir);
+  const deepRelative = detectDeepRelativeImports(appDir);
   return {
     appDir,
     fileCount,
@@ -132,5 +138,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     roleLayering,
     entryPurity,
     phantomDependencies,
+    deepRelative,
   };
 }

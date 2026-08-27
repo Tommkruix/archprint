@@ -18,6 +18,7 @@ const depInternalsAuto = fixture('dependency-internals-auto');
 const roleLayeringAuto = fixture('role-layering-auto');
 const entryPurityAuto = fixture('entry-purity-auto');
 const phantomDepsAuto = fixture('phantom-deps-auto');
+const deepRelativeAuto = fixture('deep-relative-auto');
 const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -135,6 +136,12 @@ describe('cli program', () => {
     await run(['generate', phantomDepsAuto, '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.phantom-deps.archprint.json'))).toBe(true);
     expect(output()).toContain('dependency declaration');
+  });
+
+  it('generate writes the deep-relative eslint config when relatives are shallow', async () => {
+    await run(['generate', deepRelativeAuto, '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.deep-relative.archprint.json'))).toBe(true);
+    expect(output()).toContain('import style');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {

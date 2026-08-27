@@ -102,6 +102,7 @@ Every number is measured from the import graph, not estimated.
 | Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) |
 | Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            |
 | Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   |
+| Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    |
 
 ## The confidence gate
 
@@ -124,7 +125,8 @@ The bias is deliberate and conservative: one wrong rule hurts credibility more t
 - **dependency-cruiser** `forbidden` rulesets for every enforceable boundary Archprint infers (layer,
   role-layering, public-API deep-import, feature-slice, app-isolation, test-isolation, dependency-internals,
   and entry-purity)
-- **eslint-plugin-boundaries** element-types config
+- **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
+  import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
   failing fixture
 - **Mermaid** and **Graphviz DOT** of the layer dependency graph, so the inferred architecture is visible and
@@ -173,7 +175,7 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (thirteen detectors, four output formats, the confidence gate) is in place and
+`0.1.0`, pre-stable. The engine (fourteen detectors, five output formats, the confidence gate) is in place and
 tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
 (AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
 

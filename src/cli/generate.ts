@@ -10,6 +10,7 @@ import { toDependencyCruiserDependencyInternals } from '../generator/dependency-
 import { toDependencyCruiserRoleLayering } from '../generator/role-layering-emitters.js';
 import { toDependencyCruiserEntryPurity } from '../generator/entry-purity-emitters.js';
 import { toDependencyCruiserPhantomDependencies } from '../generator/phantom-dependency-emitters.js';
+import { toEslintDeepRelative } from '../generator/deep-relative-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -107,6 +108,15 @@ export function writeRoleLayeringConfig(
   if (config.forbidden.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'dependency-cruiser.role-layering.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+export function writeDeepRelativeConfig(scan: ScanResult, outDir: string): string[] {
+  const config = toEslintDeepRelative(scan.deepRelative);
+  if (config === null) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint.deep-relative.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }

@@ -6,6 +6,7 @@ import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import type {
   AppIsolationAnalysis,
   CycleAnalysis,
+  DeepRelativeAnalysis,
   DependencyInternalsAnalysis,
   DetectedPattern,
   EntryPurityAnalysis,
@@ -24,6 +25,7 @@ import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/sc
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
   writeAppIsolationConfig,
+  writeDeepRelativeConfig,
   writeDependencyInternalsConfig,
   writeEntryPurityConfig,
   writeFeatureSliceConfig,
@@ -191,6 +193,27 @@ function emptyPhantom(): PhantomDependencyAnalysis {
   return fakePhantom(0, 0);
 }
 
+function fakeDeepRelative(
+  relativeImporterCount: number,
+  offenderCount: number,
+): DeepRelativeAnalysis {
+  return {
+    appDir: 'x',
+    relativeImporterCount,
+    offenderCount,
+    gate: evaluateGate({
+      roleFileCount: relativeImporterCount,
+      violatingFileCount: offenderCount,
+      roleConfidence: 1,
+    }),
+    violations: [],
+  };
+}
+
+function emptyDeepRelative(): DeepRelativeAnalysis {
+  return fakeDeepRelative(0, 0);
+}
+
 function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
     appDir: 'x',
@@ -209,6 +232,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     roleLayering: emptyRoleLayering(),
     entryPurity: emptyEntryPurity(),
     phantomDependencies: emptyPhantom(),
+    deepRelative: emptyDeepRelative(),
     ...overrides,
   };
 }
@@ -420,6 +444,15 @@ describe('cli scan', () => {
     expect(none).not.toContain('TEST ISOLATION');
   });
 
+  it('renders enforceable and suggested import style, hidden with no relative imports', () => {
+    const auto = renderReport(emptyScan({ deepRelative: fakeDeepRelative(40, 0) }), '1.0.0');
+    expect(auto).toContain('IMPORT STYLE (enforceable)');
+    const suggest = renderReport(emptyScan({ deepRelative: fakeDeepRelative(20, 2) }), '1.0.0');
+    expect(suggest).toContain('IMPORT STYLE (suggested)');
+    expect(suggest).toContain('Deep relative imports: 2');
+    expect(renderReport(emptyScan(), '1.0.0')).not.toContain('IMPORT STYLE');
+  });
+
   it('renders enforceable and suggested dependency declaration, hidden with no externals', () => {
     const auto = renderReport(emptyScan({ phantomDependencies: fakePhantom(40, 0) }), '1.0.0');
     expect(auto).toContain('DEPENDENCY DECLARATION (enforceable)');
@@ -612,6 +645,20 @@ describe('cli generate', () => {
 
     const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
     expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+  });
+
+  it('writes a deep-relative eslint config when relative imports are shallow, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const files = writeDeepRelativeConfig(
+      emptyScan({ deepRelative: fakeDeepRelative(40, 0) }),
+      outDir,
+    );
+    expect(files).toHaveLength(1);
+    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as {
+      rules: Record<string, unknown>;
+    };
+    expect(config.rules['no-restricted-imports']).toBeDefined();
+    expect(writeDeepRelativeConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a phantom-dependency config when all imports are declared, none otherwise', () => {

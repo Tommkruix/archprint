@@ -330,6 +330,26 @@ export function renderReport(
     }
     lines.push('');
   }
+  const deepRel = scan.deepRelative;
+  if (
+    deepRel.relativeImporterCount > 0 &&
+    (deepRel.gate.status === 'AUTO' || deepRel.gate.status === 'SUGGEST')
+  ) {
+    const label = deepRel.gate.status === 'AUTO' ? green : yellow;
+    const suffix = deepRel.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const floor = `${(deepRel.gate.conditions.confidence.value * 100).toFixed(0)}%`;
+    lines.push(label(bold(`IMPORT STYLE ${suffix}`)));
+    lines.push(`  prefer workspace aliases over deep relative imports   confidence ${floor}`);
+    lines.push(
+      dim(
+        `          Evidence: ${deepRel.relativeImporterCount - deepRel.offenderCount}/${deepRel.relativeImporterCount} files with relative imports avoid ../../../`,
+      ),
+    );
+    if (deepRel.offenderCount > 0) {
+      lines.push(dim(`          Deep relative imports: ${deepRel.offenderCount}`));
+    }
+    lines.push('');
+  }
   if (
     auto.length === 0 &&
     suggest.length === 0 &&
