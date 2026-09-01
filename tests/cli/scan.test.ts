@@ -244,13 +244,13 @@ function emptyConsole(): ConsoleIsolationAnalysis {
   return fakeConsole(0, 0);
 }
 
-function fakeEnv(envUserCount: number, offenderCount: number): EnvAccessAnalysis {
+function fakeEnv(subjectFileCount: number, offenderCount: number): EnvAccessAnalysis {
   return {
     appDir: 'x',
-    envUserCount,
+    subjectFileCount,
     offenderCount,
     gate: evaluateGate({
-      roleFileCount: envUserCount,
+      roleFileCount: subjectFileCount,
       violatingFileCount: offenderCount,
       roleConfidence: 1,
     }),

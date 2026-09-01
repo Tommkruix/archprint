@@ -367,7 +367,7 @@ export function renderReport(
     lines.push('');
   }
   const env = scan.envAccess;
-  if (env.envUserCount > 0 && (env.gate.status === 'AUTO' || env.gate.status === 'SUGGEST')) {
+  if (env.subjectFileCount > 0 && (env.gate.status === 'AUTO' || env.gate.status === 'SUGGEST')) {
     const label = env.gate.status === 'AUTO' ? green : yellow;
     const suffix = env.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
     const floor = `${(env.gate.conditions.confidence.value * 100).toFixed(0)}%`;
@@ -375,7 +375,7 @@ export function renderReport(
     lines.push(`  read process.env only in the config layer   confidence ${floor}`);
     lines.push(
       dim(
-        `          Evidence: ${env.envUserCount - env.offenderCount}/${env.envUserCount} process.env reads are in the config layer`,
+        `          Evidence: ${env.subjectFileCount - env.offenderCount}/${env.subjectFileCount} non-config files avoid direct process.env`,
       ),
     );
     if (env.offenderCount > 0)

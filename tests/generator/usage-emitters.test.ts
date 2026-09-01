@@ -17,7 +17,7 @@ const consoleAnalysis = (n: number, v: number): ConsoleIsolationAnalysis => ({
 
 const envAnalysis = (n: number, v: number): EnvAccessAnalysis => ({
   appDir: 'x',
-  envUserCount: n,
+  subjectFileCount: n,
   offenderCount: v,
   gate: evaluateGate({ roleFileCount: n, violatingFileCount: v, roleConfidence: 1 }),
   violations: [],

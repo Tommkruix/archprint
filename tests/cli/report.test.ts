@@ -90,7 +90,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   },
   envAccess: {
     appDir: '/app',
-    envUserCount: 0,
+    subjectFileCount: 0,
     offenderCount: 0,
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
     violations: [],

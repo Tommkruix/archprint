@@ -9,7 +9,7 @@ export interface EnvAccessViolation {
 
 export interface EnvAccessAnalysis {
   appDir: string;
-  envUserCount: number;
+  subjectFileCount: number;
   offenderCount: number;
   gate: GateResult;
   violations: EnvAccessViolation[];
@@ -21,18 +21,18 @@ export interface EnvAccessOptions {
 
 export function detectEnvAccess(appDir: string, options: EnvAccessOptions = {}): EnvAccessAnalysis {
   const { root, files, usage } = options.usage ?? scanUsage(appDir);
-  const envUsers = files.filter((file) => usage.get(file.relativePath)?.usesProcessEnv === true);
-  const violations = envUsers
-    .filter((file) => !CONFIG_PATH.test(file.relativePath))
+  const subject = files.filter((file) => !CONFIG_PATH.test(file.relativePath));
+  const violations = subject
+    .filter((file) => usage.get(file.relativePath)?.usesProcessEnv === true)
     .map((file) => ({ file: file.relativePath }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
   return {
     appDir: root,
-    envUserCount: envUsers.length,
+    subjectFileCount: subject.length,
     offenderCount: violations.length,
     gate: evaluateGate({
-      roleFileCount: envUsers.length,
+      roleFileCount: subject.length,
       violatingFileCount: violations.length,
       roleConfidence: 1,
     }),

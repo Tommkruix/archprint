@@ -7,9 +7,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'env-access');
 
 describe('detectEnvAccess', () => {
-  it('flags process.env reads outside the config layer, sorted', () => {
+  it('flags non-config files that read process.env, sorted; config reads are not offenders', () => {
     const analysis = detectEnvAccess(fixture);
-    expect(analysis.envUserCount).toBe(4);
+    // population = the two non-config files (config/env.ts and config/settings.ts are excluded)
+    expect(analysis.subjectFileCount).toBe(2);
     expect(analysis.offenderCount).toBe(2);
     expect(analysis.violations.map((v) => v.file)).toEqual(['src/other.ts', 'src/service.ts']);
   });
@@ -19,9 +20,9 @@ describe('detectEnvAccess', () => {
     expect(detectEnvAccess(relative).offenderCount).toBe(2);
   });
 
-  it('reports no env users for a codebase that never reads process.env', () => {
+  it('reports no offenders for a codebase that never reads process.env', () => {
     const analysis = detectEnvAccess(path.join(here, '..', 'fixtures', 'layers'));
-    expect(analysis.envUserCount).toBe(0);
     expect(analysis.offenderCount).toBe(0);
+    expect(analysis.subjectFileCount).toBeGreaterThan(0);
   });
 });

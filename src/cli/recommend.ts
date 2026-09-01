@@ -116,7 +116,7 @@ const FAMILIES: readonly Family[] = [
     title: 'Env access',
     universal: true,
     frameworks: [],
-    status: (s) => gatedStatus(s.envAccess.envUserCount, s.envAccess.gate.status),
+    status: (s) => gatedStatus(s.envAccess.subjectFileCount, s.envAccess.gate.status),
   },
   {
     title: 'Stories isolation',
