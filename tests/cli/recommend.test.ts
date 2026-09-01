@@ -19,27 +19,44 @@ describe('detectStack', () => {
 });
 
 describe('buildRecommendations', () => {
-  it('puts a repo’s AUTO families in the enforce-now tier', () => {
+  it('puts a repo’s AUTO families in enforce-now, with a census evidence rate attached', () => {
     const scan = scanRepo(fixture('layer-auto'), { deep: false });
     const rec = buildRecommendations(scan, detectStack(fixture('layer-auto')));
-    expect(rec.enforceNow.length).toBeGreaterThan(0);
-    expect(rec.enforceNow).toContain('Layer boundaries');
+    const layer = rec.enforceNow.find((r) => r.title === 'Layer boundaries');
+    expect(layer).toBeDefined();
+    expect(typeof layer?.rate).toBe('number');
+    expect(rec.evidence.apps).toBeGreaterThan(0);
   });
 
-  it('recommends universal and stack families to adopt when the code does not evidence them yet', () => {
-    // The layers fixture has no components, so UI/data is unevidenced; with a react stack it becomes a
-    // day-one recommendation. This is the fresh-repo path: guidance from the stack, not inference.
+  it('adopts families common in comparable repos, drops rare ones, sorted by rate', () => {
+    // layers has no components, so UI/data is unevidenced here; with a react stack the census rate decides.
     const scan = scanRepo(fixture('layers'), { deep: false });
     const rec = buildRecommendations(scan, new Set(['react']));
-    expect(rec.adopt).toContain('UI / data separation');
+    const adopt = rec.adopt.map((r) => r.title);
+    expect(adopt).toContain('UI / data separation'); // ~49% in react -> adopt
+    expect(adopt).not.toContain('Stories isolation'); // ~0.9% in react -> below threshold, dropped
+    const rates = rec.adopt.map((r) => r.rate ?? -1);
+    expect(rates).toEqual([...rates].sort((a, b) => b - a));
     expect(rec.stack).toEqual(['react']);
   });
 
-  it('renders the three tiers with the detected stack', () => {
+  it('carries a null rate for a family whose census number was invalidated (env access)', () => {
+    const scan = scanRepo(fixture('layers'), { deep: false });
+    const rec = buildRecommendations(scan, new Set(['react']));
+    const env = [...rec.enforceNow, ...rec.review, ...rec.adopt].find(
+      (r) => r.title === 'Env access',
+    );
+    expect(env).toBeDefined();
+    expect(env?.rate).toBeNull();
+  });
+
+  it('renders the tiers, the detected stack, the evidence line, and a percentage', () => {
     const scan = scanRepo(fixture('layer-auto'), { deep: false });
     const out = renderRecommendations(buildRecommendations(scan, new Set(['next'])), '1.0.0');
     expect(out).toContain('recommendations');
     expect(out).toContain('Detected stack: next');
     expect(out).toContain('ENFORCE NOW');
+    expect(out).toContain('Evidence:');
+    expect(out).toMatch(/\d+% of comparable repos/);
   });
 });

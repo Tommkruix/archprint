@@ -1,16 +1,19 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { ADOPTION_CATALOG } from '../data/adoption-catalog.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import type { ScanResult } from './scan.js';
 
 type FamilyStatus = 'AUTO' | 'SUGGEST' | 'NONE';
 
+// Recommend a not-yet-followed family for day-one adoption when at least this share of comparable repos
+// (same stack, else overall) already AUTO-enforce it in the census. Below this the rule is too rare to push.
+const ADOPT_THRESHOLD = 15;
+
 interface Family {
   title: string;
   status: (scan: ScanResult) => FamilyStatus;
-  universal: boolean;
-  frameworks: readonly string[];
 }
 
 const groupsStatus = (groups: readonly { gate: { status: GenerationStatus } }[]): FamilyStatus => {
@@ -27,113 +30,62 @@ const gatedStatus = (population: number, status: GenerationStatus): FamilyStatus
 const FAMILIES: readonly Family[] = [
   {
     title: 'Forbidden imports (DB client / UI in server entries)',
-    universal: false,
-    frameworks: ['next', 'nest', 'remix'],
     status: (s) => groupsStatus(s.patterns.map((p) => p.result)),
   },
-  {
-    title: 'Layer boundaries',
-    universal: true,
-    frameworks: [],
-    status: (s) => groupsStatus(s.layerBoundaries),
-  },
-  {
-    title: 'Role layering',
-    universal: false,
-    frameworks: ['nest'],
-    status: (s) => groupsStatus(s.roleLayering.boundaries),
-  },
+  { title: 'Layer boundaries', status: (s) => groupsStatus(s.layerBoundaries) },
+  { title: 'Role layering', status: (s) => groupsStatus(s.roleLayering.boundaries) },
   {
     title: 'Circular dependencies',
-    universal: true,
-    frameworks: [],
     status: (s) => gatedStatus(s.cycles.fileCount, s.cycles.gate.status),
   },
-  {
-    title: 'Public API (barrels)',
-    universal: false,
-    frameworks: ['react', 'vue', 'next'],
-    status: (s) => groupsStatus(s.publicApi.groups),
-  },
-  {
-    title: 'Feature-slice isolation',
-    universal: false,
-    frameworks: ['react', 'vue', 'next'],
-    status: (s) => groupsStatus(s.featureSlices.groups),
-  },
-  {
-    title: 'App isolation',
-    universal: false,
-    frameworks: ['monorepo'],
-    status: (s) => groupsStatus(s.appIsolation.groups),
-  },
+  { title: 'Public API (barrels)', status: (s) => groupsStatus(s.publicApi.groups) },
+  { title: 'Feature-slice isolation', status: (s) => groupsStatus(s.featureSlices.groups) },
+  { title: 'App isolation', status: (s) => groupsStatus(s.appIsolation.groups) },
   {
     title: 'Workspace-package API',
-    universal: false,
-    frameworks: ['monorepo'],
     status: (s) =>
       gatedStatus(s.workspacePackageApi.consumerCount, s.workspacePackageApi.gate.status),
   },
   {
     title: 'Test isolation',
-    universal: true,
-    frameworks: [],
     status: (s) => gatedStatus(s.testIsolation.testFileCount, s.testIsolation.gate.status),
   },
   {
     title: 'Dependency hygiene (no build/impl internals)',
-    universal: true,
-    frameworks: [],
     status: (s) =>
       gatedStatus(s.dependencyInternals.externalImporterCount, s.dependencyInternals.gate.status),
   },
   {
     title: 'Dependency declaration (no phantom deps)',
-    universal: true,
-    frameworks: [],
     status: (s) =>
       gatedStatus(s.phantomDependencies.externalImporterCount, s.phantomDependencies.gate.status),
   },
   {
     title: 'Entry purity',
-    universal: false,
-    frameworks: ['next', 'remix', 'svelte', 'nuxt'],
     status: (s) => gatedStatus(s.entryPurity.entryCount, s.entryPurity.gate.status),
   },
   {
     title: 'Import style (aliases over deep relatives)',
-    universal: true,
-    frameworks: [],
     status: (s) => gatedStatus(s.deepRelative.relativeImporterCount, s.deepRelative.gate.status),
   },
   {
     title: 'Console isolation',
-    universal: true,
-    frameworks: [],
     status: (s) => gatedStatus(s.consoleIsolation.libraryFileCount, s.consoleIsolation.gate.status),
   },
   {
     title: 'Env access',
-    universal: true,
-    frameworks: [],
     status: (s) => gatedStatus(s.envAccess.subjectFileCount, s.envAccess.gate.status),
   },
   {
     title: 'Stories isolation',
-    universal: false,
-    frameworks: ['storybook'],
     status: (s) => gatedStatus(s.storiesIsolation.storyCount, s.storiesIsolation.gate.status),
   },
   {
     title: 'UI / data separation',
-    universal: false,
-    frameworks: ['react', 'vue'],
     status: (s) => gatedStatus(s.uiDataIsolation.componentCount, s.uiDataIsolation.gate.status),
   },
   {
     title: 'Server / client boundary',
-    universal: false,
-    frameworks: ['next'],
     status: (s) => gatedStatus(s.serverClient.clientCount, s.serverClient.gate.status),
   },
 ];
@@ -177,26 +129,58 @@ export function detectStack(appDir: string): Set<string> {
   return tokens;
 }
 
+export interface Recommendation {
+  title: string;
+  // Census AUTO-adoption rate (%) among comparable repos: the best of the repo's detected stacks, else the
+  // overall rate. null when the rate is not yet measured (e.g. a family whose detector was recently fixed).
+  rate: number | null;
+}
+
 export interface Recommendations {
   stack: string[];
-  enforceNow: string[];
-  review: string[];
-  adopt: string[];
+  evidence: { apps: number; asOf: string };
+  enforceNow: Recommendation[];
+  review: Recommendation[];
+  adopt: Recommendation[];
+}
+
+// Best census AUTO rate for a family given the repo's stack: max over the detected stacks that the catalog
+// covers, falling back to the overall rate. null = unmeasured (do not compare against the threshold).
+function adoptionRate(title: string, stack: ReadonlySet<string>): number | null {
+  const family = ADOPTION_CATALOG.families[title];
+  if (!family || family.overall === null) return null;
+  let best = family.overall;
+  for (const token of stack) {
+    const rate = family.byStack[token];
+    if (rate != null && rate > best) best = rate;
+  }
+  return best;
 }
 
 export function buildRecommendations(
   scan: ScanResult,
   stack: ReadonlySet<string>,
 ): Recommendations {
-  const enforceNow: string[] = [];
-  const review: string[] = [];
-  const adopt: string[] = [];
+  const enforceNow: Recommendation[] = [];
+  const review: Recommendation[] = [];
+  const adopt: Recommendation[] = [];
   for (const family of FAMILIES) {
     const status = family.status(scan);
-    if (status === 'AUTO') enforceNow.push(family.title);
-    else if (status === 'SUGGEST') review.push(family.title);
-    else if (family.universal || family.frameworks.some((f) => stack.has(f)))
-      adopt.push(family.title);
+    const entry: Recommendation = { title: family.title, rate: adoptionRate(family.title, stack) };
+    if (status === 'AUTO') enforceNow.push(entry);
+    else if (status === 'SUGGEST') review.push(entry);
+    else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);
   }
-  return { stack: [...stack].sort(), enforceNow, review, adopt };
+  const byRate = (a: Recommendation, b: Recommendation): number =>
+    (b.rate ?? -1) - (a.rate ?? -1) || a.title.localeCompare(b.title);
+  enforceNow.sort(byRate);
+  review.sort(byRate);
+  adopt.sort(byRate);
+  return {
+    stack: [...stack].sort(),
+    evidence: { apps: ADOPTION_CATALOG.meta.apps, asOf: ADOPTION_CATALOG.meta.asOf },
+    enforceNow,
+    review,
+    adopt,
+  };
 }

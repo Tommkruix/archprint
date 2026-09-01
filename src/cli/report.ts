@@ -511,24 +511,27 @@ export function renderExplain(pattern: ScannedPattern): string {
 }
 
 export function renderRecommendations(rec: Recommendations, version: string): string {
+  const evidence = (r: { rate: number | null }): string =>
+    r.rate === null ? '' : dim(`  (${r.rate}% of comparable repos)`);
   const lines = [
     bold(`Archprint v${version}  recommendations`),
     `Detected stack: ${rec.stack.length > 0 ? rec.stack.join(', ') : 'none detected'}`,
+    dim(`Evidence: ${rec.evidence.apps.toLocaleString()} apps (census ${rec.evidence.asOf})`),
     '',
   ];
   if (rec.enforceNow.length > 0) {
     lines.push(green(bold('ENFORCE NOW (your code already follows these)')));
-    for (const title of rec.enforceNow) lines.push(green(`  + ${title}`));
+    for (const r of rec.enforceNow) lines.push(green(`  + ${r.title}`) + evidence(r));
     lines.push(dim('  Run: archprint generate'), '');
   }
   if (rec.review.length > 0) {
     lines.push(yellow(bold('REVIEW AND ADOPT (close, thin evidence)')));
-    for (const title of rec.review) lines.push(yellow(`  ~ ${title}`));
+    for (const r of rec.review) lines.push(yellow(`  ~ ${r.title}`) + evidence(r));
     lines.push('');
   }
   if (rec.adopt.length > 0) {
-    lines.push(bold('ADOPT FROM DAY ONE (recommended for your stack, not yet evidenced)'));
-    for (const title of rec.adopt) lines.push(dim(`  - ${title}`));
+    lines.push(bold('ADOPT FROM DAY ONE (common in comparable repos, not yet in your code)'));
+    for (const r of rec.adopt) lines.push(dim(`  - ${r.title}`) + evidence(r));
     lines.push('');
   }
   if (rec.enforceNow.length === 0 && rec.review.length === 0 && rec.adopt.length === 0) {

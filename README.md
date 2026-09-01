@@ -64,9 +64,13 @@ archprint recommend apps/web
 
 `recommend` sorts every rule family into three tiers: rules your code already
 follows (enforce now), rules with thin evidence (review and adopt), and rules that
-suit your stack but are not yet evidenced (adopt from day one). On a fresh repo,
-where there is little code to infer from, the last tier carries the stack-aware
-baseline so you can start enforcing on day one.
+comparable repos commonly follow but yours does not yet (adopt from day one). Each
+recommendation carries the evidence behind it: the share of comparable repos (your
+detected stack, else overall) that already enforce that rule, mined from a census of
+tens of thousands of public TypeScript repositories. The "adopt from day one" tier is
+driven by that census rather than hand-picked defaults, so on a fresh repo, where
+there is little code to infer from, it still gives you a stack-aware baseline backed
+by what the ecosystem actually does.
 
 ## Example
 
