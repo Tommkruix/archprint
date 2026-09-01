@@ -12,8 +12,18 @@ describe('layerOfPath', () => {
   it('takes the first non-structural directory segment', () => {
     expect(layerOfPath('src/features/programs/ui/card.tsx')).toBe('features');
     expect(layerOfPath('components/button.ts')).toBe('components');
-    expect(layerOfPath('app/api/things/route.ts')).toBe('api');
+    expect(layerOfPath('lib/db/client.ts')).toBe('lib');
     expect(layerOfPath('middleware.ts')).toBeNull();
+  });
+
+  it('collapses the whole file-router tree into one layer, never per-route-name layers', () => {
+    // Route directories are pages, not architectural layers. Same-named route dirs across disjoint route
+    // groups must NOT collapse into a fake shared "layer" (the dub "programs"-spans-9-dirs bug).
+    expect(layerOfPath('app/(ee)/partners.dub.co/(dashboard)/programs/foo.ts')).toBe('app');
+    expect(layerOfPath('app/(ee)/admin.dub.co/(dashboard)/programs/bar.ts')).toBe('app');
+    expect(layerOfPath('app/api/og/program/route.ts')).toBe('app');
+    expect(layerOfPath('src/app/settings/page.tsx')).toBe('app');
+    expect(layerOfPath('pages/index.tsx')).toBe('pages');
   });
 });
 
