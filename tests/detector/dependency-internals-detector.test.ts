@@ -7,19 +7,21 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'dependency-internals');
 
 describe('detectDependencyInternals', () => {
-  it('counts external importers and flags reaches into package build directories, sorted', () => {
+  it('flags reaches into a package’s /src/ and /internal/, but not its published dist/ output', () => {
     const analysis = detectDependencyInternals(fixture);
-    expect(analysis.externalImporterCount).toBe(4);
+    expect(analysis.externalImporterCount).toBe(5);
     expect(analysis.offenderCount).toBe(2);
     expect(analysis.violations).toEqual([
-      { file: 'src/bad.ts', specifier: 'lodash/dist/chunk' },
+      { file: 'src/bad.ts', specifier: 'lodash/internal/chunk' },
       { file: 'src/bad2.ts', specifier: '@scope/pkg/src/thing' },
     ]);
+    // a documented dist/esm public entry point must NOT be flagged as an internals reach
+    expect(analysis.violations.some((v) => v.specifier.includes('/dist/'))).toBe(false);
   });
 
   it('does not count node builtins or first-party imports as external', () => {
     const analysis = detectDependencyInternals(fixture);
-    expect(analysis.externalImporterCount).toBe(4);
+    expect(analysis.externalImporterCount).toBe(5);
   });
 
   it('is robust to a relative appDir', () => {

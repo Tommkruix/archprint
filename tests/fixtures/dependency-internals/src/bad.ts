@@ -1,3 +1,3 @@
-import chunk from 'lodash/dist/chunk';
+import chunk from 'lodash/internal/chunk';
 
 export const bad = (): unknown => chunk;

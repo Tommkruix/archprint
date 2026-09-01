@@ -20,9 +20,10 @@ describe('detectEnvAccess', () => {
     expect(detectEnvAccess(relative).offenderCount).toBe(2);
   });
 
-  it('reports no offenders for a codebase that never reads process.env', () => {
+  it('does not AUTO when nothing reads process.env at all (vacuous)', () => {
     const analysis = detectEnvAccess(path.join(here, '..', 'fixtures', 'layers'));
     expect(analysis.offenderCount).toBe(0);
     expect(analysis.subjectFileCount).toBeGreaterThan(0);
+    expect(analysis.gate.status).not.toBe('AUTO');
   });
 });

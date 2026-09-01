@@ -26,4 +26,12 @@ describe('detectUiDataIsolation', () => {
     const analysis = detectUiDataIsolation(path.join(here, '..', 'fixtures', 'layers'));
     expect(analysis.offenderCount).toBe(0);
   });
+
+  it('does not AUTO the rule when there is no data layer to import (vacuous)', () => {
+    // 36 components, zero data-layer files: "components must not import data" governs nothing here.
+    const analysis = detectUiDataIsolation(path.join(here, '..', 'fixtures', 'ui-data-nodata'));
+    expect(analysis.componentCount).toBeGreaterThanOrEqual(35);
+    expect(analysis.offenderCount).toBe(0);
+    expect(analysis.gate.status).not.toBe('AUTO');
+  });
 });

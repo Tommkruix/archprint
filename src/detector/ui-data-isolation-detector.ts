@@ -54,7 +54,9 @@ export function detectUiDataIsolation(
     gate: evaluateGate({
       roleFileCount: components.length,
       violatingFileCount: offenders.size,
-      roleConfidence: 1,
+      // Vacuous guard: with no data layer to import, "components must not import data" governs nothing, so we
+      // have zero confidence it is a real boundary here. roleConfidence 0 makes the gate REJECT, never AUTO.
+      roleConfidence: dataFiles.size > 0 ? 1 : 0,
     }),
     violations: violations.sort(
       (a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target),

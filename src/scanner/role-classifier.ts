@@ -106,6 +106,14 @@ const ROLE_RULES: readonly RoleRule[] = [
     test: /(\/db\/|\/database\/|\/prisma\/)/,
     confidence: 0.8,
   },
+  // A flat file named after a known ORM client is the data-access surface even without a db/ directory
+  // (e.g. inbox-zero's utils/prisma.ts holds the Prisma client). Directory rules above miss these.
+  {
+    role: 'DATA_ACCESS',
+    id: 'db-client-file',
+    test: /(^|\/)(prisma|drizzle|kysely)\.[cm]?[jt]sx?$/,
+    confidence: 0.8,
+  },
   // Next.js App Router entry files render UI but are framework entry points, not reusable components; must
   // precede the `.tsx` component rule so a page is never counted as part of the shared UI layer.
   {

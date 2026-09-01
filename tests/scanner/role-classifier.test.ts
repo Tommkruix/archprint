@@ -38,6 +38,8 @@ describe('classifyFile', () => {
     ['packages/db/src/client.ts', 'DB_MODULE'],
     ['packages/shared/src/utils.ts', 'SHARED'],
     ['apps/web/src/db/queries.ts', 'DATA_ACCESS'],
+    ['apps/web/utils/prisma.ts', 'DATA_ACCESS'],
+    ['src/lib/drizzle.ts', 'DATA_ACCESS'],
     ['apps/web/components/Button.tsx', 'COMPONENT'],
     ['apps/web/README.md', 'UNKNOWN'],
     ['apps/web/utils/format.ts', 'UNKNOWN'],
