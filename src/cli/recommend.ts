@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { ADOPTION_CATALOG } from '../data/adoption-catalog.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
+import { type FamilyKey, isStableFamily } from '../detector/family-maturity.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import type { ScanResult } from './scan.js';
 
@@ -13,6 +14,7 @@ const ADOPT_THRESHOLD = 15;
 
 interface Family {
   title: string;
+  key: FamilyKey;
   status: (scan: ScanResult) => FamilyStatus;
 }
 
@@ -30,62 +32,91 @@ const gatedStatus = (population: number, status: GenerationStatus): FamilyStatus
 const FAMILIES: readonly Family[] = [
   {
     title: 'Forbidden imports (DB client / UI in server entries)',
+    key: 'forbidden-imports',
     status: (s) => groupsStatus(s.patterns.map((p) => p.result)),
   },
-  { title: 'Layer boundaries', status: (s) => groupsStatus(s.layerBoundaries) },
-  { title: 'Role layering', status: (s) => groupsStatus(s.roleLayering.boundaries) },
+  { title: 'Layer boundaries', key: 'layer', status: (s) => groupsStatus(s.layerBoundaries) },
+  {
+    title: 'Role layering',
+    key: 'role-layering',
+    status: (s) => groupsStatus(s.roleLayering.boundaries),
+  },
   {
     title: 'Circular dependencies',
+    key: 'cycles',
     status: (s) => gatedStatus(s.cycles.fileCount, s.cycles.gate.status),
   },
-  { title: 'Public API (barrels)', status: (s) => groupsStatus(s.publicApi.groups) },
-  { title: 'Feature-slice isolation', status: (s) => groupsStatus(s.featureSlices.groups) },
-  { title: 'App isolation', status: (s) => groupsStatus(s.appIsolation.groups) },
+  {
+    title: 'Public API (barrels)',
+    key: 'public-api',
+    status: (s) => groupsStatus(s.publicApi.groups),
+  },
+  {
+    title: 'Feature-slice isolation',
+    key: 'feature-slice',
+    status: (s) => groupsStatus(s.featureSlices.groups),
+  },
+  {
+    title: 'App isolation',
+    key: 'app-isolation',
+    status: (s) => groupsStatus(s.appIsolation.groups),
+  },
   {
     title: 'Workspace-package API',
+    key: 'workspace-package-api',
     status: (s) =>
       gatedStatus(s.workspacePackageApi.consumerCount, s.workspacePackageApi.gate.status),
   },
   {
     title: 'Test isolation',
+    key: 'test-isolation',
     status: (s) => gatedStatus(s.testIsolation.testFileCount, s.testIsolation.gate.status),
   },
   {
     title: 'Dependency hygiene (no build/impl internals)',
+    key: 'dependency-hygiene',
     status: (s) =>
       gatedStatus(s.dependencyInternals.externalImporterCount, s.dependencyInternals.gate.status),
   },
   {
     title: 'Dependency declaration (no phantom deps)',
+    key: 'phantom-deps',
     status: (s) =>
       gatedStatus(s.phantomDependencies.externalImporterCount, s.phantomDependencies.gate.status),
   },
   {
     title: 'Entry purity',
+    key: 'entry-purity',
     status: (s) => gatedStatus(s.entryPurity.entryCount, s.entryPurity.gate.status),
   },
   {
     title: 'Import style (aliases over deep relatives)',
+    key: 'import-style',
     status: (s) => gatedStatus(s.deepRelative.relativeImporterCount, s.deepRelative.gate.status),
   },
   {
     title: 'Console isolation',
+    key: 'console-isolation',
     status: (s) => gatedStatus(s.consoleIsolation.libraryFileCount, s.consoleIsolation.gate.status),
   },
   {
     title: 'Env access',
+    key: 'env-access',
     status: (s) => gatedStatus(s.envAccess.subjectFileCount, s.envAccess.gate.status),
   },
   {
     title: 'Stories isolation',
+    key: 'stories-isolation',
     status: (s) => gatedStatus(s.storiesIsolation.storyCount, s.storiesIsolation.gate.status),
   },
   {
     title: 'UI / data separation',
+    key: 'ui-data',
     status: (s) => gatedStatus(s.uiDataIsolation.componentCount, s.uiDataIsolation.gate.status),
   },
   {
     title: 'Server / client boundary',
+    key: 'server-client',
     status: (s) => gatedStatus(s.serverClient.clientCount, s.serverClient.gate.status),
   },
 ];
@@ -167,8 +198,10 @@ export function buildRecommendations(
   for (const family of FAMILIES) {
     const status = family.status(scan);
     const entry: Recommendation = { title: family.title, rate: adoptionRate(family.title, stack) };
-    if (status === 'AUTO') enforceNow.push(entry);
-    else if (status === 'SUGGEST') review.push(entry);
+    // Only the audit-clean mechanical families go to enforce-now (which points at `archprint generate`);
+    // a structural family's AUTO is capped at review, matching generate holding it back for a human pass.
+    if (status === 'AUTO' && isStableFamily(family.key)) enforceNow.push(entry);
+    else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);
     else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);
   }
   const byRate = (a: Recommendation, b: Recommendation): number =>

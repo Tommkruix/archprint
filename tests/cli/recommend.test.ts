@@ -19,13 +19,22 @@ describe('detectStack', () => {
 });
 
 describe('buildRecommendations', () => {
-  it('puts a repo’s AUTO families in enforce-now, with a census evidence rate attached', () => {
-    const scan = scanRepo(fixture('layer-auto'), { deep: false });
-    const rec = buildRecommendations(scan, detectStack(fixture('layer-auto')));
-    const layer = rec.enforceNow.find((r) => r.title === 'Layer boundaries');
+  it('enforce-now holds only audit-stable AUTO families; structural AUTO is capped at review', () => {
+    // A stable family that AUTO-gates (AP-002 forbidden-imports on cli-auto) belongs in enforce-now.
+    const stable = buildRecommendations(scanRepo(fixture('cli-auto'), { deep: false }), new Set());
+    expect(stable.enforceNow.some((r) => r.title.startsWith('Forbidden imports'))).toBe(true);
+    expect(stable.evidence.apps).toBeGreaterThan(0);
+
+    // A structural family that AUTO-gates (layer boundaries on layer-auto) is provisional -> review, not
+    // enforce-now, matching `generate` holding it back for a human pass. The evidence rate still rides along.
+    const structural = buildRecommendations(
+      scanRepo(fixture('layer-auto'), { deep: false }),
+      detectStack(fixture('layer-auto')),
+    );
+    expect(structural.enforceNow.some((r) => r.title === 'Layer boundaries')).toBe(false);
+    const layer = structural.review.find((r) => r.title === 'Layer boundaries');
     expect(layer).toBeDefined();
     expect(typeof layer?.rate).toBe('number');
-    expect(rec.evidence.apps).toBeGreaterThan(0);
   });
 
   it('adopts families common in comparable repos, drops rare ones, sorted by rate', () => {

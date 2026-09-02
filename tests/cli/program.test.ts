@@ -80,10 +80,16 @@ describe('cli program', () => {
   });
 
   it('generate writes the layer-boundary configs for an AUTO boundary', async () => {
-    await run(['generate', layerAuto, '--out', out]);
+    await run(['generate', layerAuto, '--include-structural', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'eslint-boundaries.archprint.json'))).toBe(true);
     expect(output()).toContain('layer boundaries');
+  });
+
+  it('generate holds structural families for review by default (no --include-structural)', async () => {
+    await run(['generate', layerAuto, '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(false);
+    expect(output()).toContain('structural rule(s) for review');
   });
 
   it('generate writes the public-API deep-import config for an AUTO barrel', async () => {
@@ -93,7 +99,7 @@ describe('cli program', () => {
   });
 
   it('generate writes the feature-slice config for AUTO slice isolation', async () => {
-    await run(['generate', featureSliceAuto, '--fast', '--out', out]);
+    await run(['generate', featureSliceAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.feature-slice.archprint.json'))).toBe(
       true,
     );
@@ -109,7 +115,7 @@ describe('cli program', () => {
   });
 
   it('generate writes the app-isolation config for AUTO app isolation', async () => {
-    await run(['generate', appIsolationAuto, '--fast', '--out', out]);
+    await run(['generate', appIsolationAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(
       true,
     );
@@ -125,7 +131,7 @@ describe('cli program', () => {
   });
 
   it('generate writes the role-layering config for AUTO role boundaries', async () => {
-    await run(['generate', roleLayeringAuto, '--fast', '--out', out]);
+    await run(['generate', roleLayeringAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.role-layering.archprint.json'))).toBe(
       true,
     );
@@ -133,7 +139,7 @@ describe('cli program', () => {
   });
 
   it('generate writes the entry-purity config when framework entries are pure', async () => {
-    await run(['generate', entryPurityAuto, '--fast', '--out', out]);
+    await run(['generate', entryPurityAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.entry-purity.archprint.json'))).toBe(true);
     expect(output()).toContain('entry purity');
   });
@@ -157,19 +163,19 @@ describe('cli program', () => {
   });
 
   it('generate writes the env-access eslint config when env reads are centralized', async () => {
-    await run(['generate', envAuto, '--fast', '--out', out]);
+    await run(['generate', envAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.env-access.archprint.json'))).toBe(true);
     expect(output()).toContain('env access');
   });
 
   it('generate writes the workspace-package eslint config when packages import by name', async () => {
-    await run(['generate', wpkgAuto, '--fast', '--out', out]);
+    await run(['generate', wpkgAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.workspace-package.archprint.json'))).toBe(true);
     expect(output()).toContain('workspace package API');
   });
 
   it('generate writes the stories-isolation config when stories are unimported', async () => {
-    await run(['generate', storiesAuto, '--fast', '--out', out]);
+    await run(['generate', storiesAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.stories-isolation.archprint.json'))).toBe(
       true,
     );
@@ -177,13 +183,13 @@ describe('cli program', () => {
   });
 
   it('generate writes the ui-data config when components avoid the data layer', async () => {
-    await run(['generate', uiDataAuto, '--fast', '--out', out]);
+    await run(['generate', uiDataAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.ui-data.archprint.json'))).toBe(true);
     expect(output()).toContain('UI / data separation');
   });
 
   it('generate writes the server-client config when client code avoids server-only', async () => {
-    await run(['generate', serverClientAuto, '--fast', '--out', out]);
+    await run(['generate', serverClientAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.server-client.archprint.json'))).toBe(
       true,
     );
