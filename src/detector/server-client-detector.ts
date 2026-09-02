@@ -66,7 +66,9 @@ export function detectServerClientBoundary(
     gate: evaluateGate({
       roleFileCount: clients.size,
       violatingFileCount: offenders.size,
-      roleConfidence: 1,
+      // Vacuous guard: with no `server-only` modules anywhere, the boundary can never be crossed and governs
+      // nothing, so we have zero confidence it is real. roleConfidence 0 makes the gate REJECT, never AUTO.
+      roleConfidence: serverModules.size > 0 ? 1 : 0,
     }),
     violations: violations.sort(
       (a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target),

@@ -31,7 +31,22 @@ interface RoleRule {
 
 // First match wins; TEST precedes COMPONENT so a `.test.tsx` is not read as a component.
 const ROLE_RULES: readonly RoleRule[] = [
-  { role: 'TEST', id: 'test-spec-suffix', test: /\.(test|spec)\.(ts|tsx)$/, confidence: 1 },
+  {
+    role: 'TEST',
+    id: 'test-spec-suffix',
+    test: /\.(test|spec|e2e-spec|e2e)\.(ts|tsx)$/,
+    confidence: 1,
+  },
+  {
+    role: 'TEST',
+    id: 'test-directory',
+    test: /(^|\/)(__tests__|__mocks__|e2e|cypress|playwright|test|tests)\//,
+    confidence: 0.95,
+  },
+  // Generated code (e.g. `generated/prisma/enums.ts`) is mostly enums/types a component may legitimately
+  // import; it is not the hand-written data-access layer. Classify it neutral so it never counts as a
+  // DATA_ACCESS target (the `/prisma/` directory rule below would otherwise mis-hit generated enums).
+  { role: 'UNKNOWN', id: 'generated-code', test: /(^|\/)generated\//, confidence: 0.5 },
   { role: 'CONTROLLER', id: 'controller-suffix', test: /\.controller\.ts$/, confidence: 1 },
   { role: 'SERVICE', id: 'service-suffix', test: /\.service\.ts$/, confidence: 1 },
   { role: 'REPOSITORY', id: 'repository-suffix', test: /\.(repository|repo)\.ts$/, confidence: 1 },
