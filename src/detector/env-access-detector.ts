@@ -27,8 +27,6 @@ export function detectEnvAccess(appDir: string, options: EnvAccessOptions = {}):
     .map((file) => ({ file: file.relativePath }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
-  // Vacuous guard: if nothing in the app reads process.env at all, "read env only in config" governs nothing,
-  // so we have zero confidence it is a real boundary. roleConfidence 0 makes the gate REJECT, never AUTO.
   const anyEnvReader = files.some((file) => usage.get(file.relativePath)?.usesProcessEnv === true);
 
   return {

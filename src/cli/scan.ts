@@ -133,9 +133,6 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const layerBoundaries = detectLayerBoundaries(appDir, {
     resolve: options.deep ?? false,
   }).boundaries;
-  // Cycles, orphans, reachability, and public-API detection are all structural, so build the first-party
-  // graph once (fast: faithful to deep for cycles/orphans/reachability, and required for public-API since
-  // deep resolution would resolve through barrels and erase the barrel-vs-deep signal) and share it.
   const graph = buildImportGraph(appDir, { resolve: false });
   const cycles = detectCycles(appDir, { graph });
   const orphans = detectOrphans(appDir, { graph });

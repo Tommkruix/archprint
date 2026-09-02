@@ -8,8 +8,6 @@ import type { ScanResult } from './scan.js';
 
 type FamilyStatus = 'AUTO' | 'SUGGEST' | 'NONE';
 
-// Recommend a not-yet-followed family for day-one adoption when at least this share of comparable repos
-// (same stack, else overall) already AUTO-enforce it in the census. Below this the rule is too rare to push.
 const ADOPT_THRESHOLD = 15;
 
 interface Family {
@@ -162,8 +160,6 @@ export function detectStack(appDir: string): Set<string> {
 
 export interface Recommendation {
   title: string;
-  // Census AUTO-adoption rate (%) among comparable repos: the best of the repo's detected stacks, else the
-  // overall rate. null when the rate is not yet measured (e.g. a family whose detector was recently fixed).
   rate: number | null;
 }
 
@@ -175,8 +171,6 @@ export interface Recommendations {
   adopt: Recommendation[];
 }
 
-// Best census AUTO rate for a family given the repo's stack: max over the detected stacks that the catalog
-// covers, falling back to the overall rate. null = unmeasured (do not compare against the threshold).
 function adoptionRate(title: string, stack: ReadonlySet<string>): number | null {
   const family = ADOPTION_CATALOG.families[title];
   if (!family || family.overall === null) return null;
@@ -198,8 +192,6 @@ export function buildRecommendations(
   for (const family of FAMILIES) {
     const status = family.status(scan);
     const entry: Recommendation = { title: family.title, rate: adoptionRate(family.title, stack) };
-    // Only the audit-clean mechanical families go to enforce-now (which points at `archprint generate`);
-    // a structural family's AUTO is capped at review, matching generate holding it back for a human pass.
     if (status === 'AUTO' && isStableFamily(family.key)) enforceNow.push(entry);
     else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);
     else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);

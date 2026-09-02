@@ -17,8 +17,6 @@ describe('layerOfPath', () => {
   });
 
   it('collapses the whole file-router tree into one layer, never per-route-name layers', () => {
-    // Route directories are pages, not architectural layers. Same-named route dirs across disjoint route
-    // groups must NOT collapse into a fake shared "layer" (the dub "programs"-spans-9-dirs bug).
     expect(layerOfPath('app/(ee)/partners.dub.co/(dashboard)/programs/foo.ts')).toBe('app');
     expect(layerOfPath('app/(ee)/admin.dub.co/(dashboard)/programs/bar.ts')).toBe('app');
     expect(layerOfPath('app/api/og/program/route.ts')).toBe('app');

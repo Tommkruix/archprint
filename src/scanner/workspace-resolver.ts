@@ -2,10 +2,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
 
-// A package's own name resolves to itself: files commonly self-reference via `@scope/pkg/sub` (npm workspaces
-// self-reference) instead of a relative path, and this is not a tsconfig `paths` alias. Without it the resolver
-// silently drops these real, first-party imports, undercounting violations (a false-AUTO source) and leaving a
-// live enforcement gap. Map the app's own package name to its root so `@scope/pkg/sub` -> <root>/sub.
 function ownPackageName(rootDir: string): string | null {
   try {
     const pkg = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as {
@@ -48,10 +44,6 @@ export function buildWorkspaceMap(rootDir: string): Record<string, string> {
     map[cleanAlias] = path.resolve(base, cleanTarget);
   }
 
-  // With an explicit tsconfig `baseUrl`, TypeScript resolves a bare specifier (`app/foo`, `test/fixtures/x`)
-  // against baseUrl before node_modules, so its top-level directories are first-party. Treat each as a prefix
-  // alias; otherwise the resolver drops these real first-party imports as external, undercounting violations
-  // (a false-AUTO source). A same-named local dir intentionally shadows a package, exactly as TS does.
   if (options.baseUrl !== undefined) {
     try {
       for (const entry of readdirSync(options.baseUrl, { withFileTypes: true })) {

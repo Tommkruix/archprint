@@ -145,8 +145,6 @@ export function renderReport(
     lines.push(green(bold('LAYER BOUNDARIES (enforceable)')));
     for (const boundary of autoLayers) {
       lines.push(...layerLines(boundary));
-      // A direct-clean boundary can still leak through an intermediary layer; a plain import rule would not
-      // catch that, so flag it and point at the stronger transitive (dependency-cruiser reachable) form.
       if (reachesLayer(scan.reachability, boundary.from, boundary.to)) {
         lines.push(
           yellow(

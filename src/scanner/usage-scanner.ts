@@ -13,11 +13,6 @@ export interface UsageScan {
   usage: Map<string, FileUsage>;
 }
 
-/**
- * Scan each non-test file for global-usage patterns (`console.*`, `process.env`) syntactically. One ts-morph
- * pass shared by the console-isolation and env-access detectors; source files are forgotten after scanning to
- * bound memory on large repos.
- */
 export function scanUsage(appDir: string): UsageScan {
   const root = path.resolve(appDir);
   const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');

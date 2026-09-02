@@ -9,7 +9,6 @@ const fixture = path.join(here, '..', 'fixtures', 'env-access');
 describe('detectEnvAccess', () => {
   it('flags non-config files that read process.env, sorted; config reads are not offenders', () => {
     const analysis = detectEnvAccess(fixture);
-    // population = the two non-config files (config/env.ts and config/settings.ts are excluded)
     expect(analysis.subjectFileCount).toBe(2);
     expect(analysis.offenderCount).toBe(2);
     expect(analysis.violations.map((v) => v.file)).toEqual(['src/other.ts', 'src/service.ts']);

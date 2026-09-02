@@ -10,4 +10,5 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,
+  { rules: { 'no-empty': ['error', { allowEmptyCatch: true }] } },
 );

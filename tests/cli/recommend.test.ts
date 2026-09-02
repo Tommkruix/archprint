@@ -20,13 +20,10 @@ describe('detectStack', () => {
 
 describe('buildRecommendations', () => {
   it('enforce-now holds only audit-stable AUTO families; structural AUTO is capped at review', () => {
-    // A stable family that AUTO-gates (AP-002 forbidden-imports on cli-auto) belongs in enforce-now.
     const stable = buildRecommendations(scanRepo(fixture('cli-auto'), { deep: false }), new Set());
     expect(stable.enforceNow.some((r) => r.title.startsWith('Forbidden imports'))).toBe(true);
     expect(stable.evidence.apps).toBeGreaterThan(0);
 
-    // A structural family that AUTO-gates (layer boundaries on layer-auto) is provisional -> review, not
-    // enforce-now, matching `generate` holding it back for a human pass. The evidence rate still rides along.
     const structural = buildRecommendations(
       scanRepo(fixture('layer-auto'), { deep: false }),
       detectStack(fixture('layer-auto')),
@@ -38,12 +35,11 @@ describe('buildRecommendations', () => {
   });
 
   it('adopts families common in comparable repos, drops rare ones, sorted by rate', () => {
-    // layers has no components, so UI/data is unevidenced here; with a react stack the census rate decides.
     const scan = scanRepo(fixture('layers'), { deep: false });
     const rec = buildRecommendations(scan, new Set(['react']));
     const adopt = rec.adopt.map((r) => r.title);
-    expect(adopt).toContain('UI / data separation'); // ~49% in react -> adopt
-    expect(adopt).not.toContain('Stories isolation'); // ~0.9% in react -> below threshold, dropped
+    expect(adopt).toContain('UI / data separation');
+    expect(adopt).not.toContain('Stories isolation');
     const rates = rec.adopt.map((r) => r.rate ?? -1);
     expect(rates).toEqual([...rates].sort((a, b) => b - a));
     expect(rec.stack).toEqual(['react']);

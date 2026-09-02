@@ -1,6 +1,3 @@
-// Generated from the 92,861-repo census (ab/phase15/census). Per-family AUTO-adoption rates, overall and
-// per detected stack, used to back day-one recommendations with real evidence. Env-access is null: its census
-// rate reflected a since-fixed detector bug, so its true rate is pending a re-census.
 export interface FamilyAdoption {
   overall: number | null;
   byStack: Record<string, number>;

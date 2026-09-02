@@ -4,8 +4,6 @@ export const GATE_THRESHOLDS = {
   roleConfidence: 0.8,
 } as const;
 
-// z = 1.96 is the two-sided 95% quantile; the resulting lower bound is a conservative one-sided 97.5%
-// bound (errs toward not auto-generating). A one-sided 95% bound would use 1.645.
 const Z_SCORE = 1.96;
 
 export interface GateInput {
@@ -36,11 +34,6 @@ export interface GateResult {
 
 const round = (value: number): number => Math.round(value * 10000) / 10000;
 
-/**
- * Wilson score lower bound on a proportion: the smallest true rate consistent with `successes`/`n` at the
- * given confidence. Fuses the observed rate and the sample size into one number, so a thin sample yields a
- * low bound even at 100% observed (5/5 is not evidence of a 90% rule; 40/40 is).
- */
 export function wilsonLowerBound(successes: number, n: number, z: number = Z_SCORE): number {
   if (n === 0) return 0;
   const p = successes / n;

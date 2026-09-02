@@ -20,10 +20,6 @@ const STRUCTURAL_SEGMENTS = new Set([
   '.next',
 ]);
 
-// The file-based router tree is ONE layer, not a source of per-route layers. Without this, a file deep in
-// app/(group)/sub.domain/(group)/<segment>/ would be assigned the route <segment> as its "layer", and every
-// same-named route directory across disjoint route groups would collapse into one fake, non-cohesive layer
-// (e.g. dub's "programs" spans 9 unrelated app/**/programs dirs). Route directories are pages, not layers.
 const ROUTER_ROOTS = new Set(['app', 'pages']);
 
 const isStructural = (segment: string): boolean =>
@@ -35,7 +31,7 @@ const isStructural = (segment: string): boolean =>
 
 export function layerOfPath(relativePath: string): string | null {
   for (const segment of relativePath.split('/')) {
-    if (ROUTER_ROOTS.has(segment)) return segment; // collapse the whole router tree to one layer
+    if (ROUTER_ROOTS.has(segment)) return segment;
     if (!isStructural(segment)) return segment;
   }
   return null;

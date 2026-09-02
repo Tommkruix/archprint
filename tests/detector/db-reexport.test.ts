@@ -14,8 +14,6 @@ const fixture = path.join(here, '..', 'fixtures', 'db-reexport');
 
 describe('db-client marker inference follows re-exports of a known db library', () => {
   it('infers the first-party re-export file (lib/db) as a db-client surface', () => {
-    // The wrapper is stored in its most-specific alias form (baseUrl dir `lib/db`); the derived marker regex
-    // still matches imports via any alias form, e.g. `@/lib/db` (see the detection test below).
     expect(inferDbClientMarkers(fixture).wrappers).toContain('lib/db');
   });
 

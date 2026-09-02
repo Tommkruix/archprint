@@ -34,8 +34,6 @@ export function detectEntryPurity(
   );
   const importerOf = new Map<string, string>();
   for (const [file, targets] of adjacency) {
-    // An entry importing/re-exporting another entry is idiomatic (e.g. a Next.js route re-exporting another
-    // route for a legacy URL alias); only NON-entry code importing an entry breaks entry purity.
     if (entries.has(file)) continue;
     for (const target of targets) {
       if (entries.has(target) && !importerOf.has(target)) importerOf.set(target, file);

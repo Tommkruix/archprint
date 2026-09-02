@@ -62,9 +62,6 @@ function forbiddenTargetReachedByValue(
   imp: { specifier: string; valueLeafPaths: string[]; hasValueBinding: boolean },
   forbidden: readonly RegExp[],
 ): string | null {
-  // A fully type-only import is erased at compile time, so it is not a runtime dependency on the target.
-  // valueLeafPaths already excludes type-only leaves, so only the specifier match needs this guard, and it
-  // is the sole signal in fast mode (where no leaves are resolved).
   if (imp.hasValueBinding && matchesAny(imp.specifier, forbidden)) return imp.specifier;
   const leaf = imp.valueLeafPaths.find(
     (path) => !NODE_MODULES.test(path) && matchesAny(path, forbidden),

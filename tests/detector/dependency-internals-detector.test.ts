@@ -15,7 +15,6 @@ describe('detectDependencyInternals', () => {
       { file: 'src/bad.ts', specifier: 'lodash/internal/chunk' },
       { file: 'src/bad2.ts', specifier: '@scope/pkg/src/thing' },
     ]);
-    // a documented dist/esm public entry point must NOT be flagged as an internals reach
     expect(analysis.violations.some((v) => v.specifier.includes('/dist/'))).toBe(false);
   });
 

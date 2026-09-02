@@ -37,7 +37,6 @@ export function readVersion(): string {
   ).version;
 }
 
-// How many structural-inference AUTO rules exist in a scan (held for review unless --include-structural).
 function countStructuralAuto(scan: ScanResult): number {
   const groups = [
     scan.layerBoundaries,
@@ -137,8 +136,6 @@ export function buildProgram(version = readVersion()): Command {
       (input: string, options: { out: string; fast?: boolean; includeStructural?: boolean }) => {
         const scan = scanRepo(resolveApp(input), { deep: !options.fast });
         const outDir = path.resolve(options.out);
-        // Structural-inference families are capped at review (Phase A1: all false-AUTO came from these) unless
-        // the user opts in. Mechanical families (0 false-AUTO across the audit) always auto-emit.
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
         const written = writeRules(scan, outDir, ['AUTO']);

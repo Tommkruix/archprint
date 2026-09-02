@@ -29,7 +29,6 @@ interface RoleRule {
   confidence: number;
 }
 
-// First match wins; TEST precedes COMPONENT so a `.test.tsx` is not read as a component.
 const ROLE_RULES: readonly RoleRule[] = [
   {
     role: 'TEST',
@@ -43,9 +42,6 @@ const ROLE_RULES: readonly RoleRule[] = [
     test: /(^|\/)(__tests__|__mocks__|e2e|cypress|playwright|test|tests)\//,
     confidence: 0.95,
   },
-  // Generated code (e.g. `generated/prisma/enums.ts`) is mostly enums/types a component may legitimately
-  // import; it is not the hand-written data-access layer. Classify it neutral so it never counts as a
-  // DATA_ACCESS target (the `/prisma/` directory rule below would otherwise mis-hit generated enums).
   { role: 'UNKNOWN', id: 'generated-code', test: /(^|\/)generated\//, confidence: 0.5 },
   { role: 'CONTROLLER', id: 'controller-suffix', test: /\.controller\.ts$/, confidence: 1 },
   { role: 'SERVICE', id: 'service-suffix', test: /\.service\.ts$/, confidence: 1 },
@@ -121,16 +117,12 @@ const ROLE_RULES: readonly RoleRule[] = [
     test: /(\/db\/|\/database\/|\/prisma\/)/,
     confidence: 0.8,
   },
-  // A flat file named after a known ORM client is the data-access surface even without a db/ directory
-  // (e.g. inbox-zero's utils/prisma.ts holds the Prisma client). Directory rules above miss these.
   {
     role: 'DATA_ACCESS',
     id: 'db-client-file',
     test: /(^|\/)(prisma|drizzle|kysely)\.[cm]?[jt]sx?$/,
     confidence: 0.8,
   },
-  // Next.js App Router entry files render UI but are framework entry points, not reusable components; must
-  // precede the `.tsx` component rule so a page is never counted as part of the shared UI layer.
   {
     role: 'ROUTE_ENTRY',
     id: 'next-app-router-entry',
@@ -164,12 +156,6 @@ const USE_CLIENT_LITERAL = /^["']use client["']/;
 const isWhitespace = (c: string): boolean =>
   c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 
-/**
- * Test the leading module directive against `literal`, allowing leading whitespace and comments. Scans
- * linearly (skipping whitespace, line comments, and block comments) rather than one backtracking regex: a
- * head full of comment tokens must never cause catastrophic backtracking (ReDoS). Only the final fixed-literal
- * check uses a regex.
- */
 function hasLeadingDirective(sourceHead: string, literal: RegExp): boolean {
   let i = 0;
   const n = sourceHead.length;

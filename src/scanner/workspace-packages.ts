@@ -9,9 +9,7 @@ export function buildWorkspacePackageMap(rootDir: string): Record<string, string
     try {
       const name: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8')).name;
       if (typeof name === 'string' && name.length > 0) map[name] = packageDir;
-    } catch {
-      // unreadable/invalid package.json; skip
-    }
+    } catch {}
   }
   return map;
 }
@@ -24,9 +22,7 @@ export function findWorkspaceRoot(startDir: string): string {
     if (existsSync(packageJsonPath)) {
       try {
         if (JSON.parse(readFileSync(packageJsonPath, 'utf-8')).workspaces !== undefined) return dir;
-      } catch {
-        // fall through
-      }
+      } catch {}
     }
     const parent = path.dirname(dir);
     if (parent === dir) return path.resolve(startDir);
@@ -45,9 +41,7 @@ function readWorkspaceGlobs(rootDir: string): string[] {
           ? (workspaces as { packages: string[] }).packages
           : [];
       if (globs.length > 0) return globs as string[];
-    } catch {
-      // fall through to pnpm
-    }
+    } catch {}
   }
   const pnpmPath = path.join(rootDir, 'pnpm-workspace.yaml');
   if (existsSync(pnpmPath)) {

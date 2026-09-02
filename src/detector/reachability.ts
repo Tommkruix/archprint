@@ -57,8 +57,6 @@ export function computeLayerReachability(
     }
   }
 
-  // Tarjan emits components in reverse topological order, so every successor has a lower id than its
-  // predecessor. Accumulating in a single forward pass therefore needs no recursion (stack-safe at scale).
   const reachableComps: Set<number>[] = components.map(() => new Set<number>());
   components.forEach((_component, id) => {
     for (const next of successors[id]!) {

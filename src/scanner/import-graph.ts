@@ -98,10 +98,6 @@ export function buildImportGraph(appDir: string, options: ImportGraphOptions = {
   return { root, files, adjacency };
 }
 
-/**
- * Tarjan strongly-connected components, iterative so it stays safe on large, deep graphs. Returns one array
- * of node ids per component; a component of size > 1 (or a single self-looping node) is a cycle.
- */
 export function stronglyConnectedComponents(
   nodes: readonly string[],
   adjacency: Map<string, string[]>,

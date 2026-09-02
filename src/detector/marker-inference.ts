@@ -231,9 +231,7 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
   for (const root of scanRoots) {
     try {
       for (const file of listSourceFiles(root)) scanned.add(file);
-    } catch {
-      // package dir missing or unreadable; skip
-    }
+    } catch {}
   }
 
   const wrapperFiles: string[] = [];

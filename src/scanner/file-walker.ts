@@ -27,15 +27,9 @@ export interface ResolvedImport {
   throughBarrel: boolean;
   valueLeafPaths: string[];
   typeLeafPaths: string[];
-  /** True if the import brings in at least one runtime value binding (default, namespace, a non-type named
-   *  import, or a side-effect import). False for fully type-only imports, which are erased and are not a
-   *  runtime dependency. Syntactic, so it is available in fast (no-resolve) mode. */
   hasValueBinding: boolean;
 }
 
-/** Whether an import contributes a runtime value binding, as opposed to a fully type-only import that is
- *  erased at compile time. Syntactic only (no resolution), so it holds in fast mode. A bare `import "x"`
- *  side-effect import counts as a value use. */
 function importHasValueBinding(importDeclaration: ImportDeclaration): boolean {
   if (importDeclaration.isTypeOnly()) return false;
   const named = importDeclaration.getNamedImports();
@@ -153,9 +147,7 @@ export function createImportAnalyzer(
         for (const [name, declarations] of target.getExportedDeclarations()) {
           map.set(name, new Set(declarations.map((d) => d.getSourceFile().getFilePath())));
         }
-      } catch {
-        // type info unavailable (e.g. deps not installed); leave empty and fall back below
-      }
+      } catch {}
       exportedLeafCache.set(key, map);
     }
     return map;

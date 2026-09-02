@@ -9,9 +9,6 @@ import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import * as path from 'node:path';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 
-// Only the unambiguous "reaching into a package's guts" signals. dist/lib/esm/cjs/build/out are commonly a
-// package's PUBLISHED public output (e.g. react-syntax-highlighter documents `dist/esm/styles/prism`), so
-// flagging them produces false positives; importing a dependency's /src/ or /internal(s)/ is the real smell.
 const INTERNAL_DIRS = new Set(['src', 'internal', 'internals']);
 const BUILTINS = new Set(builtinModules);
 
