@@ -142,7 +142,7 @@ export function renderReport(
     (boundary) => boundary.gate.status === 'SUGGEST',
   );
   if (autoLayers.length > 0) {
-    lines.push(green(bold('LAYER BOUNDARIES (enforceable)')));
+    lines.push(green(bold('LAYER BOUNDARIES (review before enforcing)')));
     for (const boundary of autoLayers) {
       lines.push(...layerLines(boundary));
       if (reachesLayer(scan.reachability, boundary.from, boundary.to)) {
@@ -166,7 +166,7 @@ export function renderReport(
   const autoRoles = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'AUTO');
   const suggestRoles = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'SUGGEST');
   if (autoRoles.length > 0) {
-    lines.push(green(bold('ROLE LAYERING (enforceable)')));
+    lines.push(green(bold('ROLE LAYERING (review before enforcing)')));
     for (const boundary of autoRoles) lines.push(...roleLayerLines(boundary));
     lines.push('');
   }
@@ -223,7 +223,7 @@ export function renderReport(
   const autoSlices = scan.featureSlices.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestSlices = scan.featureSlices.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoSlices.length > 0) {
-    lines.push(green(bold('FEATURE SLICE ISOLATION (enforceable)')));
+    lines.push(green(bold('FEATURE SLICE ISOLATION (review before enforcing)')));
     for (const g of autoSlices) lines.push(...sliceLines(g));
     lines.push('');
   }
@@ -238,7 +238,7 @@ export function renderReport(
   const autoApps = scan.appIsolation.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApps = scan.appIsolation.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoApps.length > 0) {
-    lines.push(green(bold('APP ISOLATION (enforceable)')));
+    lines.push(green(bold('APP ISOLATION (review before enforcing)')));
     for (const g of autoApps) lines.push(...appLines(g));
     lines.push('');
   }
@@ -295,7 +295,7 @@ export function renderReport(
   const entry = scan.entryPurity;
   if (entry.entryCount > 0 && (entry.gate.status === 'AUTO' || entry.gate.status === 'SUGGEST')) {
     const label = entry.gate.status === 'AUTO' ? green : yellow;
-    const suffix = entry.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = entry.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(entry.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`ENTRY PURITY ${suffix}`)));
     lines.push(`  framework entries must not be imported by other code   confidence ${floor}`);
@@ -367,7 +367,7 @@ export function renderReport(
   const env = scan.envAccess;
   if (env.subjectFileCount > 0 && (env.gate.status === 'AUTO' || env.gate.status === 'SUGGEST')) {
     const label = env.gate.status === 'AUTO' ? green : yellow;
-    const suffix = env.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = env.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(env.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`ENV ACCESS ${suffix}`)));
     lines.push(`  read process.env only in the config layer   confidence ${floor}`);
@@ -383,7 +383,7 @@ export function renderReport(
   const wpkg = scan.workspacePackageApi;
   if (wpkg.consumerCount > 0 && (wpkg.gate.status === 'AUTO' || wpkg.gate.status === 'SUGGEST')) {
     const label = wpkg.gate.status === 'AUTO' ? green : yellow;
-    const suffix = wpkg.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = wpkg.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(wpkg.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`WORKSPACE PACKAGE API ${suffix}`)));
     lines.push(`  import workspace packages by name, not a deep path   confidence ${floor}`);
@@ -403,7 +403,7 @@ export function renderReport(
     (stories.gate.status === 'AUTO' || stories.gate.status === 'SUGGEST')
   ) {
     const label = stories.gate.status === 'AUTO' ? green : yellow;
-    const suffix = stories.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = stories.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(stories.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`STORIES ISOLATION ${suffix}`)));
     lines.push(`  Storybook stories must not be imported by other code   confidence ${floor}`);
@@ -423,7 +423,7 @@ export function renderReport(
     (uiData.gate.status === 'AUTO' || uiData.gate.status === 'SUGGEST')
   ) {
     const label = uiData.gate.status === 'AUTO' ? green : yellow;
-    const suffix = uiData.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = uiData.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(uiData.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`UI / DATA SEPARATION ${suffix}`)));
     lines.push(`  UI components must not import the data layer directly   confidence ${floor}`);
@@ -440,7 +440,7 @@ export function renderReport(
   const sc = scan.serverClient;
   if (sc.clientCount > 0 && (sc.gate.status === 'AUTO' || sc.gate.status === 'SUGGEST')) {
     const label = sc.gate.status === 'AUTO' ? green : yellow;
-    const suffix = sc.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = sc.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(sc.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`SERVER / CLIENT BOUNDARY ${suffix}`)));
     lines.push(`  "use client" modules must not import server-only code   confidence ${floor}`);

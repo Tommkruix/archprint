@@ -573,7 +573,7 @@ describe('cli scan', () => {
 
   it('renders server/client boundary, hidden when there are no client modules', () => {
     expect(renderReport(emptyScan({ serverClient: fakeServerClient(40, 0) }), '1.0.0')).toContain(
-      'SERVER / CLIENT BOUNDARY (enforceable)',
+      'SERVER / CLIENT BOUNDARY (review before enforcing)',
     );
     const suggest = renderReport(emptyScan({ serverClient: fakeServerClient(20, 2) }), '1.0.0');
     expect(suggest).toContain('SERVER / CLIENT BOUNDARY (suggested)');
@@ -583,7 +583,7 @@ describe('cli scan', () => {
 
   it('renders UI/data separation, hidden when there are no components', () => {
     expect(renderReport(emptyScan({ uiDataIsolation: fakeUiData(40, 0) }), '1.0.0')).toContain(
-      'UI / DATA SEPARATION (enforceable)',
+      'UI / DATA SEPARATION (review before enforcing)',
     );
     const suggest = renderReport(emptyScan({ uiDataIsolation: fakeUiData(20, 2) }), '1.0.0');
     expect(suggest).toContain('UI / DATA SEPARATION (suggested)');
@@ -593,7 +593,7 @@ describe('cli scan', () => {
 
   it('renders stories isolation, hidden when there are no stories', () => {
     expect(renderReport(emptyScan({ storiesIsolation: fakeStories(40, 0) }), '1.0.0')).toContain(
-      'STORIES ISOLATION (enforceable)',
+      'STORIES ISOLATION (review before enforcing)',
     );
     const suggest = renderReport(emptyScan({ storiesIsolation: fakeStories(20, 2) }), '1.0.0');
     expect(suggest).toContain('STORIES ISOLATION (suggested)');
@@ -603,7 +603,7 @@ describe('cli scan', () => {
 
   it('renders workspace package API, hidden when there are no workspace consumers', () => {
     expect(renderReport(emptyScan({ workspacePackageApi: fakeWpkg(40, 0) }), '1.0.0')).toContain(
-      'WORKSPACE PACKAGE API (enforceable)',
+      'WORKSPACE PACKAGE API (review before enforcing)',
     );
     const suggest = renderReport(emptyScan({ workspacePackageApi: fakeWpkg(20, 2) }), '1.0.0');
     expect(suggest).toContain('WORKSPACE PACKAGE API (suggested)');
@@ -619,7 +619,7 @@ describe('cli scan', () => {
     expect(conSuggest).toContain('CONSOLE ISOLATION (suggested)');
     expect(conSuggest).toContain('Console usage: 2');
     expect(renderReport(emptyScan({ envAccess: fakeEnv(40, 0) }), '1.0.0')).toContain(
-      'ENV ACCESS (enforceable)',
+      'ENV ACCESS (review before enforcing)',
     );
     const envSuggest = renderReport(emptyScan({ envAccess: fakeEnv(20, 2) }), '1.0.0');
     expect(envSuggest).toContain('Reads outside config: 2');
@@ -647,7 +647,7 @@ describe('cli scan', () => {
 
   it('renders enforceable and suggested entry purity, hidden when there are no entries', () => {
     const auto = renderReport(emptyScan({ entryPurity: fakeEntryPurity(40, 0) }), '1.0.0');
-    expect(auto).toContain('ENTRY PURITY (enforceable)');
+    expect(auto).toContain('ENTRY PURITY (review before enforcing)');
     const suggest = renderReport(emptyScan({ entryPurity: fakeEntryPurity(20, 2) }), '1.0.0');
     expect(suggest).toContain('ENTRY PURITY (suggested)');
     expect(suggest).toContain('Imported entries: 2');
@@ -667,7 +667,7 @@ describe('cli scan', () => {
       },
     });
     const report = renderReport(scan, '1.0.0');
-    expect(report).toContain('ROLE LAYERING (enforceable)');
+    expect(report).toContain('ROLE LAYERING (review before enforcing)');
     expect(report).toContain('REPOSITORY !-> SERVICE');
     expect(report).toContain('ROLE LAYERING (suggested)');
     expect(report).toContain('SERVICE !-> CONTROLLER');
@@ -683,7 +683,7 @@ describe('cli scan', () => {
       },
     });
     const report = renderReport(scan, '1.0.0');
-    expect(report).toContain('APP ISOLATION (enforceable)');
+    expect(report).toContain('APP ISOLATION (review before enforcing)');
     expect(report).toContain('apps (3 apps)');
     expect(report).toContain('APP ISOLATION (suggested)');
     expect(report).toContain('Cross-app imports: 2');
@@ -699,7 +699,7 @@ describe('cli scan', () => {
       },
     });
     const report = renderReport(scan, '1.0.0');
-    expect(report).toContain('FEATURE SLICE ISOLATION (enforceable)');
+    expect(report).toContain('FEATURE SLICE ISOLATION (review before enforcing)');
     expect(report).toContain('src/features (3 slices)');
     expect(report).toContain('FEATURE SLICE ISOLATION (suggested)');
     expect(report).toContain('Cross-slice imports: 2');

@@ -11,7 +11,20 @@ Your `CLAUDE.md` is guidance. Your lint rules are enforcement. Archprint closes 
 enforcement from patterns your codebase already demonstrates, so you adopt rules you can trust instead of
 authoring them by hand.
 
-> Status: `0.1.0`, pre-stable (0.x may break between minor versions). Not yet published to npm.
+**What auto-enforces vs. what you review.** Archprint is honest about which of its inferences it will stand
+behind unattended. An adversarial correctness audit (three rounds over four real repositories) found that the
+_mechanical_ families, ones grounded in unambiguous signals (no cycles, production must not import tests, no
+`console` in library code, no undeclared dependencies, deep-relative import style, public-API barrels, no
+reaching into a dependency's internals, and the DB/UI-in-server-entry rule), had zero false positives every
+round. So those auto-generate as enforcement. The _structural-inference_ families (layer and role boundaries,
+UI/data separation, entry purity, server/client, feature-slice and app isolation) infer a "layer" or "role"
+from paths, which can be wrong, so Archprint holds them for human review by default rather than silently
+enforcing them. Nothing whose inferred layer or role could be wrong is written as enforcement without you
+opting in.
+
+> Status: `0.1.0`, pre-stable (0.x may break between minor versions). Not yet published to npm. Production-ready
+> today: the insight commands (`scan`, `recommend`) and the auto-enforcement of the mechanical families above.
+> The structural families are review-only while they are hardened.
 
 ## What makes it different
 
@@ -49,7 +62,8 @@ package such as `apps/web`; a monorepo root is fine too, Archprint discovers the
 # See the rules your repo already follows, with the evidence
 archprint scan apps/web
 
-# Write the enforceable ones to disk (rule files + tool configs)
+# Write the auto-trusted (mechanical) rules to disk (rule files + tool configs).
+# Structural-inference rules are held for review; add --include-structural to emit them too.
 archprint generate apps/web --out archprint-rules
 
 # Inspect the gate evidence behind one rule
@@ -80,48 +94,53 @@ trimmed:
 ```
 Archprint v0.1.0
 Scanned 2,232 TypeScript files
-Workspace aliases: 3 resolved
+Workspace aliases: 18 resolved
 
 GENERATED RULES
   AP-002  no-ui-layer-in-server-entry      confidence 97%
           Evidence: 216/217 role files conform (99.5% observed)
           Exceptions: 1
 
-LAYER BOUNDARIES (enforceable)
-  utils !-> api  layer boundary   confidence 99%
-          Evidence: 655/655 utils files conform (100%); 186 api file(s) depend on utils
-  utils !-> components  layer boundary   confidence 99%
-          Evidence: 652/655 utils files conform (99.5%); 164 components file(s) depend on utils
-          Exceptions: 3
-          Transitive leak: utils reaches components through another layer (needs a reachability rule).
+LAYER BOUNDARIES (review before enforcing)
+  utils !-> app  layer boundary   confidence 99%
+          Evidence: 650/653 utils files conform (99.5%); 451 app file(s) depend on utils
+  hooks !-> app  layer boundary   confidence 94%
+          Evidence: 65/65 hooks files conform (100%); 121 app file(s) depend on hooks
 ```
+
+`AP-002` is a mechanical family, so it auto-generates as enforcement. The layer boundaries are inferred, so
+they are shown for review, not written as enforcement unless you pass `--include-structural`.
 
 Every number is measured from the import graph, not estimated.
 
 ## What Archprint detects
 
-| Detector                         | Rule it can infer                                                                                                    |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          |
-| Layer boundaries                 | Files in one layer must not import another, inferred from the dominant dependency direction                          |
-| Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         |
-| Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates, reported, never auto enforced)       |
-| Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                        |
-| Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          |
-| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                  |
-| Test isolation                   | Production (non-test) code must not import test or spec files                                                        |
-| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                                |
-| Dependency hygiene               | Import third-party packages by their public entry, not their build/impl internals (`lodash/dist/...`)                |
-| Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) |
-| Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            |
-| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   |
-| Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    |
-| Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     |
-| Env access                       | Read `process.env` only in the config/env layer                                                                      |
-| Workspace package API            | Import a monorepo workspace package by its name, not a deep path into its source                                     |
-| Stories isolation                | Storybook `.stories` files must not be imported by other code                                                        |
-| UI / data separation             | Reusable UI components must not import the DB/data layer directly                                                    |
-| Server / client boundary         | A Next.js `"use client"` module must not import a `server-only` module                                               |
+Ships as: **Auto** = auto-generated as enforcement (mechanical families, 0 false positives across the
+correctness audit). **Review** = held for human review by default; emit with `--include-structural` (the
+inferred layer/role can be wrong, so it is not enforced silently). **Report** = surfaced only, never enforced.
+
+| Detector                         | Rule it can infer                                                                                                    | Ships as |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
+| Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          | Auto     |
+| Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         | Auto     |
+| Test isolation                   | Production (non-test) code must not import test or spec files                                                        | Auto     |
+| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Auto     |
+| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Auto     |
+| Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    | Auto     |
+| Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     | Auto     |
+| Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          | Auto     |
+| Layer boundaries                 | Files in one layer must not import another, inferred from the dominant dependency direction                          | Review   |
+| Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) | Review   |
+| Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            | Review   |
+| UI / data separation             | Reusable UI components must not import the DB/data layer directly                                                    | Review   |
+| Server / client boundary         | A Next.js `"use client"` module must not import a `server-only` module                                               | Review   |
+| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                  | Review   |
+| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                                | Review   |
+| Env access                       | Read `process.env` only in the config/env layer                                                                      | Review   |
+| Workspace package API            | Import a monorepo workspace package by its name, not a deep path into its source                                     | Review   |
+| Stories isolation                | Storybook `.stories` files must not be imported by other code                                                        | Review   |
+| Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates)                                      | Report   |
+| Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                        | Report   |
 
 ## The confidence gate
 
@@ -135,15 +154,21 @@ number, so 5 of 5 clean files is not treated as evidence of a 90% rule but 40 of
   to be confident. Surfaced for review, not auto generated.
 - **REJECT**: not enough signal.
 
-The bias is deliberate and conservative: one wrong rule hurts credibility more than zero rules.
+The statistical gate is necessary but not sufficient: a rule can be statistically clean yet semantically wrong
+if the inferred "layer" or "role" is not real. So a second, evidence-based gate sits on top of it: only the
+_mechanical_ families (see the "Ships as: Auto" rows above), which an adversarial correctness audit found had
+zero false positives across three rounds and four repositories, auto-generate as enforcement. The
+_structural-inference_ families are capped at review regardless of their statistical score until they earn the
+same clean record. The bias is deliberate and conservative: one wrong enforced rule hurts credibility more than
+zero rules.
 
 ## Output formats
 
 `archprint generate` writes into the formats your existing tools already read:
 
-- **dependency-cruiser** `forbidden` rulesets for every enforceable boundary Archprint infers (layer,
-  role-layering, public-API deep-import, feature-slice, app-isolation, test-isolation, dependency-internals,
-  and entry-purity)
+- **dependency-cruiser** `forbidden` rulesets: by default the mechanical boundaries (public-API deep-import,
+  test-isolation, dependency-internals); the structural ones (layer, role-layering, feature-slice,
+  app-isolation, entry-purity) are written only with `--include-structural`, after you review them
 - **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
   import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
@@ -173,13 +198,13 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 
 ## Commands
 
-| Command                         | What it does                                                                                             |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases. |
-| `archprint generate [path]`     | Write the enforceable (AUTO) rules and tool configs. `--out <dir>`, `--fast`.                            |
-| `archprint explain <id> [path]` | Show the full gate breakdown for one rule id.                                                            |
-| `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                               |
-| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).            |
+| Command                         | What it does                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                   |
+| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--include-structural`, `--out <dir>`, `--fast`. |
+| `archprint explain <id> [path]` | Show the full gate breakdown for one rule id.                                                                                              |
+| `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                                                                 |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                              |
 
 ## Fast and deep modes
 
@@ -196,8 +221,14 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 ## Status and roadmap
 
 `0.1.0`, pre-stable. The engine (twenty detectors, five output formats, the confidence gate) is in place and
-tested. Still ahead: broader framework role coverage, more rule families, and the companion benchmark
-(AgentRuleBench) measuring whether installing an inferred rule makes an AI coding agent self correct.
+tested, and an adversarial correctness audit (three rounds, four real repositories) drove the false-positive
+rate on auto-generated rules to zero for the mechanical families, which is why those auto-enforce while the
+structural-inference families are held for review.
+
+Production-ready today: `scan` and `recommend` (insight), and auto-enforcement of the mechanical families.
+Still ahead: hardening the structural families toward auto-enforcement (a real per-file role-confidence measure,
+layer-cohesion, role-classifier ordering), a self-consistency check at generate time, a pinned regression
+corpus, an `init` scaffolder for fresh repos, and broader framework role coverage.
 
 ## Contributing
 
