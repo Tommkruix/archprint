@@ -176,6 +176,7 @@ export {
   type GateResult,
   type GenerationStatus,
 } from './detector/confidence-gate.js';
+export { checkSelfConsistency, type ConsistencyIssue } from './detector/self-consistency.js';
 export {
   generateRuleArtifacts,
   emitRuleArtifacts,

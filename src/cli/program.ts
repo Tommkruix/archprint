@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
 import { renderExplain, renderReport, renderRecommendations } from './report.js';
@@ -135,6 +136,17 @@ export function buildProgram(version = readVersion()): Command {
     .action(
       (input: string, options: { out: string; fast?: boolean; includeStructural?: boolean }) => {
         const scan = scanRepo(resolveApp(input), { deep: !options.fast });
+        const issues = checkSelfConsistency(scan);
+        /* v8 ignore start -- defensive guardrail: fires only if a detector regresses into inconsistency */
+        if (issues.length > 0) {
+          console.error(
+            'Refusing to generate: a rule failed the self-consistency check (its evidence does not match what it would enforce):',
+          );
+          for (const issue of issues) console.error(`  - ${issue.rule}: ${issue.problem}`);
+          process.exitCode = 1;
+          return;
+        }
+        /* v8 ignore stop */
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
