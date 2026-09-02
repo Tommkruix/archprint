@@ -50,7 +50,8 @@ export function detectTestIsolation(
     gate: evaluateGate({
       roleFileCount: production.length,
       violatingFileCount: offenders.size,
-      roleConfidence: isTest.size > 0 ? 1 : 0,
+      roleConfidence: 1,
+      applicable: isTest.size > 0,
     }),
     violations: violations.sort((a, b) => a.file.localeCompare(b.file)),
   };

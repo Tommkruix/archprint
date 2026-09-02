@@ -36,7 +36,8 @@ export function detectEnvAccess(appDir: string, options: EnvAccessOptions = {}):
     gate: evaluateGate({
       roleFileCount: subject.length,
       violatingFileCount: violations.length,
-      roleConfidence: anyEnvReader ? 1 : 0,
+      roleConfidence: 1,
+      applicable: anyEnvReader,
     }),
     violations,
   };

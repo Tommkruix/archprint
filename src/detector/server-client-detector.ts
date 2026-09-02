@@ -66,7 +66,8 @@ export function detectServerClientBoundary(
     gate: evaluateGate({
       roleFileCount: clients.size,
       violatingFileCount: offenders.size,
-      roleConfidence: serverModules.size > 0 ? 1 : 0,
+      roleConfidence: 1,
+      applicable: serverModules.size > 0,
     }),
     violations: violations.sort(
       (a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target),

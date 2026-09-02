@@ -29,7 +29,15 @@ export function detectUiDataIsolation(
   const { root, files, adjacency } =
     options.graph ?? buildImportGraph(appDir, { resolve: options.resolve ?? false });
 
-  const components = files.filter((file) => classifyFile(file.relativePath).role === 'COMPONENT');
+  const componentClassifications = files
+    .map((file) => ({ file, classification: classifyFile(file.relativePath) }))
+    .filter((entry) => entry.classification.role === 'COMPONENT');
+  const components = componentClassifications.map((entry) => entry.file);
+  const roleConfidence =
+    components.length === 0
+      ? 0
+      : componentClassifications.reduce((sum, entry) => sum + entry.classification.confidence, 0) /
+        components.length;
   const dataFiles = new Set(
     files
       .filter((file) => DATA_ROLES.has(classifyFile(file.relativePath).role))
@@ -54,7 +62,8 @@ export function detectUiDataIsolation(
     gate: evaluateGate({
       roleFileCount: components.length,
       violatingFileCount: offenders.size,
-      roleConfidence: dataFiles.size > 0 ? 1 : 0,
+      roleConfidence,
+      applicable: dataFiles.size > 0,
     }),
     violations: violations.sort(
       (a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target),

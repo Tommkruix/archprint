@@ -48,9 +48,24 @@ describe('evaluateGate', () => {
     expect(r.status).toBe('SUGGEST');
   });
 
-  it('REJECTs when the role classification is not confident, regardless of a clean ratio', () => {
+  it('SUGGESTs (never AUTO) for a moderately-confident role with a clean ratio', () => {
     const r = evaluateGate({ roleFileCount: 100, violatingFileCount: 1, roleConfidence: 0.5 });
     expect(r.conditions.roleConfidence.pass).toBe(false);
+    expect(r.status).toBe('SUGGEST');
+  });
+
+  it('REJECTs a role below the moderate SUGGEST floor, even with a clean ratio', () => {
+    const r = evaluateGate({ roleFileCount: 100, violatingFileCount: 1, roleConfidence: 0.3 });
+    expect(r.status).toBe('REJECT');
+  });
+
+  it('REJECTs an inapplicable rule (vacuous population) even when trivially clean', () => {
+    const r = evaluateGate({
+      roleFileCount: 100,
+      violatingFileCount: 0,
+      roleConfidence: 1,
+      applicable: false,
+    });
     expect(r.status).toBe('REJECT');
   });
 
@@ -71,6 +86,7 @@ describe('evaluateGate', () => {
       confidence: 0.9,
       exceptions: 3,
       roleConfidence: 0.8,
+      roleConfidenceSuggest: 0.5,
     });
   });
 });

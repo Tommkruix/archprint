@@ -182,10 +182,9 @@ describe('cli program', () => {
     expect(output()).toContain('stories isolation');
   });
 
-  it('generate writes the ui-data config when components avoid the data layer', async () => {
+  it('generate never enforces ui-data: its COMPONENT role is too low-confidence to AUTO', async () => {
     await run(['generate', uiDataAuto, '--include-structural', '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'dependency-cruiser.ui-data.archprint.json'))).toBe(true);
-    expect(output()).toContain('UI / data separation');
+    expect(existsSync(path.join(out, 'dependency-cruiser.ui-data.archprint.json'))).toBe(false);
   });
 
   it('generate writes the server-client config when client code avoids server-only', async () => {

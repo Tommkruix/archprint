@@ -2,6 +2,7 @@ export const GATE_THRESHOLDS = {
   confidence: 0.9,
   exceptions: 3,
   roleConfidence: 0.8,
+  roleConfidenceSuggest: 0.5,
 } as const;
 
 const Z_SCORE = 1.96;
@@ -10,6 +11,7 @@ export interface GateInput {
   roleFileCount: number;
   violatingFileCount: number;
   roleConfidence: number;
+  applicable?: boolean;
 }
 
 export interface GateCondition {
@@ -26,6 +28,7 @@ export interface GateResult {
     exceptions: GateCondition;
     roleConfidence: GateCondition;
   };
+  applicable: boolean;
   observedConformance: number;
   observations: number;
   passes: boolean;
@@ -44,7 +47,7 @@ export function wilsonLowerBound(successes: number, n: number, z: number = Z_SCO
 }
 
 export function evaluateGate(input: GateInput): GateResult {
-  const { roleFileCount, violatingFileCount, roleConfidence } = input;
+  const { roleFileCount, violatingFileCount, roleConfidence, applicable = true } = input;
   const conformingFileCount = roleFileCount - violatingFileCount;
   const observedConformance = roleFileCount === 0 ? 0 : conformingFileCount / roleFileCount;
   const floor = wilsonLowerBound(conformingFileCount, roleFileCount);
@@ -67,11 +70,15 @@ export function evaluateGate(input: GateInput): GateResult {
     },
   };
 
-  const passes = Object.values(conditions).every((condition) => condition.pass);
+  const passes = applicable && Object.values(conditions).every((condition) => condition.pass);
   let status: GenerationStatus;
   if (passes) {
     status = 'AUTO';
-  } else if (observedConformance >= 0.8 && conditions.roleConfidence.pass) {
+  } else if (
+    applicable &&
+    observedConformance >= 0.8 &&
+    roleConfidence >= GATE_THRESHOLDS.roleConfidenceSuggest
+  ) {
     status = 'SUGGEST';
   } else {
     status = 'REJECT';
@@ -79,6 +86,7 @@ export function evaluateGate(input: GateInput): GateResult {
 
   return {
     conditions,
+    applicable,
     observedConformance: round(observedConformance),
     observations: roleFileCount,
     passes,
