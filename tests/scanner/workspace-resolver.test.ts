@@ -36,6 +36,13 @@ describe('buildWorkspaceMap', () => {
     expect(buildWorkspaceMap(fixture('no-paths'))).toEqual({});
   });
 
+  it('maps top-level baseUrl directories to first-party prefixes (bare specifiers resolve)', () => {
+    const dir = fixture('baseurl');
+    const map = buildWorkspaceMap(dir);
+    expect(map['app']).toBe(path.resolve(dir, 'app'));
+    expect(map['utils']).toBe(path.resolve(dir, 'utils'));
+  });
+
   it('returns an empty map when no tsconfig exists', () => {
     expect(buildWorkspaceMap(fixture('does-not-exist'))).toEqual({});
   });
