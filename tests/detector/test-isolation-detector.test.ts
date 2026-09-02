@@ -23,9 +23,10 @@ describe('detectTestIsolation', () => {
     expect(detectTestIsolation(relative).offenderCount).toBe(2);
   });
 
-  it('reports no test files for an app without tests', () => {
+  it('does not AUTO when there are no test files (vacuous)', () => {
     const analysis = detectTestIsolation(path.join(here, '..', 'fixtures', 'layers'));
     expect(analysis.testFileCount).toBe(0);
     expect(analysis.offenderCount).toBe(0);
+    expect(analysis.gate.status).not.toBe('AUTO');
   });
 });
