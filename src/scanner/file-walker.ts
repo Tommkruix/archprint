@@ -1,6 +1,15 @@
-import { closeSync, existsSync, openSync, readSync, readdirSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  statSync,
+} from 'node:fs';
 import * as path from 'node:path';
 import { type ImportDeclaration, Project, type SourceFile, SyntaxKind } from 'ts-morph';
+import * as ts from 'typescript';
 import { isBarrelFile, resolveToLeafFiles } from './barrel-resolver.js';
 import {
   classifyFile,
@@ -100,19 +109,115 @@ export function walkRepo(rootDir: string): WalkedFile[] {
   });
 }
 
+function nodeHasValueBinding(clause: ts.ImportClause | undefined): boolean {
+  if (clause === undefined) return true;
+  if (clause.isTypeOnly) return false;
+  const hasDefault = clause.name !== undefined;
+  const bindings = clause.namedBindings;
+  const hasNamespace = bindings !== undefined && ts.isNamespaceImport(bindings);
+  const named = bindings !== undefined && ts.isNamedImports(bindings) ? bindings.elements : [];
+  const hasValueNamed = named.some((element) => !element.isTypeOnly);
+  const sideEffectOnly = named.length === 0 && !hasDefault && !hasNamespace;
+  return hasValueNamed || hasDefault || hasNamespace || sideEffectOnly;
+}
+
+interface RawImport {
+  specifier: string;
+  hasValueBinding: boolean;
+}
+
+// Content-keyed parse cache: the raw import extraction (specifier + value-binding) depends only on the file
+// content, not on the analyzer's alias set, so it is safe to share across every detector that scans the same
+// file within a run. Edge classification stays per-analyzer and is applied on top. Keyed by path + mtime + size
+// so an edit is picked up; capped as a backstop against unbounded growth in long-lived processes.
+const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
+const FAST_PARSE_CACHE_CAP = 50000;
+
+function parseFastImports(absoluteFilePath: string): RawImport[] {
+  const stat = statSync(absoluteFilePath);
+  const cached = fastParseCache.get(absoluteFilePath);
+  if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.raw;
+  }
+  const text = readFileSync(absoluteFilePath, 'utf8');
+  const scriptKind = absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(
+    absoluteFilePath,
+    text,
+    ts.ScriptTarget.Latest,
+    false,
+    scriptKind,
+  );
+  const raw: RawImport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      raw.push({
+        specifier: statement.moduleSpecifier.text,
+        hasValueBinding: nodeHasValueBinding(statement.importClause),
+      });
+    }
+  }
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length > 0 &&
+      ts.isStringLiteral(node.arguments[0]!)
+    ) {
+      raw.push({ specifier: node.arguments[0].text, hasValueBinding: true });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (fastParseCache.size >= FAST_PARSE_CACHE_CAP) fastParseCache.clear();
+  fastParseCache.set(absoluteFilePath, { mtimeMs: stat.mtimeMs, size: stat.size, raw });
+  return raw;
+}
+
+// Fast import extraction with the raw TypeScript parser: same AST fidelity as ts-morph but without its
+// wrapper layer, which dominates fast-mode time. Used when we only need specifiers + value-binding, not
+// cross-file resolution.
+function createFastImportAnalyzer(
+  classifyEdge: (specifier: string) => EdgeKind,
+): (absoluteFilePath: string) => ResolvedImport[] {
+  return (absoluteFilePath: string): ResolvedImport[] =>
+    parseFastImports(absoluteFilePath).map((imp) => ({
+      specifier: imp.specifier,
+      edgeKind: classifyEdge(imp.specifier),
+      throughBarrel: false,
+      valueLeafPaths: [],
+      typeLeafPaths: [],
+      hasValueBinding: imp.hasValueBinding,
+    }));
+}
+
 export function createImportAnalyzer(
   appDir: string,
   options: { resolve?: boolean } = {},
 ): (absoluteFilePath: string) => ResolvedImport[] {
   const resolve = options.resolve ?? true;
-  const project = new Project(
-    resolve
-      ? { tsConfigFilePath: path.join(appDir, 'tsconfig.json'), skipAddingFilesFromTsConfig: true }
-      : { skipAddingFilesFromTsConfig: true },
-  );
   const aliases = Object.keys(buildWorkspaceMap(appDir));
   const workspacePackages = Object.keys(buildWorkspacePackageMap(findWorkspaceRoot(appDir)));
 
+  const matchesPrefix = (specifier: string, names: string[]): boolean =>
+    names.some((name) => specifier === name || specifier.startsWith(name + '/'));
+
+  const classifyEdge = (specifier: string, target: SourceFile | undefined): EdgeKind => {
+    if (specifier.startsWith('.')) return 'relative';
+    if (matchesPrefix(specifier, aliases)) return 'alias';
+    if (matchesPrefix(specifier, workspacePackages)) return 'workspace';
+    if (target === undefined) return 'unresolved';
+    return target.getFilePath().includes('/node_modules/') ? 'external' : 'workspace';
+  };
+
+  if (!resolve) {
+    return createFastImportAnalyzer((specifier) => classifyEdge(specifier, undefined));
+  }
+
+  const project = new Project({
+    tsConfigFilePath: path.join(appDir, 'tsconfig.json'),
+    skipAddingFilesFromTsConfig: true,
+  });
   const aliasDirs = Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
     prefix: key.replace(/\/?\*$/, ''),
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
@@ -153,17 +258,6 @@ export function createImportAnalyzer(
     return map;
   };
 
-  const matchesPrefix = (specifier: string, names: string[]): boolean =>
-    names.some((name) => specifier === name || specifier.startsWith(name + '/'));
-
-  const classifyEdge = (specifier: string, target: SourceFile | undefined): EdgeKind => {
-    if (specifier.startsWith('.')) return 'relative';
-    if (matchesPrefix(specifier, aliases)) return 'alias';
-    if (matchesPrefix(specifier, workspacePackages)) return 'workspace';
-    if (target === undefined) return 'unresolved';
-    return target.getFilePath().includes('/node_modules/') ? 'external' : 'workspace';
-  };
-
   return (absoluteFilePath: string): ResolvedImport[] => {
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
     const results: ResolvedImport[] = sourceFile
@@ -171,16 +265,6 @@ export function createImportAnalyzer(
       .map((importDeclaration) => {
         const specifier = importDeclaration.getModuleSpecifierValue();
         const hasValueBinding = importHasValueBinding(importDeclaration);
-        if (!resolve) {
-          return {
-            specifier,
-            edgeKind: classifyEdge(specifier, undefined),
-            throughBarrel: false,
-            valueLeafPaths: [],
-            typeLeafPaths: [],
-            hasValueBinding,
-          };
-        }
         const target = importDeclaration.getModuleSpecifierSourceFile();
         const edgeKind = classifyEdge(specifier, target);
         const throughBarrel = target !== undefined && isBarrelFile(target);
