@@ -48,10 +48,24 @@ Useful scripts:
   `feat(detector): infer public-API boundaries`.
 - Every meaningful change includes a changeset: `npx changeset`. Do not hand edit versions or the changelog.
 
-## Pull requests
+## Branching and pull requests
 
-Open a PR against `develop`. CI must pass: format check, lint, typecheck, tests with coverage, and build. Keep
-PRs focused and describe the evidence behind any behavior change.
+Archprint uses two long-lived branches:
+
+- **`develop`** — the integration branch. **Open all PRs against `develop`.**
+- **`main`** — the release branch. Always releasable; publishing to npm is automated on merge to `main`.
+
+The flow:
+
+1. Fork the repo, branch from `develop` (`feat/…`, `fix/…`).
+2. Make your change, add tests, and run `npx changeset` for anything user-facing.
+3. Open a PR **to `develop`**. CI (`verify`) must pass: format check, lint, typecheck, tests with coverage, and
+   build. A maintainer reviews and merges.
+4. Releases happen when a maintainer promotes `develop` → `main`: Changesets opens a "Version Packages" PR, and
+   merging it publishes the new version.
+
+Keep PRs focused and describe the evidence behind any behavior change. By participating you agree to the
+[Code of Conduct](./CODE_OF_CONDUCT.md); report security issues privately per the [Security Policy](./SECURITY.md).
 
 ## Conservative bias
 
