@@ -35,8 +35,9 @@ yarn-error.log*
 # ── A/B evaluation harness (local only, one subfolder per day) ──
 ab/
 
-# ── Private strategy / planning docs — never ship in the public repo ──
-docs/
+# Private strategy / planning docs live under ab/ (ignored above). Public docs live in docs/ and ARE committed.
+# Guard: only markdown is tracked in docs/; stray rendered/planning files (e.g. .html) stay private.
+docs/*.html
 
 # generated at test time
 tests/generator/__generated__/

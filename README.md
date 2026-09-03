@@ -227,6 +227,13 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 | `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                    |
 | `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                     |
 
+## Documentation
+
+Full docs live in [`docs/`](./docs/): [getting started](./docs/getting-started.md),
+[concepts](./docs/concepts.md) (the confidence gate, mechanical vs. structural, fast vs. deep, the
+generate/wire/eject lifecycle), and the [rule-family reference](./docs/rules.md) (what each rule detects, how it
+ships, and when not to use it).
+
 ## Fast and deep modes
 
 `scan` defaults to a **fast** specifier level pass (no type checker). `generate` defaults to a
