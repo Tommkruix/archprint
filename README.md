@@ -91,7 +91,9 @@ evidence no longer supports, so the output never drifts from the current codebas
 enforcement tools your repo already uses (a flat eslint config, a `.dependency-cruiser.json`) and inserts a
 single managed reference into each, one that survives those regenerations; `eject` removes archprint's files
 and every wired reference, restoring each config exactly. For a tool config it cannot safely edit (a JS
-dependency-cruiser config, say), it prints the exact snippet to paste.
+dependency-cruiser config, say), it prints the exact snippet to paste. The flagship forbidden-import rules
+(AP-) ship as a generated local eslint plugin that the eslint reference activates, so wiring the eslint config
+enforces them too, no extra install.
 
 `recommend` sorts every rule family into three tiers: rules your code already
 follows (enforce now), rules with thin evidence (review and adopt), and rules that
