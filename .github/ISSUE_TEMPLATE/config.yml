@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/Tommkruix/archprint/discussions
+    about: For questions and open-ended discussion, please use Discussions.
+  - name: Documentation
+    url: https://tommkruix.github.io/archprint/
+    about: Getting started, concepts, and the rule-family reference.
+  - name: Security vulnerability
+    url: https://github.com/Tommkruix/archprint/security/advisories/new
+    about: Report security issues privately, not as a public issue.

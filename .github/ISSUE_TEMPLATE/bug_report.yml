@@ -1,0 +1,44 @@
+name: Bug report
+description: Something Archprint did wrong, a bad rule, a crash, or wrong output.
+labels: ['bug']
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you run, and what went wrong?
+      placeholder: e.g. `archprint scan .` reported a rule that isn't true for my repo.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s), and if possible a minimal repo or snippet.
+      value: |
+        1. Command:
+        2. Repo shape / relevant files:
+        3. Output:
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Archprint version
+      description: Output of `archprint --version` (or the npm version you installed).
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Node version, OS, package manager.
+      placeholder: Node 22, macOS, npm
+    validations:
+      required: true
