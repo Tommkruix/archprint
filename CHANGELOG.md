@@ -4,13 +4,13 @@
 
 ### Minor Changes
 
-- 621dd8f: Add a self-consistency guardrail (roadmap A2). Before `generate` writes anything, it verifies every AUTO rule
+- 621dd8f: Add a self-consistency guardrail. Before `generate` writes anything, it verifies every AUTO rule
   it would emit is internally coherent: it governs a non-empty population, and the exception files its gate
   recorded exactly match the violations it lists (and stay within the exception budget). If any rule fails,
   generate refuses to write and names the rule, so a detector regression can never ship an incoherent rule. The
   check is exported as `checkSelfConsistency` and covered by a test that both confirms real repos are clean and
   that an injected inconsistency is caught.
-- b6cebc9: Separate rule applicability from role-classification confidence in the confidence gate (roadmap A4). The gate
+- b6cebc9: Separate rule applicability from role-classification confidence in the confidence gate. The gate
   previously overloaded `roleConfidence`: detectors passed `0` both to mean "this rule governs nothing" (vacuous)
   and paid the price when a role was real but only moderately identifiable, so a genuinely-followed rule over a
   low-confidence role was silently REJECTed. The gate now takes an explicit `applicable` flag for the vacuous
@@ -81,7 +81,7 @@
   handlers) are loaded by the framework and should not be imported by other first-party code. `detectEntryPurity`
   counts entries with a non-zero first-party in-degree and gates the rule with the Wilson floor; `archprint
 generate` writes `dependency-cruiser.entry-purity.archprint.json`.
-- 667de54: Make `archprint explain` actionable (roadmap B2). Each explanation now shows, below the gate breakdown, a
+- 667de54: Make `archprint explain` actionable. Each explanation now shows, below the gate breakdown, a
   codeframe for every exception (the offending import line with its line number), a "How to fix" line, a "When
   not to use this" caveat, and a "How to enforce" line that names the exact next command for the rule's gate
   status. Per-rule guidance lives in a single `rule-guidance` source and the codeframe reader is a small,
@@ -111,7 +111,7 @@ generate` writes `dependency-cruiser.entry-purity.archprint.json`.
   every pattern per role. Previously a role matched by more than one rule would have collapsed to a single
   pattern in generated rules; with the new multi-framework rules this would have dropped variants.
 
-- bbae98a: Grandfather known exceptions in the generated AP- eslint rules (roadmap B3). An AUTO rule is inferred because the
+- bbae98a: Grandfather known exceptions in the generated AP- eslint rules. An AUTO rule is inferred because the
   code already follows it apart from at most a few exception files; the generated plugin rule now skips exactly
   those files, so wiring the rule and running the linter is green on the current codebase (no red wall on day one)
   while any new violation elsewhere is still caught, the standard ratchet. The exceptions remain visible in `scan`
@@ -122,7 +122,7 @@ generate` writes `dependency-cruiser.entry-purity.archprint.json`.
   `layer-graph.archprint.dot` whenever layers are present. Each interacting layer pair renders as a weighted
   directed edge: the dominant dependency is a solid arrow, and a leak that runs against an inferred boundary is
   dotted (Mermaid) or dashed red (DOT), so a reader sees the architecture and where it is violated.
-- 0671bf9: Add `archprint init` (roadmap B1): a single zero-config onboarding command. It detects the repo's stack, scans
+- 0671bf9: Add `archprint init`: a single zero-config onboarding command. It detects the repo's stack, scans
   the import graph, writes enforcement configs for the rules the code already follows (mechanical families by
   default, `--include-structural` to add the review-tier families), and records an `archprint.json` manifest with
   the three census-backed recommendation tiers (enforce now / review / adopt) so the setup is reproducible and
@@ -130,7 +130,7 @@ generate` writes `dependency-cruiser.entry-purity.archprint.json`.
   before writing, and prints a friendly summary with next steps. The writer orchestration shared with `generate`
   was extracted into a single `writeEnforcementConfigs` helper so the mechanical/structural partition lives in one
   place.
-- f4943d8: Add machine-readable output (roadmap B4). `scan --json` emits a stable, serializable summary (per app: file and
+- f4943d8: Add machine-readable output. `scan --json` emits a stable, serializable summary (per app: file and
   alias counts, plus each non-rejected rule with its family, status, observed conformance, confidence floor,
   observations, and violating-file count), and `recommend --json` emits the three recommendation tiers as JSON.
   Both are keyed by `archprintVersion` for forward compatibility, making archprint scriptable in CI. Exit codes are
@@ -143,14 +143,14 @@ generate` writes `dependency-cruiser.entry-purity.archprint.json`.
   available; both agree on the enforced (AUTO) boundaries. This is the first of the broader rule families that
   bring Archprint level with hand-written architecture-conformance tools, with the difference that the rules
   are inferred from the real import graph and evidence-gated rather than hand-written.
-- 0f41d6f: Add the generated-output lifecycle (roadmap B6, part 1). Archprint now records everything it writes into an
+- 0f41d6f: Add the generated-output lifecycle. Archprint now records everything it writes into an
   `.archprint-outputs.json` manifest in the output directory, so it owns a precise, safe list of its own files.
   `generate` and `init` now clean their previous outputs before writing fresh ones, so a rule the evidence no
   longer supports stops being enforced instead of lingering as a stale file (upholds the conservative-bias
   principle). A new `archprint eject` command removes archprint's generated files and its config manifests cleanly
   (`--dry-run` to preview), giving a clean uninstall. The clean step only ever touches paths archprint recorded
   as its own, and refuses to delete anything outside the output directory.
-- 38789b8: Make the flagship forbidden-import rules (AP-) loadable and enforceable (roadmap B7). `generate`/`init` now emit
+- 38789b8: Make the flagship forbidden-import rules (AP-) loadable and enforceable. `generate`/`init` now emit
   a self-contained local eslint plugin (`eslint-plugin.archprint.mjs`) that implements each AUTO forbidden-import
   rule faithfully to the detector (matches the import specifier, skips type-only imports, and only applies to files
   whose path matches the rule's role). The eslint aggregator loads the plugin so a single wired reference activates
@@ -275,7 +275,7 @@ roleConfidence }`.
   the first config, keeping the file's formatting, and `eject` restores it exactly. Config shapes it still cannot
   parse fall back to the printed snippet as before. Proven end-to-end: wiring archprint's own `tseslint.config()`
   eslint config and running the real eslint engine fires the generated `no-console` rule.
-- 1ddb697: Add `archprint wire` to reference the generated eslint rules from your flat eslint config (roadmap B6, part 2).
+- 1ddb697: Add `archprint wire` to reference the generated eslint rules from your flat eslint config.
   `generate`/`init` now also emit an aggregator (`eslint.archprint.mjs`) that globs archprint's eslint rule blocks,
   so the reference is one stable line that survives regeneration (new rules are picked up, dropped ones disappear,
   without re-wiring). `wire` inserts a MANAGED, reversible block (a marked import + one spread) into a flat
@@ -323,7 +323,7 @@ generate` writes `eslint.workspace-package.archprint.json` (a `no-restricted-imp
     `@scope/core/prisma-client`), not only files that instantiate a client. This closes a false-AUTO gap where
     direct database access through a re-export surface was invisible.
 
-- 4d2a0fc: Speed up fast-mode scanning about 2.6x (roadmap C1/C2). Fast mode now extracts imports with the raw TypeScript
+- 4d2a0fc: Speed up fast-mode scanning about 2.6x. Fast mode now extracts imports with the raw TypeScript
   parser instead of ts-morph's heavier wrapper layer (same AST fidelity, no regex parsing), and caches each file's
   parse by path + mtime + size so the many detectors that scan the same files reuse one parse instead of
   re-parsing. On inbox-zero (2,232 files) a fast scan drops from ~13.5s to ~5.2s. Output is unchanged: the
