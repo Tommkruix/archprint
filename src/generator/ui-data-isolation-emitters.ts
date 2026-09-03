@@ -11,7 +11,10 @@ const dataPath = (): string => {
   return `(${sources.join('|')})`;
 };
 
-const componentPath = (): string => (ROLE_PATTERNS.get('COMPONENT') ?? [])[0]?.source ?? '\\.tsx$';
+const componentPath = (): string => {
+  const sources = (ROLE_PATTERNS.get('COMPONENT') ?? []).map((pattern) => pattern.source);
+  return sources.length > 0 ? `(${sources.join('|')})` : '\\.tsx$';
+};
 
 export interface UiDataRule {
   name: string;

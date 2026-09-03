@@ -45,6 +45,8 @@ describe('classifyFile', () => {
     ['apps/api/v2/test/fixtures/repo.fixture.ts', 'TEST'],
     ['apps/web/__tests__/eval/judge.ts', 'TEST'],
     ['apps/web/components/Button.tsx', 'COMPONENT'],
+    ['src/app/user/user.component.ts', 'COMPONENT'],
+    ['src/app/shared/highlight.directive.ts', 'COMPONENT'],
     ['apps/web/README.md', 'UNKNOWN'],
     ['apps/web/utils/format.ts', 'UNKNOWN'],
   ];
