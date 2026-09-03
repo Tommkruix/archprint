@@ -1,5 +1,11 @@
 # Archprint
 
+[![npm version](https://img.shields.io/npm/v/archprint.svg)](https://www.npmjs.com/package/archprint)
+[![CI](https://github.com/Tommkruix/archprint/actions/workflows/ci.yml/badge.svg)](https://github.com/Tommkruix/archprint/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/archprint.svg)](https://www.npmjs.com/package/archprint)
+[![license](https://img.shields.io/npm/l/archprint.svg)](./LICENSE)
+[![docs](https://img.shields.io/badge/docs-live-blue)](https://tommkruix.github.io/archprint/)
+
 **Mine the architecture rules your repo already enforces, with the evidence attached.**
 
 Archprint scans a TypeScript repository's real import graph, finds the architectural boundaries the code
@@ -22,9 +28,9 @@ from paths, which can be wrong, so Archprint holds them for human review by defa
 enforcing them. Nothing whose inferred layer or role could be wrong is written as enforcement without you
 opting in.
 
-> Status: `0.1.0`, pre-stable (0.x may break between minor versions). Not yet published to npm. Production-ready
-> today: the insight commands (`scan`, `recommend`) and the auto-enforcement of the mechanical families above.
-> The structural families are review-only while they are hardened.
+> Status: published on npm, pre-stable (0.x may break between minor versions). Production-ready today: the
+> insight commands (`scan`, `recommend`) and the auto-enforcement of the mechanical families above. The
+> structural families are review-only while they are hardened.
 
 ## What makes it different
 
@@ -36,7 +42,17 @@ your stack rather than replacing it.
 
 ## Install
 
-Not yet on npm. For now, build from source:
+```bash
+npm install --save-dev archprint
+```
+
+Then run it (or use `npx archprint …` without installing):
+
+```bash
+npx archprint scan .
+```
+
+Or build from source:
 
 ```bash
 git clone https://github.com/Tommkruix/archprint
@@ -44,13 +60,6 @@ cd archprint
 npm ci
 npm run build
 node dist/cli.js scan <path-to-your-app>
-```
-
-Once published, it will install as a normal dev dependency:
-
-```bash
-npm install --save-dev archprint
-npx archprint scan .
 ```
 
 Requires Node >= 20. Point Archprint at an app directory that has a `tsconfig.json` (for a monorepo, a
