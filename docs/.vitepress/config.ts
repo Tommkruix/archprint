@@ -13,6 +13,7 @@ export default defineConfig({
       { text: 'Getting started', link: '/getting-started' },
       { text: 'Concepts', link: '/concepts' },
       { text: 'Rules', link: '/rules' },
+      { text: 'Changelog', link: '/changelog' },
     ],
     sidebar: [
       {
@@ -21,6 +22,7 @@ export default defineConfig({
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Concepts', link: '/concepts' },
           { text: 'Rules', link: '/rules' },
+          { text: 'Changelog', link: '/changelog' },
         ],
       },
     ],
