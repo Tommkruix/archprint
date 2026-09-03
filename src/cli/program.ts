@@ -244,7 +244,8 @@ export function buildProgram(version = readVersion()): Command {
     .argument('[path]', 'app directory', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
     .action((id: string, input: string, options: { deep?: boolean }) => {
-      console.log(renderExplain(findPattern(input, id, Boolean(options.deep)).pattern));
+      const { appDir, pattern } = findPattern(input, id, Boolean(options.deep));
+      console.log(renderExplain(pattern, appDir));
     });
 
   program

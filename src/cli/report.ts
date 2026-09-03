@@ -7,6 +7,9 @@ import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 import type { Recommendations } from './recommend.js';
 import type { InitManifest } from './init.js';
+import { locateImport } from './codeframe.js';
+import { guidanceFor } from './rule-guidance.js';
+import type { GenerationStatus } from '../detector/confidence-gate.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
 const paint =
@@ -478,7 +481,15 @@ export function renderReport(
   return lines.join('\n');
 }
 
-export function renderExplain(pattern: ScannedPattern): string {
+function enforceHint(id: string, status: GenerationStatus): string {
+  if (status === 'AUTO')
+    return `archprint generate  (writes the rule + fixtures to archprint-rules/, then wire it into your eslint config)`;
+  if (status === 'SUGGEST')
+    return `review the evidence above, then: archprint approve ${id}  (writes the rule to archprint-rules/)`;
+  return 'this pattern does not meet the confidence gate, so there is nothing to enforce yet.';
+}
+
+export function renderExplain(pattern: ScannedPattern, appDir: string): string {
   const { config, result } = pattern;
   const lines = [
     bold(`${config.id}  ${config.name}`),
@@ -501,11 +512,17 @@ export function renderExplain(pattern: ScannedPattern): string {
   if (result.violations.length > 0) {
     lines.push('', 'Exceptions:');
     for (const violation of result.violations.slice(0, 10)) {
-      lines.push(dim(`  ${violation.file}  ->  ${violation.specifier}`));
+      lines.push(`  ${violation.file}  ->  ${violation.specifier}`);
+      const frame = locateImport(appDir, violation.file, violation.specifier);
+      if (frame) lines.push(dim(`    ${frame.line} | ${frame.text}`));
     }
     if (result.violations.length > 10)
       lines.push(dim(`  ... and ${result.violations.length - 10} more`));
   }
+  const guidance = guidanceFor(config.name);
+  lines.push('', bold('How to fix'), `  ${guidance.howToFix}`);
+  lines.push(bold('When not to use this'), dim(`  ${guidance.whenNotToUse}`));
+  lines.push(bold('How to enforce'), `  ${enforceHint(config.id, result.gate.status)}`);
   return lines.join('\n');
 }
 

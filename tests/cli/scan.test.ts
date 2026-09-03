@@ -481,9 +481,12 @@ describe('cli scan', () => {
 
   it('renders a gate breakdown for a pattern', () => {
     const pattern = scanRepo(fixture).patterns[0]!;
-    const explained = renderExplain(pattern);
+    const explained = renderExplain(pattern, fixture);
     expect(explained).toContain(pattern.config.id);
     expect(explained).toContain('Gate:');
+    expect(explained).toContain('How to fix');
+    expect(explained).toContain('When not to use this');
+    expect(explained).toContain('How to enforce');
   });
 
   it('truncates the exception list in explain past ten', () => {
@@ -493,7 +496,27 @@ describe('cli scan', () => {
       specifier: '@/x',
       leaf: 'x',
     }));
-    expect(renderExplain(pattern)).toContain('and 1 more');
+    expect(renderExplain(pattern, fixture)).toContain('and 1 more');
+  });
+
+  it('shows a codeframe for an exception whose source file exists', () => {
+    const pattern = fakePattern('AP-001', 'SUGGEST');
+    pattern.result.violations = [
+      { file: 'src/server/db.ts', specifier: '@prisma/client', leaf: '@prisma/client' },
+    ];
+    const explained = renderExplain(pattern, fixture);
+    expect(explained).toContain('src/server/db.ts');
+    expect(explained).toContain('1 | import { PrismaClient }');
+  });
+
+  it('explains a rejected pattern as having nothing to enforce yet', () => {
+    const pattern = fakePattern('AP-001', 'SUGGEST');
+    pattern.result.gate = evaluateGate({
+      roleFileCount: 50,
+      violatingFileCount: 40,
+      roleConfidence: 0.9,
+    });
+    expect(renderExplain(pattern, fixture)).toContain('nothing to enforce');
   });
 
   it('separates AUTO into GENERATED and SUGGEST into SUGGESTIONS', () => {
