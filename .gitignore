@@ -44,3 +44,7 @@ tests/generator/__generated__/
 
 tests/cli/__generated__/
 tests/cli/__prog__/
+
+# VitePress build output + cache
+docs/.vitepress/dist/
+docs/.vitepress/cache/

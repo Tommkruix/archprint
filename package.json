@@ -57,6 +57,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "prepublishOnly": "npm run build && npm run test",
     "changeset": "changeset",
     "release": "changeset publish",
@@ -91,6 +94,7 @@
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.22.4",
     "typescript-eslint": "^8.62.1",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.9"
   }
 }

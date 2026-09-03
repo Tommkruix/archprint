@@ -8,3 +8,7 @@ ab
 # Intentionally malformed / fixed-shape config fixtures. Formatting them would
 # defeat the tests that prove the resolver tolerates JSONC and odd layouts.
 tests/fixtures
+
+# VitePress build output + cache
+docs/.vitepress/dist
+docs/.vitepress/cache
