@@ -73,8 +73,8 @@ archprint generate apps/web --out archprint-rules
 # Inspect the gate evidence behind one rule
 archprint explain AP-002 apps/web
 
-# Generate a provisional (SUGGEST) rule after reviewing it
-archprint approve AP-001 apps/web
+# Generate a single rule by id after reviewing it (including a SUGGEST rule)
+archprint generate apps/web --rule AP-001
 
 # Recommend a rule set from the evidence and the detected stack (fresh repos too)
 archprint recommend apps/web
@@ -217,20 +217,19 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 
 ## Commands
 
-| Command                         | What it does                                                                                                                                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write an `archprint.json` with the adopt tiers. `--include-structural`, `--out <dir>`, `--fast`, `--force`. |
-| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                         |
-| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--include-structural`, `--out <dir>`, `--fast`.                                                       |
-| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                       |
-| `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                                                                                                                       |
-| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                                                                                    |
-| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.        |
-| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                         |
+| Command                         | What it does                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write an `archprint.json` with the adopt tiers. `--include-structural`, `--out <dir>`, `--fast`, `--force`.             |
+| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                     |
+| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--rule <id>` emits one reviewed rule (including a SUGGEST rule). `--include-structural`, `--out <dir>`, `--fast`. |
+| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                   |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                                                                                                |
+| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                    |
+| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                     |
 
 ## Fast and deep modes
 
-`scan` defaults to a **fast** specifier level pass (no type checker). `generate` and `approve` default to a
+`scan` defaults to a **fast** specifier level pass (no type checker). `generate` defaults to a
 **deep** pass that resolves through barrels and workspace aliases, since generation is the commitment point.
 Structural analysis (cycles, orphans, reachability, public-API) always uses the fast graph: it is faithful to
 deep resolution for those, and public-API detection in fact requires it (deep resolution would resolve through

@@ -239,13 +239,13 @@ describe('cli program', () => {
     expect(output()).toContain('Gate:');
   });
 
-  it('approve generates a specific rule after review', async () => {
-    await run(['approve', 'AP-001', auto, '--out', out]);
+  it('generate --rule emits a specific rule after review', async () => {
+    await run(['generate', auto, '--rule', 'AP-001', '--out', out]);
     expect(existsSync(path.join(out, 'no-db-client-in-request-entry'))).toBe(true);
   });
 
-  it('approve --fast warns to confirm with a deep pass', async () => {
-    await run(['approve', 'AP-001', auto, '--fast', '--out', out]);
+  it('generate --rule --fast warns to confirm with a deep pass', async () => {
+    await run(['generate', auto, '--rule', 'AP-001', '--fast', '--out', out]);
     expect(output()).toContain('Warning');
   });
 

@@ -190,8 +190,26 @@ export function buildProgram(version = readVersion()): Command {
       '--include-structural',
       'also emit the structural-inference families (layer, role, entry-purity, ui/data, server/client, feature-slice, app-isolation, stories, env, workspace-package) as AUTO. Held for review by default: the Phase A audit found their inferred layers/roles can be wrong; review before enforcing.',
     )
+    .option(
+      '--rule <id>',
+      'emit a single rule by id (e.g. AP-001) after reviewing its evidence with `explain`, including a SUGGEST rule',
+    )
     .action(
-      (input: string, options: { out: string; fast?: boolean; includeStructural?: boolean }) => {
+      (
+        input: string,
+        options: { out: string; fast?: boolean; includeStructural?: boolean; rule?: string },
+      ) => {
+        if (options.rule !== undefined) {
+          const { appDir, pattern } = findPattern(input, options.rule, !options.fast);
+          const dir = emitOne(pattern, appDir, path.resolve(options.out));
+          console.log(`generated ${path.relative(process.cwd(), dir)}/`);
+          if (options.fast) {
+            console.log(
+              'Warning: generated from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
+            );
+          }
+          return;
+        }
         const scan = scanRepo(resolveApp(input), { deep: !options.fast });
         const issues = checkSelfConsistency(scan);
         /* v8 ignore start -- defensive guardrail: fires only if a detector regresses into inconsistency */
@@ -269,26 +287,6 @@ export function buildProgram(version = readVersion()): Command {
     .action((id: string, input: string, options: { deep?: boolean }) => {
       const { appDir, pattern } = findPattern(input, id, Boolean(options.deep));
       console.log(renderExplain(pattern, appDir));
-    });
-
-  program
-    .command('approve')
-    .description(
-      'Generate a SUGGEST rule after reviewing its evidence (resolves the graph by default)',
-    )
-    .argument('<id>', 'rule id, e.g. AP-001')
-    .argument('[path]', 'app directory', '.')
-    .option('-o, --out <dir>', 'output directory', 'archprint-rules')
-    .option('--fast', 'skip barrel/alias resolution (faster, less accurate)')
-    .action((id: string, input: string, options: { out: string; fast?: boolean }) => {
-      const { appDir, pattern } = findPattern(input, id, !options.fast);
-      const dir = emitOne(pattern, appDir, path.resolve(options.out));
-      console.log(`generated ${path.relative(process.cwd(), dir)}/`);
-      if (options.fast) {
-        console.log(
-          'Warning: approved from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
-        );
-      }
     });
 
   program

@@ -137,7 +137,7 @@ export function renderReport(
     lines.push(yellow(bold('SUGGESTIONS')));
     for (const pattern of suggest) {
       lines.push(...patternLines(pattern));
-      lines.push(dim(`          Run: archprint approve ${pattern.config.id}`));
+      lines.push(dim(`          Run: archprint generate --rule ${pattern.config.id}`));
     }
     lines.push('');
   }
@@ -485,7 +485,7 @@ function enforceHint(id: string, status: GenerationStatus): string {
   if (status === 'AUTO')
     return `archprint generate  (writes the rule + fixtures to archprint-rules/, then wire it into your eslint config)`;
   if (status === 'SUGGEST')
-    return `review the evidence above, then: archprint approve ${id}  (writes the rule to archprint-rules/)`;
+    return `review the evidence above, then: archprint generate --rule ${id}  (writes the rule to archprint-rules/)`;
   return 'this pattern does not meet the confidence gate, so there is nothing to enforce yet.';
 }
 

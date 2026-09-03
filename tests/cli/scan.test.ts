@@ -529,7 +529,7 @@ describe('cli scan', () => {
     expect(report).toContain('GENERATED RULES');
     expect(report).toContain('AP-002');
     expect(report).toContain('SUGGESTIONS');
-    expect(report).toContain('archprint approve AP-001');
+    expect(report).toContain('archprint generate --rule AP-001');
   });
 
   it('renders inferred layer boundaries in their own section', () => {
