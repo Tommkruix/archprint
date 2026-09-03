@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch: # allow manual re-runs from the Actions tab
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
