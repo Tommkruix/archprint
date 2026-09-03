@@ -221,3 +221,89 @@ export function writeGraph(scan: ScanResult, outDir: string): string[] {
     write('layer-graph.archprint.dot', toGraphviz(scan.layerBoundaries)),
   ];
 }
+
+export interface WrittenConfig {
+  files: string[];
+  label: string | null;
+}
+
+const countAuto = (items: readonly { gate: { status: GenerationStatus } }[]): number =>
+  items.filter((item) => item.gate.status === 'AUTO').length;
+
+export function writeEnforcementConfigs(
+  scan: ScanResult,
+  outDir: string,
+  options: { structural?: boolean } = {},
+): WrittenConfig[] {
+  const structural = options.structural ?? false;
+  const configs: WrittenConfig[] = [];
+  const add = (files: string[], label: string | null): void => {
+    if (files.length > 0) configs.push({ files, label });
+  };
+
+  add(writeRules(scan, outDir, ['AUTO']), null);
+  if (structural) {
+    add(
+      writeLayerConfig(scan, outDir, ['AUTO']),
+      `${countAuto(scan.layerBoundaries)} layer boundaries: dependency-cruiser and eslint-plugin-boundaries`,
+    );
+    add(
+      writeRoleLayeringConfig(scan, outDir, ['AUTO']),
+      `${countAuto(scan.roleLayering.boundaries)} role-layering boundaries: dependency-cruiser rules`,
+    );
+  }
+  add(
+    writePublicApiConfig(scan, outDir, ['AUTO']),
+    `${countAuto(scan.publicApi.groups)} public API boundaries: dependency-cruiser deep-import rules`,
+  );
+  if (structural) {
+    add(
+      writeFeatureSliceConfig(scan, outDir, ['AUTO']),
+      `${countAuto(scan.featureSlices.groups)} feature-slice boundaries: dependency-cruiser cross-slice rules`,
+    );
+    add(
+      writeAppIsolationConfig(scan, outDir, ['AUTO']),
+      `${countAuto(scan.appIsolation.groups)} app boundaries: dependency-cruiser cross-app rules`,
+    );
+  }
+  add(
+    writeTestIsolationConfig(scan, outDir),
+    'test isolation: dependency-cruiser not-to-test rule',
+  );
+  add(
+    writeDependencyInternalsConfig(scan, outDir),
+    'dependency hygiene: dependency-cruiser no-internals rule',
+  );
+  if (structural)
+    add(
+      writeEntryPurityConfig(scan, outDir),
+      'entry purity: dependency-cruiser no-import-entry rule',
+    );
+  add(
+    writePhantomDependencyConfig(scan, outDir),
+    'dependency declaration: dependency-cruiser no-phantom-deps rule',
+  );
+  add(writeDeepRelativeConfig(scan, outDir), 'import style: eslint no-restricted-imports rule');
+  add(writeConsoleIsolationConfig(scan, outDir), 'console isolation: eslint no-console rule');
+  if (structural) {
+    add(writeEnvAccessConfig(scan, outDir), 'env access: eslint no-restricted-properties rule');
+    add(
+      writeWorkspacePackageConfig(scan, outDir),
+      'workspace package API: eslint no-restricted-imports rule',
+    );
+    add(
+      writeStoriesIsolationConfig(scan, outDir),
+      'stories isolation: dependency-cruiser no-import-stories rule',
+    );
+    add(
+      writeUiDataConfig(scan, outDir),
+      'UI / data separation: dependency-cruiser no-ui-to-data rule',
+    );
+    add(
+      writeServerClientConfig(scan, outDir),
+      'server / client boundary: dependency-cruiser no-server-only-in-client rule',
+    );
+  }
+  add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
+  return configs;
+}

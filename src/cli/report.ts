@@ -6,6 +6,7 @@ import type { RoleBoundary } from '../detector/role-layering-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 import type { Recommendations } from './recommend.js';
+import type { InitManifest } from './init.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
 const paint =
@@ -535,5 +536,51 @@ export function renderRecommendations(rec: Recommendations, version: string): st
   if (rec.enforceNow.length === 0 && rec.review.length === 0 && rec.adopt.length === 0) {
     lines.push(dim('No recommendations: no stack detected and no code to learn from yet.'));
   }
+  return lines.join('\n');
+}
+
+export function renderInit(
+  manifest: InitManifest,
+  writtenCount: number,
+  structural: boolean,
+  version: string,
+): string {
+  const evidence = (r: { rate: number | null }): string =>
+    r.rate === null ? '' : dim(`  (${r.rate}% of comparable repos)`);
+  const lines = [
+    bold(`Archprint v${version}  initialized`),
+    `Detected stack: ${manifest.stack.length > 0 ? manifest.stack.join(', ') : 'none detected'}`,
+    dim(
+      `Evidence: ${manifest.evidence.apps.toLocaleString()} apps (census ${manifest.evidence.asOf})`,
+    ),
+    '',
+  ];
+  if (writtenCount > 0) {
+    lines.push(
+      green(bold(`Enforcing now -> ${manifest.rulesDir}/ (${writtenCount} rule config(s))`)),
+    );
+    for (const r of manifest.enforced) lines.push(green(`  + ${r.title}`) + evidence(r));
+    if (structural)
+      lines.push(dim('  (includes structural-inference families; review before you trust them)'));
+    lines.push('');
+  } else {
+    lines.push(dim('No rules your code already follows cleanly enough to enforce yet.'), '');
+  }
+  if (manifest.review.length > 0) {
+    lines.push(yellow(bold('Review before enforcing (close, thin or lower-confidence evidence)')));
+    for (const r of manifest.review) lines.push(yellow(`  ~ ${r.title}`) + evidence(r));
+    lines.push('');
+  }
+  if (manifest.adopt.length > 0) {
+    lines.push(bold('Adopt from day one (common in comparable repos, not yet in your code)'));
+    for (const r of manifest.adopt) lines.push(dim(`  - ${r.title}`) + evidence(r));
+    lines.push('');
+  }
+  lines.push(
+    dim(
+      `Wrote archprint.json. Wire ${manifest.rulesDir}/*.json into your dependency-cruiser / eslint`,
+    ),
+    dim("config, then run your linter. Re-run 'archprint scan' any time to see the evidence."),
+  );
   return lines.join('\n');
 }

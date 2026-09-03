@@ -1,33 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import { renderExplain, renderReport, renderRecommendations } from './report.js';
+import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
-import {
-  emitOne,
-  writeAppIsolationConfig,
-  writeConsoleIsolationConfig,
-  writeDeepRelativeConfig,
-  writeDependencyInternalsConfig,
-  writeEnvAccessConfig,
-  writeEntryPurityConfig,
-  writeFeatureSliceConfig,
-  writeGraph,
-  writeLayerConfig,
-  writePhantomDependencyConfig,
-  writePublicApiConfig,
-  writeRoleLayeringConfig,
-  writeRules,
-  writeServerClientConfig,
-  writeStoriesIsolationConfig,
-  writeTestIsolationConfig,
-  writeUiDataConfig,
-  writeWorkspacePackageConfig,
-} from './generate.js';
+import { emitOne, writeEnforcementConfigs } from './generate.js';
+import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -93,6 +74,69 @@ export function buildProgram(version = readVersion()): Command {
     .exitOverride();
 
   program
+    .command('init')
+    .description(
+      'Set up archprint for this repo: detect the stack, enforce the rules your code already follows, and record what to adopt next',
+    )
+    .argument('[path]', 'app directory', '.')
+    .option('-o, --out <dir>', 'output directory for rule configs', 'archprint-rules')
+    .option('--fast', 'skip barrel/alias resolution (faster, less accurate)')
+    .option(
+      '--include-structural',
+      'also enforce the structural-inference families (held for review by default)',
+    )
+    .option('--force', `overwrite an existing ${INIT_MANIFEST_FILE} and rule configs`)
+    .action(
+      (
+        input: string,
+        options: { out: string; fast?: boolean; includeStructural?: boolean; force?: boolean },
+      ) => {
+        const appDir = resolveApp(input);
+        const manifestPath = path.resolve(INIT_MANIFEST_FILE);
+        if (existsSync(manifestPath) && !options.force) {
+          console.error(
+            `${INIT_MANIFEST_FILE} already exists. Re-run with --force to overwrite, or use 'archprint scan' / 'archprint generate' directly.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        const scan = scanRepo(appDir, { deep: !options.fast });
+        const issues = checkSelfConsistency(scan);
+        /* v8 ignore start -- defensive guardrail: fires only if a detector regresses into inconsistency */
+        if (issues.length > 0) {
+          console.error(
+            'Refusing to init: a rule failed the self-consistency check (its evidence does not match what it would enforce):',
+          );
+          for (const issue of issues) console.error(`  - ${issue.rule}: ${issue.problem}`);
+          process.exitCode = 1;
+          return;
+        }
+        /* v8 ignore stop */
+        const outDir = path.resolve(options.out);
+        const structural = options.includeStructural ?? false;
+        const configs = writeEnforcementConfigs(scan, outDir, { structural });
+        const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
+        const recommendations = buildRecommendations(scan, detectStack(appDir));
+        const cwd = process.cwd();
+        const relOrAbs = (target: string): string => {
+          const rel = path.relative(cwd, target);
+          return rel === '' ? '.' : rel.startsWith('..') ? target : rel;
+        };
+        const manifest = buildInitManifest(recommendations, version, {
+          app: relOrAbs(appDir),
+          rulesDir: relOrAbs(outDir),
+        });
+        writeInitManifest(manifest, manifestPath);
+        console.log(renderInit(manifest, writtenCount, structural, version));
+        if (options.fast) {
+          console.log(
+            '\nWarning: rules came from a fast specifier-level scan; re-run without --fast before enforcing.',
+          );
+        }
+      },
+    );
+
+  program
     .command('scan')
     .description('Scan an app and report the rules it already follows')
     .argument('[path]', 'app directory (contains tsconfig.json)', '.')
@@ -150,44 +194,8 @@ export function buildProgram(version = readVersion()): Command {
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
-        const written = writeRules(scan, outDir, ['AUTO']);
-        const layerFiles = structural ? writeLayerConfig(scan, outDir, ['AUTO']) : [];
-        const roleFiles = structural ? writeRoleLayeringConfig(scan, outDir, ['AUTO']) : [];
-        const apiFiles = writePublicApiConfig(scan, outDir, ['AUTO']);
-        const sliceFiles = structural ? writeFeatureSliceConfig(scan, outDir, ['AUTO']) : [];
-        const appFiles = structural ? writeAppIsolationConfig(scan, outDir, ['AUTO']) : [];
-        const testIsoFiles = writeTestIsolationConfig(scan, outDir);
-        const depFiles = writeDependencyInternalsConfig(scan, outDir);
-        const entryFiles = structural ? writeEntryPurityConfig(scan, outDir) : [];
-        const phantomFiles = writePhantomDependencyConfig(scan, outDir);
-        const deepRelFiles = writeDeepRelativeConfig(scan, outDir);
-        const consoleFiles = writeConsoleIsolationConfig(scan, outDir);
-        const envFiles = structural ? writeEnvAccessConfig(scan, outDir) : [];
-        const wpkgFiles = structural ? writeWorkspacePackageConfig(scan, outDir) : [];
-        const storiesFiles = structural ? writeStoriesIsolationConfig(scan, outDir) : [];
-        const uiDataFiles = structural ? writeUiDataConfig(scan, outDir) : [];
-        const serverClientFiles = structural ? writeServerClientConfig(scan, outDir) : [];
-        const graphFiles = writeGraph(scan, outDir);
-        if (
-          written.length === 0 &&
-          layerFiles.length === 0 &&
-          roleFiles.length === 0 &&
-          apiFiles.length === 0 &&
-          sliceFiles.length === 0 &&
-          appFiles.length === 0 &&
-          testIsoFiles.length === 0 &&
-          depFiles.length === 0 &&
-          entryFiles.length === 0 &&
-          phantomFiles.length === 0 &&
-          deepRelFiles.length === 0 &&
-          consoleFiles.length === 0 &&
-          envFiles.length === 0 &&
-          wpkgFiles.length === 0 &&
-          storiesFiles.length === 0 &&
-          uiDataFiles.length === 0 &&
-          serverClientFiles.length === 0 &&
-          graphFiles.length === 0
-        ) {
+        const configs = writeEnforcementConfigs(scan, outDir, { structural });
+        if (configs.length === 0) {
           if (heldStructuralAuto > 0) {
             console.log(
               `No mechanical AUTO rules to generate. ${heldStructuralAuto} structural rule(s) are held for review; pass --include-structural to emit them (review before enforcing).`,
@@ -201,93 +209,9 @@ export function buildProgram(version = readVersion()): Command {
           const relative = path.relative(process.cwd(), target);
           console.log(`generated ${relative.startsWith('..') ? target : relative}${suffix}`);
         };
-        for (const dir of written) report(dir, '/');
-        for (const file of layerFiles) report(file);
-        if (layerFiles.length > 0) {
-          const count = scan.layerBoundaries.filter(
-            (boundary) => boundary.gate.status === 'AUTO',
-          ).length;
-          console.log(
-            `  (${count} layer boundaries: dependency-cruiser and eslint-plugin-boundaries)`,
-          );
-        }
-        for (const file of roleFiles) report(file);
-        if (roleFiles.length > 0) {
-          const count = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'AUTO').length;
-          console.log(`  (${count} role-layering boundaries: dependency-cruiser rules)`);
-        }
-        for (const file of apiFiles) report(file);
-        if (apiFiles.length > 0) {
-          const count = scan.publicApi.groups.filter(
-            (group) => group.gate.status === 'AUTO',
-          ).length;
-          console.log(`  (${count} public API boundaries: dependency-cruiser deep-import rules)`);
-        }
-        for (const file of sliceFiles) report(file);
-        if (sliceFiles.length > 0) {
-          const count = scan.featureSlices.groups.filter(
-            (group) => group.gate.status === 'AUTO',
-          ).length;
-          console.log(
-            `  (${count} feature-slice boundaries: dependency-cruiser cross-slice rules)`,
-          );
-        }
-        for (const file of appFiles) report(file);
-        if (appFiles.length > 0) {
-          const count = scan.appIsolation.groups.filter(
-            (group) => group.gate.status === 'AUTO',
-          ).length;
-          console.log(`  (${count} app boundaries: dependency-cruiser cross-app rules)`);
-        }
-        for (const file of testIsoFiles) report(file);
-        if (testIsoFiles.length > 0) {
-          console.log('  (test isolation: dependency-cruiser not-to-test rule)');
-        }
-        for (const file of depFiles) report(file);
-        if (depFiles.length > 0) {
-          console.log('  (dependency hygiene: dependency-cruiser no-internals rule)');
-        }
-        for (const file of entryFiles) report(file);
-        if (entryFiles.length > 0) {
-          console.log('  (entry purity: dependency-cruiser no-import-entry rule)');
-        }
-        for (const file of phantomFiles) report(file);
-        if (phantomFiles.length > 0) {
-          console.log('  (dependency declaration: dependency-cruiser no-phantom-deps rule)');
-        }
-        for (const file of deepRelFiles) report(file);
-        if (deepRelFiles.length > 0) {
-          console.log('  (import style: eslint no-restricted-imports rule)');
-        }
-        for (const file of consoleFiles) report(file);
-        if (consoleFiles.length > 0) {
-          console.log('  (console isolation: eslint no-console rule)');
-        }
-        for (const file of envFiles) report(file);
-        if (envFiles.length > 0) {
-          console.log('  (env access: eslint no-restricted-properties rule)');
-        }
-        for (const file of wpkgFiles) report(file);
-        if (wpkgFiles.length > 0) {
-          console.log('  (workspace package API: eslint no-restricted-imports rule)');
-        }
-        for (const file of storiesFiles) report(file);
-        if (storiesFiles.length > 0) {
-          console.log('  (stories isolation: dependency-cruiser no-import-stories rule)');
-        }
-        for (const file of uiDataFiles) report(file);
-        if (uiDataFiles.length > 0) {
-          console.log('  (UI / data separation: dependency-cruiser no-ui-to-data rule)');
-        }
-        for (const file of serverClientFiles) report(file);
-        if (serverClientFiles.length > 0) {
-          console.log(
-            '  (server / client boundary: dependency-cruiser no-server-only-in-client rule)',
-          );
-        }
-        for (const file of graphFiles) report(file);
-        if (graphFiles.length > 0) {
-          console.log('  (layer dependency graph: Mermaid and Graphviz DOT)');
+        for (const config of configs) {
+          for (const file of config.files) report(file, config.label === null ? '/' : '');
+          if (config.label !== null) console.log(`  (${config.label})`);
         }
         if (heldStructuralAuto > 0) {
           console.log(

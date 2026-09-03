@@ -1,4 +1,5 @@
-import { existsSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -237,5 +238,74 @@ describe('cli program', () => {
 
   it('--version is handled by exitOverride', async () => {
     await expect(run(['--version'])).rejects.toMatchObject({ code: 'commander.version' });
+  });
+});
+
+describe('init', () => {
+  let cwd: string;
+  let tmp: string;
+  beforeEach(() => {
+    cwd = process.cwd();
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-init-'));
+    process.chdir(tmp);
+  });
+  afterEach(() => {
+    process.chdir(cwd);
+    rmSync(tmp, { recursive: true, force: true });
+    process.exitCode = 0;
+  });
+
+  it('writes a manifest and enforcement configs and reports the tiers', async () => {
+    await run(['init', auto]);
+    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
+    const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
+    expect(manifest.archprintVersion).toBe('9.9.9');
+    expect(manifest.enforced.length).toBeGreaterThan(0);
+    expect(output()).toContain('initialized');
+    expect(output()).toContain('Enforcing now');
+  });
+
+  it('records "." for the app path when run from the app directory', async () => {
+    cpSync(auto, tmp, { recursive: true });
+    await run(['init', '.']);
+    const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
+    expect(manifest.app).toBe('.');
+    expect(manifest.rulesDir).toBe('archprint-rules');
+  });
+
+  it('refuses to overwrite an existing manifest without --force', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(['init', auto]);
+    await run(['init', auto]);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('already exists');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('overwrites an existing manifest with --force', async () => {
+    await run(['init', auto]);
+    await run(['init', auto, '--force']);
+    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
+    expect(process.exitCode).not.toBe(1);
+  });
+
+  it('reports when no rule is enforceable but still records recommendations', async () => {
+    await run(['init', reject]);
+    const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
+    expect(manifest).toHaveProperty('adopt');
+    expect(output()).toContain('initialized');
+  });
+
+  it('includes structural families with --include-structural and notes the caveat', async () => {
+    await run(['init', layerAuto, '--include-structural']);
+    expect(existsSync(path.join(tmp, 'archprint-rules', 'dependency-cruiser.archprint.json'))).toBe(
+      true,
+    );
+    expect(output()).toContain('review before you trust them');
+  });
+
+  it('warns to confirm with a deep pass when run with --fast', async () => {
+    await run(['init', auto, '--fast']);
+    expect(output()).toContain('Warning');
   });
 });
