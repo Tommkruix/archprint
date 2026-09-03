@@ -59,6 +59,10 @@ package such as `apps/web`; a monorepo root is fine too, Archprint discovers the
 ## Quick start
 
 ```bash
+# One-shot setup: detect the stack, enforce the rules your code already follows,
+# and record what to adopt next in archprint.json
+archprint init apps/web
+
 # See the rules your repo already follows, with the evidence
 archprint scan apps/web
 
@@ -198,13 +202,14 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 
 ## Commands
 
-| Command                         | What it does                                                                                                                               |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                   |
-| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--include-structural`, `--out <dir>`, `--fast`. |
-| `archprint explain <id> [path]` | Show the full gate breakdown for one rule id.                                                                                              |
-| `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                                                                 |
-| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                              |
+| Command                         | What it does                                                                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write an `archprint.json` with the adopt tiers. `--include-structural`, `--out <dir>`, `--fast`, `--force`. |
+| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                         |
+| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--include-structural`, `--out <dir>`, `--fast`.                                                       |
+| `archprint explain <id> [path]` | Show the full gate breakdown for one rule id.                                                                                                                                                    |
+| `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                                                                                                                       |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                                                                                    |
 
 ## Fast and deep modes
 
