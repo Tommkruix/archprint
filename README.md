@@ -79,17 +79,19 @@ archprint approve AP-001 apps/web
 # Recommend a rule set from the evidence and the detected stack (fresh repos too)
 archprint recommend apps/web
 
-# Reference the generated eslint rules from your flat eslint config (managed, reversible)
+# Reference the generated rules from the enforcement tools your repo uses (managed, reversible)
 archprint wire
 
-# Remove archprint's files and any wired reference (clean uninstall)
+# Remove archprint's files and any wired references (clean uninstall)
 archprint eject
 ```
 
 Re-running `generate` (or `init`) refreshes the files in `archprint-rules/` and removes any rule the
-evidence no longer supports, so the output never drifts from the current codebase. `wire` inserts a single
-managed reference into your flat eslint config that survives those regenerations; `eject` removes archprint's
-files and that reference, restoring the config exactly.
+evidence no longer supports, so the output never drifts from the current codebase. `wire` detects the
+enforcement tools your repo already uses (a flat eslint config, a `.dependency-cruiser.json`) and inserts a
+single managed reference into each, one that survives those regenerations; `eject` removes archprint's files
+and every wired reference, restoring each config exactly. For a tool config it cannot safely edit (a JS
+dependency-cruiser config, say), it prints the exact snippet to paste.
 
 `recommend` sorts every rule family into three tiers: rules your code already
 follows (enforce now), rules with thin evidence (review and adopt), and rules that
@@ -221,8 +223,8 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 | `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                       |
 | `archprint approve <id> [path]` | Generate a provisional (SUGGEST) rule after you review it.                                                                                                                                       |
 | `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                                                                                    |
-| `archprint wire`                | Reference the generated eslint rules from your flat eslint config via a managed, reversible block. `--out <dir>`, `--dry-run`.                                                                   |
-| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired reference. `--out <dir>`, `--dry-run`.                                                                                          |
+| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.        |
+| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                         |
 
 ## Fast and deep modes
 

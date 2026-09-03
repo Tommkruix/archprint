@@ -20,7 +20,12 @@ import { toDependencyCruiserServerClient } from '../generator/server-client-emit
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
-import { hasEslintBlocks, writeEslintAggregator } from './wiring.js';
+import {
+  hasDependencyCruiserBlocks,
+  hasEslintBlocks,
+  writeDependencyCruiserAggregate,
+  writeEslintAggregator,
+} from './wiring.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
 export function writeRules(
@@ -319,6 +324,7 @@ export function regenerateConfigs(
   const configs = writeEnforcementConfigs(scan, outDir, { structural: options.structural });
   const allPaths = configs.flatMap((config) => config.files);
   if (hasEslintBlocks(allPaths)) allPaths.push(writeEslintAggregator(outDir));
+  if (hasDependencyCruiserBlocks(allPaths)) allPaths.push(writeDependencyCruiserAggregate(outDir));
   if (allPaths.length > 0) writeOutputsManifest(outDir, allPaths, options.version);
   else removeIfEmpty(outDir);
   return { configs, removed };

@@ -48,7 +48,7 @@ export function importReference(configDir: string, aggregatorPath: string): stri
 
 export interface WireResult {
   changed: boolean;
-  reason?: 'already-wired' | 'no-array-export';
+  reason?: 'already-wired' | 'no-array-export' | 'unparseable';
   content?: string;
 }
 
@@ -109,3 +109,131 @@ export function outDirHasEslintBlocks(outDir: string): boolean {
     (name) => name.startsWith('eslint.') && name.endsWith('.archprint.json'),
   );
 }
+
+export const DC_AGGREGATE_FILE = 'dependency-cruiser.all.archprint.json';
+const DC_CONFIG_NAMES = [
+  '.dependency-cruiser.json',
+  '.dependency-cruiser.js',
+  '.dependency-cruiser.cjs',
+  '.dependency-cruiser.mjs',
+];
+const DC_BLOCK = /^dependency-cruiser\.[^/\\]*\.archprint\.json$/;
+
+const isDcBlock = (name: string): boolean => DC_BLOCK.test(name) && name !== DC_AGGREGATE_FILE;
+
+export function hasDependencyCruiserBlocks(paths: readonly string[]): boolean {
+  return paths.some((p) => isDcBlock(path.basename(p)));
+}
+
+export function outDirHasDependencyCruiserBlocks(outDir: string): boolean {
+  return existsSync(outDir) && readdirSync(outDir).some(isDcBlock);
+}
+
+export function writeDependencyCruiserAggregate(outDir: string): string {
+  const forbidden: unknown[] = [];
+  for (const name of readdirSync(outDir).filter(isDcBlock).sort()) {
+    try {
+      const config = JSON.parse(readFileSync(path.join(outDir, name), 'utf8')) as {
+        forbidden?: unknown[];
+      };
+      if (Array.isArray(config.forbidden)) forbidden.push(...config.forbidden);
+    } catch {
+      /* v8 ignore next -- a malformed block contributes nothing to the aggregate */
+    }
+  }
+  const file = path.join(outDir, DC_AGGREGATE_FILE);
+  writeFileSync(file, `${JSON.stringify({ forbidden }, null, 2)}\n`);
+  return file;
+}
+
+const extendsList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string')
+    : typeof value === 'string'
+      ? [value]
+      : [];
+
+export function wireDependencyCruiserJson(content: string, reference: string): WireResult {
+  let config: Record<string, unknown>;
+  try {
+    config = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return { changed: false, reason: 'unparseable' };
+  }
+  const list = extendsList(config.extends);
+  if (list.includes(reference)) return { changed: false, reason: 'already-wired' };
+  list.push(reference);
+  config.extends = list.length === 1 ? list[0] : list;
+  return { changed: true, content: `${JSON.stringify(config, null, 2)}\n` };
+}
+
+export function unwireDependencyCruiserJson(content: string): string {
+  const config = JSON.parse(content) as Record<string, unknown>;
+  const list = extendsList(config.extends).filter((entry) => !entry.includes('archprint'));
+  if (list.length === 0) delete config.extends;
+  else config.extends = list.length === 1 ? list[0] : list;
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+export function dependencyCruiserJsonWired(content: string): boolean {
+  try {
+    return extendsList((JSON.parse(content) as Record<string, unknown>).extends).some((entry) =>
+      entry.includes('archprint'),
+    );
+  } catch {
+    /* v8 ignore next -- an unparseable config is treated as not wired */
+    return false;
+  }
+}
+
+export function dependencyCruiserSnippet(reference: string): string {
+  return ['{', `  "extends": "${reference}",`, '  "forbidden": []', '}'].join('\n');
+}
+
+export interface WiringTool {
+  name: string;
+  hasOutputs: (outDir: string) => boolean;
+  findConfig: (cwd: string) => string | null;
+  canEdit: (configPath: string) => boolean;
+  aggregatePath: (outDir: string) => string;
+  reference: (configDir: string, aggregatePath: string) => string;
+  apply: (content: string, reference: string) => WireResult;
+  remove: (content: string) => string;
+  isWired: (content: string) => boolean;
+  snippet: (reference: string) => string;
+}
+
+function findConfig(cwd: string, names: readonly string[]): string | null {
+  for (const name of names) {
+    const candidate = path.join(cwd, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+export const WIRING_TOOLS: readonly WiringTool[] = [
+  {
+    name: 'eslint',
+    hasOutputs: outDirHasEslintBlocks,
+    findConfig: findEslintConfig,
+    canEdit: () => true,
+    aggregatePath: (outDir) => path.join(outDir, AGGREGATOR_FILE),
+    reference: importReference,
+    apply: wireEslintContent,
+    remove: unwireEslintContent,
+    isWired: (content) => content.includes(MANAGED_START),
+    snippet,
+  },
+  {
+    name: 'dependency-cruiser',
+    hasOutputs: outDirHasDependencyCruiserBlocks,
+    findConfig: (cwd) => findConfig(cwd, DC_CONFIG_NAMES),
+    canEdit: (configPath) => configPath.endsWith('.json'),
+    aggregatePath: (outDir) => path.join(outDir, DC_AGGREGATE_FILE),
+    reference: importReference,
+    apply: wireDependencyCruiserJson,
+    remove: unwireDependencyCruiserJson,
+    isWired: dependencyCruiserJsonWired,
+    snippet: dependencyCruiserSnippet,
+  },
+];

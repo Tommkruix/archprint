@@ -384,7 +384,7 @@ describe('init', () => {
   it('wire prints a snippet when there is no eslint config to edit', async () => {
     await run(['init', auto]);
     await run(['wire', '--out', 'archprint-rules']);
-    expect(output()).toContain('Add this to your config');
+    expect(output()).toContain('Add this manually');
   });
 
   it('wire --dry-run does not modify the config', async () => {
@@ -394,7 +394,7 @@ describe('init', () => {
     await run(['init', auto]);
     await run(['wire', '--out', 'archprint-rules', '--dry-run']);
     expect(readFileSync(config, 'utf8')).toBe(original);
-    expect(output()).toContain('Would wire');
+    expect(output()).toContain('would wire');
   });
 
   it('wire prints a manual snippet when the config has no array-form export', async () => {
@@ -404,10 +404,22 @@ describe('init', () => {
     expect(output()).toContain('Add this manually');
   });
 
-  it('wire errors when no eslint rule blocks have been generated', async () => {
+  it('wire errors when no rules have been generated', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await run(['wire', '--out', 'archprint-rules']);
     expect(errSpy.mock.calls.flat().join(' ')).toContain('Run');
     expect(process.exitCode).toBe(1);
+  });
+
+  it('wire adds a managed extends to a dependency-cruiser json config, and eject removes it', async () => {
+    const config = path.join(tmp, '.dependency-cruiser.json');
+    const original = '{\n  "forbidden": [],\n  "options": {}\n}\n';
+    writeFileSync(config, original);
+    await run(['init', phantomDepsAuto, '--fast']);
+    await run(['wire', '--out', 'archprint-rules']);
+    const wired = JSON.parse(readFileSync(config, 'utf8')) as { extends?: string };
+    expect(wired.extends).toContain('dependency-cruiser.all.archprint.json');
+    await run(['eject', '--out', 'archprint-rules']);
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({ forbidden: [], options: {} });
   });
 });

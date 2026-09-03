@@ -1,18 +1,27 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   AGGREGATOR_FILE,
+  DC_AGGREGATE_FILE,
   MANAGED_START,
+  WIRING_TOOLS,
+  dependencyCruiserJsonWired,
+  dependencyCruiserSnippet,
   eslintConfigHasBlock,
   findEslintConfig,
+  hasDependencyCruiserBlocks,
   hasEslintBlocks,
   importReference,
+  outDirHasDependencyCruiserBlocks,
   outDirHasEslintBlocks,
   snippet,
+  unwireDependencyCruiserJson,
   unwireEslintContent,
+  wireDependencyCruiserJson,
   wireEslintContent,
+  writeDependencyCruiserAggregate,
   writeEslintAggregator,
 } from '../../src/cli/wiring.js';
 
@@ -101,5 +110,100 @@ describe('wiring filesystem helpers', () => {
     expect(eslintConfigHasBlock(config)).toBe(false);
     writeFileSync(config, `${MANAGED_START}\nexport default [];\n`);
     expect(eslintConfigHasBlock(config)).toBe(true);
+  });
+});
+
+describe('dependency-cruiser wiring', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'archprint-dc-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('adds a managed extends and unwire restores it (round-trip)', () => {
+    const base = '{\n  "forbidden": [],\n  "options": {}\n}\n';
+    const wired = wireDependencyCruiserJson(
+      base,
+      './archprint-rules/dependency-cruiser.all.archprint.json',
+    );
+    expect(wired.changed).toBe(true);
+    expect(dependencyCruiserJsonWired(wired.content!)).toBe(true);
+    expect(JSON.parse(unwireDependencyCruiserJson(wired.content!))).toEqual({
+      forbidden: [],
+      options: {},
+    });
+  });
+
+  it('appends to an existing extends array and is idempotent', () => {
+    const withExtends = '{\n  "extends": "some-preset"\n}\n';
+    const once = wireDependencyCruiserJson(
+      withExtends,
+      './x/dependency-cruiser.all.archprint.json',
+    );
+    expect(JSON.parse(once.content!).extends).toEqual([
+      'some-preset',
+      './x/dependency-cruiser.all.archprint.json',
+    ]);
+    const twice = wireDependencyCruiserJson(
+      once.content!,
+      './x/dependency-cruiser.all.archprint.json',
+    );
+    expect(twice.reason).toBe('already-wired');
+  });
+
+  it('unwire keeps a user extends and drops only the archprint one', () => {
+    const content = JSON.stringify({
+      extends: ['some-preset', './archprint-rules/dependency-cruiser.all.archprint.json'],
+    });
+    expect(JSON.parse(unwireDependencyCruiserJson(content))).toEqual({ extends: 'some-preset' });
+  });
+
+  it('reports unparseable config instead of throwing', () => {
+    expect(wireDependencyCruiserJson('not json', './x.json').reason).toBe('unparseable');
+    expect(dependencyCruiserJsonWired('not json')).toBe(false);
+  });
+
+  it('aggregate merges the forbidden arrays and excludes itself', () => {
+    writeFileSync(
+      path.join(dir, 'dependency-cruiser.a.archprint.json'),
+      JSON.stringify({ forbidden: [{ name: 'a' }] }),
+    );
+    writeFileSync(
+      path.join(dir, 'dependency-cruiser.b.archprint.json'),
+      JSON.stringify({ forbidden: [{ name: 'b' }] }),
+    );
+    const file = writeDependencyCruiserAggregate(dir);
+    expect(path.basename(file)).toBe(DC_AGGREGATE_FILE);
+    const merged = JSON.parse(readFileSync(file, 'utf8')) as { forbidden: { name: string }[] };
+    expect(merged.forbidden.map((r) => r.name).sort()).toEqual(['a', 'b']);
+  });
+
+  it('hasDependencyCruiserBlocks and outDirHasDependencyCruiserBlocks detect blocks', () => {
+    expect(hasDependencyCruiserBlocks(['/o/dependency-cruiser.phantom-deps.archprint.json'])).toBe(
+      true,
+    );
+    expect(hasDependencyCruiserBlocks(['/o/dependency-cruiser.all.archprint.json'])).toBe(false);
+    expect(hasDependencyCruiserBlocks(['/o/eslint.console-isolation.archprint.json'])).toBe(false);
+    expect(outDirHasDependencyCruiserBlocks(dir)).toBe(false);
+    writeFileSync(path.join(dir, 'dependency-cruiser.phantom-deps.archprint.json'), '{}');
+    expect(outDirHasDependencyCruiserBlocks(dir)).toBe(true);
+  });
+
+  it('dependencyCruiserSnippet renders a paste-able extends block', () => {
+    expect(dependencyCruiserSnippet('./x.json')).toContain('"extends": "./x.json"');
+  });
+});
+
+describe('wiring registry', () => {
+  it('exposes eslint and dependency-cruiser tools', () => {
+    expect(WIRING_TOOLS.map((tool) => tool.name).sort()).toEqual(['dependency-cruiser', 'eslint']);
+  });
+
+  it('dependency-cruiser only auto-edits .json configs', () => {
+    const dc = WIRING_TOOLS.find((tool) => tool.name === 'dependency-cruiser')!;
+    expect(dc.canEdit('/x/.dependency-cruiser.json')).toBe(true);
+    expect(dc.canEdit('/x/.dependency-cruiser.js')).toBe(false);
   });
 });

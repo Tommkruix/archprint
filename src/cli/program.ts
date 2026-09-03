@@ -11,18 +11,7 @@ import { toScanSummary } from './summary.js';
 import { emitOne, regenerateConfigs } from './generate.js';
 import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
-import {
-  MANAGED_END,
-  MANAGED_START,
-  eslintConfigHasBlock,
-  findEslintConfig,
-  importReference,
-  outDirHasEslintBlocks,
-  snippet,
-  unwireEslintContent,
-  wireEslintContent,
-  writeEslintAggregator,
-} from './wiring.js';
+import { WIRING_TOOLS } from './wiring.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -305,7 +294,7 @@ export function buildProgram(version = readVersion()): Command {
   program
     .command('wire')
     .description(
-      "Reference archprint's generated eslint rules from your flat eslint config (managed, reversible)",
+      "Reference archprint's generated rules from the enforcement tools your repo uses (managed, reversible)",
     )
     .option(
       '-o, --out <dir>',
@@ -316,52 +305,57 @@ export function buildProgram(version = readVersion()): Command {
     .action((options: { out: string; dryRun?: boolean }) => {
       const cwd = process.cwd();
       const outDir = path.resolve(options.out);
-      if (!outDirHasEslintBlocks(outDir)) {
+      const active = WIRING_TOOLS.filter((tool) => tool.hasOutputs(outDir));
+      if (active.length === 0) {
         console.error(
-          `No eslint rule blocks in ${displayPath(outDir)}. Run 'archprint generate' (or 'archprint init') first.`,
+          `No generated rules in ${displayPath(outDir)}. Run 'archprint generate' (or 'archprint init') first.`,
         );
         process.exitCode = 1;
         return;
       }
-      const aggregator = writeEslintAggregator(outDir);
-      const configPath = findEslintConfig(cwd);
-      if (!configPath) {
-        console.log(
-          'No flat eslint config (eslint.config.js/.mjs/.cjs) found here. Add this to your config:',
-        );
-        console.log('');
-        console.log(snippet(importReference(cwd, aggregator)));
-        return;
-      }
-      const reference = importReference(path.dirname(configPath), aggregator);
-      const result = wireEslintContent(readFileSync(configPath, 'utf8'), reference);
-      if (!result.changed) {
-        if (result.reason === 'already-wired') {
-          console.log(`${displayPath(configPath)} is already wired to archprint.`);
-        } else {
-          console.log(
-            `Could not find an array-form default export in ${displayPath(configPath)}. Add this manually:`,
-          );
+      for (const tool of active) {
+        const aggregate = tool.aggregatePath(outDir);
+        const configPath = tool.findConfig(cwd);
+        if (!configPath || !tool.canEdit(configPath)) {
+          const reference = tool.reference(configPath ? path.dirname(configPath) : cwd, aggregate);
+          const where = configPath
+            ? `${displayPath(configPath)} cannot be edited automatically`
+            : `no ${tool.name} config found`;
+          console.log(`[${tool.name}] ${where}. Add this manually:`);
           console.log('');
-          console.log(snippet(reference));
+          console.log(tool.snippet(reference));
+          console.log('');
+          continue;
         }
-        return;
+        const reference = tool.reference(path.dirname(configPath), aggregate);
+        const result = tool.apply(readFileSync(configPath, 'utf8'), reference);
+        if (!result.changed) {
+          console.log(
+            result.reason === 'already-wired'
+              ? `[${tool.name}] ${displayPath(configPath)} is already wired.`
+              : `[${tool.name}] could not edit ${displayPath(configPath)} (${result.reason}). Add this manually:\n\n${tool.snippet(reference)}\n`,
+          );
+          continue;
+        }
+        if (options.dryRun) {
+          console.log(
+            `[${tool.name}] would wire ${displayPath(configPath)} -> ${displayPath(aggregate)}.`,
+          );
+          continue;
+        }
+        writeFileSync(configPath, result.content!);
+        console.log(
+          `[${tool.name}] wired ${displayPath(configPath)} -> ${displayPath(aggregate)}.`,
+        );
       }
-      if (options.dryRun) {
-        console.log(`Would wire ${displayPath(configPath)} (adds a managed import + one spread):`);
-        console.log('');
-        console.log(`${MANAGED_START}\nimport archprintRules from '${reference}';\n${MANAGED_END}`);
-        return;
-      }
-      writeFileSync(configPath, result.content!);
-      console.log(
-        `Wired ${displayPath(configPath)} to ${displayPath(aggregator)}. Run 'archprint eject' to undo.`,
-      );
+      if (!options.dryRun) console.log("Run 'archprint eject' to undo.");
     });
 
   program
     .command('eject')
-    .description("Remove archprint's generated files, its config manifest, and any wired reference")
+    .description(
+      "Remove archprint's generated files, its config manifest, and any wired references",
+    )
     .option(
       '-o, --out <dir>',
       'output directory that holds the generated rule configs',
@@ -380,25 +374,27 @@ export function buildProgram(version = readVersion()): Command {
       if (existsSync(outputsManifest)) targets.push(outputsManifest);
       const initManifest = path.resolve(INIT_MANIFEST_FILE);
       if (existsSync(initManifest)) targets.push(initManifest);
-      const configPath = findEslintConfig(cwd);
-      const configWired = configPath !== null && eslintConfigHasBlock(configPath);
-      if (targets.length === 0 && !configWired) {
+      const wired = WIRING_TOOLS.map((tool) => ({ tool, configPath: tool.findConfig(cwd) })).filter(
+        (entry) =>
+          entry.configPath !== null && entry.tool.isWired(readFileSync(entry.configPath, 'utf8')),
+      );
+      if (targets.length === 0 && wired.length === 0) {
         console.log('Nothing to eject: no archprint outputs found here.');
         return;
       }
       if (options.dryRun) {
         console.log('Would remove:');
         for (const target of targets) console.log(`  ${displayPath(target)}`);
-        if (configWired) console.log(`  unwire ${displayPath(configPath!)}`);
+        for (const { configPath } of wired) console.log(`  unwire ${displayPath(configPath!)}`);
         return;
       }
       for (const target of targets) rmSync(target, { recursive: true, force: true });
       removeIfEmpty(outDir);
-      if (configWired)
-        writeFileSync(configPath!, unwireEslintContent(readFileSync(configPath!, 'utf8')));
-      console.log(`Ejected ${targets.length + (configWired ? 1 : 0)} archprint artifact(s):`);
+      for (const { tool, configPath } of wired)
+        writeFileSync(configPath!, tool.remove(readFileSync(configPath!, 'utf8')));
+      console.log(`Ejected ${targets.length + wired.length} archprint artifact(s):`);
       for (const target of targets) console.log(`  removed ${displayPath(target)}`);
-      if (configWired) console.log(`  unwired ${displayPath(configPath!)}`);
+      for (const { configPath } of wired) console.log(`  unwired ${displayPath(configPath!)}`);
     });
 
   return program;
