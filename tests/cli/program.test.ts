@@ -308,4 +308,31 @@ describe('init', () => {
     await run(['init', auto, '--fast']);
     expect(output()).toContain('Warning');
   });
+
+  it('regenerating removes stale outputs before writing fresh ones', async () => {
+    await run(['init', auto]);
+    await run(['generate', auto, '--out', 'archprint-rules']);
+    expect(output()).toContain('Refreshed: removed');
+  });
+
+  it('eject removes the generated files and the manifests', async () => {
+    await run(['init', auto]);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
+    await run(['eject', '--out', 'archprint-rules']);
+    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(false);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(false);
+    expect(output()).toContain('Ejected');
+  });
+
+  it('eject --dry-run lists targets without deleting', async () => {
+    await run(['init', auto]);
+    await run(['eject', '--out', 'archprint-rules', '--dry-run']);
+    expect(output()).toContain('Would remove');
+    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
+  });
+
+  it('eject reports when there is nothing to remove', async () => {
+    await run(['eject', '--out', 'archprint-rules']);
+    expect(output()).toContain('Nothing to eject');
+  });
 });

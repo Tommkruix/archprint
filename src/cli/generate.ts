@@ -19,6 +19,7 @@ import { toDependencyCruiserUiData } from '../generator/ui-data-isolation-emitte
 import { toDependencyCruiserServerClient } from '../generator/server-client-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
+import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
 export function writeRules(
@@ -306,4 +307,17 @@ export function writeEnforcementConfigs(
   }
   add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
   return configs;
+}
+
+export function regenerateConfigs(
+  scan: ScanResult,
+  outDir: string,
+  options: { structural?: boolean; version: string },
+): { configs: WrittenConfig[]; removed: string[] } {
+  const removed = cleanPreviousOutputs(outDir);
+  const configs = writeEnforcementConfigs(scan, outDir, { structural: options.structural });
+  const allPaths = configs.flatMap((config) => config.files);
+  if (allPaths.length > 0) writeOutputsManifest(outDir, allPaths, options.version);
+  else removeIfEmpty(outDir);
+  return { configs, removed };
 }

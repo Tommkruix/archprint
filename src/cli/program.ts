@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
@@ -7,8 +7,9 @@ import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
 import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
-import { emitOne, writeEnforcementConfigs } from './generate.js';
+import { emitOne, regenerateConfigs } from './generate.js';
 import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
+import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -114,7 +115,7 @@ export function buildProgram(version = readVersion()): Command {
         /* v8 ignore stop */
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
-        const configs = writeEnforcementConfigs(scan, outDir, { structural });
+        const { configs } = regenerateConfigs(scan, outDir, { structural, version });
         const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
         const recommendations = buildRecommendations(scan, detectStack(appDir));
         const cwd = process.cwd();
@@ -194,7 +195,12 @@ export function buildProgram(version = readVersion()): Command {
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
-        const configs = writeEnforcementConfigs(scan, outDir, { structural });
+        const { configs, removed } = regenerateConfigs(scan, outDir, { structural, version });
+        if (removed.length > 0) {
+          console.log(
+            `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
+          );
+        }
         if (configs.length === 0) {
           if (heldStructuralAuto > 0) {
             console.log(
@@ -266,6 +272,45 @@ export function buildProgram(version = readVersion()): Command {
           'Warning: approved from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
         );
       }
+    });
+
+  program
+    .command('eject')
+    .description("Remove archprint's generated files and its config manifest from this repo")
+    .option(
+      '-o, --out <dir>',
+      'output directory that holds the generated rule configs',
+      'archprint-rules',
+    )
+    .option('--dry-run', 'list what would be removed without deleting anything')
+    .action((options: { out: string; dryRun?: boolean }) => {
+      const outDir = path.resolve(options.out);
+      const targets: string[] = [];
+      for (const relative of readOutputs(outDir)) {
+        const target = path.join(outDir, relative);
+        if (existsSync(target)) targets.push(target);
+      }
+      const outputsManifest = path.join(outDir, OUTPUTS_MANIFEST_FILE);
+      if (existsSync(outputsManifest)) targets.push(outputsManifest);
+      const initManifest = path.resolve(INIT_MANIFEST_FILE);
+      if (existsSync(initManifest)) targets.push(initManifest);
+      const show = (target: string): string => {
+        const relative = path.relative(process.cwd(), target);
+        return relative.startsWith('..') ? target : relative;
+      };
+      if (targets.length === 0) {
+        console.log('Nothing to eject: no archprint outputs found here.');
+        return;
+      }
+      if (options.dryRun) {
+        console.log('Would remove:');
+        for (const target of targets) console.log(`  ${show(target)}`);
+        return;
+      }
+      for (const target of targets) rmSync(target, { recursive: true, force: true });
+      removeIfEmpty(outDir);
+      console.log(`Ejected ${targets.length} archprint artifact(s):`);
+      for (const target of targets) console.log(`  removed ${show(target)}`);
     });
 
   return program;
