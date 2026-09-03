@@ -26,6 +26,8 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
+      # OIDC trusted publishing requires npm >= 11.5.1; Node 22 ships npm 10.x, so upgrade.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
       # Changesets opens/updates a "Version Packages" PR when there are unreleased
