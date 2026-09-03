@@ -14,6 +14,10 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Do not install husky git hooks in CI: the Changesets "Version Packages" bot commit is not
+    # Conventional-Commits shaped and would be rejected by the commit-msg (commitlint) hook.
+    env:
+      HUSKY: 0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
