@@ -7,6 +7,7 @@ import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
 import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
+import { toScanSummary } from './summary.js';
 import { emitOne, regenerateConfigs } from './generate.js';
 import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
@@ -155,13 +156,22 @@ export function buildProgram(version = readVersion()): Command {
     .description('Scan an app and report the rules it already follows')
     .argument('[path]', 'app directory (contains tsconfig.json)', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
-    .action((input: string, options: { deep?: boolean }) => {
+    .option('--json', 'emit a machine-readable JSON summary instead of the human report')
+    .action((input: string, options: { deep?: boolean; json?: boolean }) => {
       const root = path.resolve(input);
       const appDirs = discoverAppDirs(root);
       if (appDirs.length === 0) {
         throw new Error(
           `No tsconfig.json found under ${root}. Point archprint at an app directory (a directory with a tsconfig.json); a monorepo root is fine.`,
         );
+      }
+      if (options.json) {
+        const apps = appDirs.map((appDir) => ({
+          app: displayPath(appDir, root),
+          ...toScanSummary(scanRepo(appDir, { deep: options.deep })),
+        }));
+        console.log(JSON.stringify({ archprintVersion: version, apps }, null, 2));
+        return;
       }
       const started = performance.now();
       const reports = appDirs.map((appDir) => {
@@ -249,10 +259,15 @@ export function buildProgram(version = readVersion()): Command {
     .command('recommend')
     .description('Recommend a rule set for this repo (or a fresh one) from its stack and evidence')
     .argument('[path]', 'app directory', '.')
-    .action((input: string) => {
+    .option('--json', 'emit a machine-readable JSON summary instead of the human report')
+    .action((input: string, options: { json?: boolean }) => {
       const appDir = resolveApp(input);
       const scan = scanRepo(appDir, { deep: false });
       const recommendations = buildRecommendations(scan, detectStack(appDir));
+      if (options.json) {
+        console.log(JSON.stringify({ archprintVersion: version, ...recommendations }, null, 2));
+        return;
+      }
       console.log(renderRecommendations(recommendations, version));
     });
 

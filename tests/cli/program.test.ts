@@ -59,6 +59,31 @@ describe('cli program', () => {
     expect(output()).not.toContain('fast scan at the specifier level');
   });
 
+  it('scan --json emits a parseable summary with rules and evidence', async () => {
+    await run(['scan', auto, '--json']);
+    const parsed = JSON.parse(output()) as {
+      archprintVersion: string;
+      apps: { app: string; fileCount: number; rules: { family: string; status: string }[] }[];
+    };
+    expect(parsed.archprintVersion).toBe('9.9.9');
+    expect(parsed.apps).toHaveLength(1);
+    expect(parsed.apps[0]!.rules.some((rule) => rule.family === 'forbidden-imports')).toBe(true);
+    expect(parsed.apps[0]!.rules.every((rule) => rule.status !== 'REJECT')).toBe(true);
+  });
+
+  it('recommend --json emits the three tiers as parseable JSON', async () => {
+    await run(['recommend', auto, '--json']);
+    const parsed = JSON.parse(output()) as {
+      archprintVersion: string;
+      enforceNow: unknown[];
+      review: unknown[];
+      adopt: unknown[];
+    };
+    expect(parsed.archprintVersion).toBe('9.9.9');
+    expect(Array.isArray(parsed.enforceNow)).toBe(true);
+    expect(Array.isArray(parsed.adopt)).toBe(true);
+  });
+
   it('generate writes all four artifacts (deep by default, no warning)', async () => {
     await run(['generate', auto, '--out', out]);
     const dir = path.join(out, 'no-ui-layer-in-server-entry');
