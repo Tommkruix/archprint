@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -334,5 +334,55 @@ describe('init', () => {
   it('eject reports when there is nothing to remove', async () => {
     await run(['eject', '--out', 'archprint-rules']);
     expect(output()).toContain('Nothing to eject');
+  });
+
+  it('wire inserts a managed block into a flat eslint config, and eject removes it', async () => {
+    const config = path.join(tmp, 'eslint.config.mjs');
+    const original = 'export default [\n  { rules: {} },\n];\n';
+    writeFileSync(config, original);
+    await run(['init', auto]);
+    await run(['wire', '--out', 'archprint-rules']);
+    expect(readFileSync(config, 'utf8')).toContain('archprint:start');
+    expect(readFileSync(config, 'utf8')).toContain('...archprintRules');
+    await run(['eject', '--out', 'archprint-rules']);
+    expect(readFileSync(config, 'utf8')).toBe(original);
+  });
+
+  it('wire is idempotent on a second run', async () => {
+    writeFileSync(path.join(tmp, 'eslint.config.mjs'), 'export default [];\n');
+    await run(['init', auto]);
+    await run(['wire', '--out', 'archprint-rules']);
+    await run(['wire', '--out', 'archprint-rules']);
+    expect(output()).toContain('already wired');
+  });
+
+  it('wire prints a snippet when there is no eslint config to edit', async () => {
+    await run(['init', auto]);
+    await run(['wire', '--out', 'archprint-rules']);
+    expect(output()).toContain('Add this to your config');
+  });
+
+  it('wire --dry-run does not modify the config', async () => {
+    const config = path.join(tmp, 'eslint.config.mjs');
+    const original = 'export default [];\n';
+    writeFileSync(config, original);
+    await run(['init', auto]);
+    await run(['wire', '--out', 'archprint-rules', '--dry-run']);
+    expect(readFileSync(config, 'utf8')).toBe(original);
+    expect(output()).toContain('Would wire');
+  });
+
+  it('wire prints a manual snippet when the config has no array-form export', async () => {
+    writeFileSync(path.join(tmp, 'eslint.config.mjs'), 'export default someConfig;\n');
+    await run(['init', auto]);
+    await run(['wire', '--out', 'archprint-rules']);
+    expect(output()).toContain('Add this manually');
+  });
+
+  it('wire errors when no eslint rule blocks have been generated', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(['wire', '--out', 'archprint-rules']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Run');
+    expect(process.exitCode).toBe(1);
   });
 });
