@@ -13,9 +13,11 @@ import {
   findEslintConfig,
   hasDependencyCruiserBlocks,
   hasEslintBlocks,
+  hasEslintOutputs,
   importReference,
   outDirHasDependencyCruiserBlocks,
   outDirHasEslintBlocks,
+  outDirHasEslintOutputs,
   snippet,
   unwireDependencyCruiserJson,
   unwireEslintContent,
@@ -56,6 +58,13 @@ describe('wiring transforms', () => {
     expect(result.changed).toBe(true);
   });
 
+  it('keeps a single-line empty array valid (the closer is not swallowed by the comment)', () => {
+    const result = wireEslintContent('export default [];\n', './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('\n];');
+    expect(result.content).not.toMatch(/managed\];/);
+  });
+
   it('unwire restores the original content exactly (round-trip)', () => {
     const wired = wireEslintContent(base, './x.mjs').content!;
     expect(unwireEslintContent(wired)).toBe(base);
@@ -70,6 +79,12 @@ describe('wiring transforms', () => {
   it('hasEslintBlocks detects eslint json blocks among paths', () => {
     expect(hasEslintBlocks(['/o/eslint.console-isolation.archprint.json'])).toBe(true);
     expect(hasEslintBlocks(['/o/dependency-cruiser.archprint.json'])).toBe(false);
+  });
+
+  it('hasEslintOutputs also counts the generated plugin', () => {
+    expect(hasEslintOutputs(['/o/eslint-plugin.archprint.mjs'])).toBe(true);
+    expect(hasEslintOutputs(['/o/eslint.console-isolation.archprint.json'])).toBe(true);
+    expect(hasEslintOutputs(['/o/dependency-cruiser.archprint.json'])).toBe(false);
   });
 
   it('snippet renders a paste-able managed block', () => {
@@ -110,6 +125,12 @@ describe('wiring filesystem helpers', () => {
     expect(eslintConfigHasBlock(config)).toBe(false);
     writeFileSync(config, `${MANAGED_START}\nexport default [];\n`);
     expect(eslintConfigHasBlock(config)).toBe(true);
+  });
+
+  it('outDirHasEslintOutputs is true when only the generated plugin is present', () => {
+    expect(outDirHasEslintOutputs(dir)).toBe(false);
+    writeFileSync(path.join(dir, 'eslint-plugin.archprint.mjs'), 'export default [];\n');
+    expect(outDirHasEslintOutputs(dir)).toBe(true);
   });
 });
 

@@ -19,10 +19,14 @@ import { toDependencyCruiserUiData } from '../generator/ui-data-isolation-emitte
 import { toDependencyCruiserServerClient } from '../generator/server-client-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
+import {
+  buildForbiddenImportSpecs,
+  renderEslintPluginSource,
+} from '../generator/eslint-plugin-emitter.js';
 import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
 import {
   hasDependencyCruiserBlocks,
-  hasEslintBlocks,
+  hasEslintOutputs,
   writeDependencyCruiserAggregate,
   writeEslintAggregator,
 } from './wiring.js';
@@ -215,6 +219,15 @@ export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string)
   return [file];
 }
 
+export function writeEslintPlugin(scan: ScanResult, outDir: string): string[] {
+  const specs = buildForbiddenImportSpecs(scan.patterns);
+  if (specs.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint-plugin.archprint.mjs');
+  writeFileSync(file, renderEslintPluginSource(specs));
+  return [file];
+}
+
 export function writeGraph(scan: ScanResult, outDir: string): string[] {
   if (scan.layerBoundaries.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
@@ -249,6 +262,7 @@ export function writeEnforcementConfigs(
   };
 
   add(writeRules(scan, outDir, ['AUTO']), null);
+  add(writeEslintPlugin(scan, outDir), 'forbidden-import rules as a loadable eslint plugin');
   if (structural) {
     add(
       writeLayerConfig(scan, outDir, ['AUTO']),
@@ -323,7 +337,7 @@ export function regenerateConfigs(
   const removed = cleanPreviousOutputs(outDir);
   const configs = writeEnforcementConfigs(scan, outDir, { structural: options.structural });
   const allPaths = configs.flatMap((config) => config.files);
-  if (hasEslintBlocks(allPaths)) allPaths.push(writeEslintAggregator(outDir));
+  if (hasEslintOutputs(allPaths)) allPaths.push(writeEslintAggregator(outDir));
   if (hasDependencyCruiserBlocks(allPaths)) allPaths.push(writeDependencyCruiserAggregate(outDir));
   if (allPaths.length > 0) writeOutputsManifest(outDir, allPaths, options.version);
   else removeIfEmpty(outDir);

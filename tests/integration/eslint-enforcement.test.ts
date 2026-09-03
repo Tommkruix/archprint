@@ -50,3 +50,49 @@ describe('eslint enforcement (end to end)', () => {
     expect(result!.messages.filter((m) => m.ruleId === 'no-console')).toHaveLength(0);
   });
 });
+
+// The flagship AP- forbidden-import rules ship as a generated eslint plugin. Prove one loads and fires.
+describe('generated eslint plugin (AP- rules, end to end)', () => {
+  let tmp: string;
+  let eslint: ESLint;
+
+  beforeAll(() => {
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-plugin-e2e-'));
+    const outDir = path.join(tmp, 'archprint-rules');
+    regenerateConfigs(scanRepo(path.join(here, '..', 'fixtures', 'cli-auto')), outDir, {
+      version: '0.0.0',
+    });
+    expect(existsSync(path.join(outDir, 'eslint-plugin.archprint.mjs'))).toBe(true);
+    const configPath = path.join(tmp, 'eslint.config.mjs');
+    writeFileSync(
+      configPath,
+      "import archprintRules from './archprint-rules/eslint.archprint.mjs';\nexport default [...archprintRules];\n",
+    );
+    eslint = new ESLint({ cwd: tmp, overrideConfigFile: configPath });
+  });
+
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('flags a server-entry route that imports the UI layer', async () => {
+    const [result] = await eslint.lintText(
+      "import C from '@/components/C1';\nexport const GET = () => C;\n",
+      {
+        filePath: path.join(tmp, 'app', 'api', 'x', 'route.ts'),
+      },
+    );
+    expect(result!.messages.map((m) => m.ruleId)).toContain(
+      'archprint/no-ui-layer-in-server-entry',
+    );
+  });
+
+  it('passes a server-entry route that does not import the UI layer', async () => {
+    const [result] = await eslint.lintText('export const GET = () => 1;\n', {
+      filePath: path.join(tmp, 'app', 'api', 'x', 'route.ts'),
+    });
+    expect(
+      result!.messages.filter((m) => m.ruleId === 'archprint/no-ui-layer-in-server-entry'),
+    ).toHaveLength(0);
+  });
+});

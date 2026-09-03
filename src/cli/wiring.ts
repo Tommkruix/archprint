@@ -16,10 +16,19 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export default readdirSync(here)
+const blocks = readdirSync(here)
   .filter((name) => name.startsWith('eslint.') && name.endsWith('.archprint.json'))
   .sort()
   .map((name) => JSON.parse(readFileSync(join(here, name), 'utf8')));
+
+let pluginConfigs = [];
+try {
+  pluginConfigs = (await import('./eslint-plugin.archprint.mjs')).default ?? [];
+} catch {
+  pluginConfigs = [];
+}
+
+export default [...blocks, ...pluginConfigs];
 ${MANAGED_END}
 `;
 
@@ -57,7 +66,9 @@ export function wireEslintContent(content: string, reference: string): WireResul
   const match = ARRAY_OPEN.exec(content);
   if (!match) return { changed: false, reason: 'no-array-export' };
   const insertAt = match.index + match[0].length;
-  const withSpread = `${content.slice(0, insertAt)}\n  ...archprintRules, ${SPREAD_MARK}${content.slice(insertAt)}`;
+  const remainder = content.slice(insertAt);
+  const separator = remainder.startsWith('\n') ? '' : '\n';
+  const withSpread = `${content.slice(0, insertAt)}\n  ...archprintRules, ${SPREAD_MARK}${separator}${remainder}`;
   const importBlock = `${MANAGED_START}\nimport archprintRules from '${reference}';\n${MANAGED_END}\n`;
   return { changed: true, content: importBlock + withSpread };
 }
@@ -108,6 +119,16 @@ export function outDirHasEslintBlocks(outDir: string): boolean {
   return readdirSync(outDir).some(
     (name) => name.startsWith('eslint.') && name.endsWith('.archprint.json'),
   );
+}
+
+export const ESLINT_PLUGIN_FILE = 'eslint-plugin.archprint.mjs';
+
+export function hasEslintOutputs(paths: readonly string[]): boolean {
+  return hasEslintBlocks(paths) || paths.some((p) => path.basename(p) === ESLINT_PLUGIN_FILE);
+}
+
+export function outDirHasEslintOutputs(outDir: string): boolean {
+  return outDirHasEslintBlocks(outDir) || existsSync(path.join(outDir, ESLINT_PLUGIN_FILE));
 }
 
 export const DC_AGGREGATE_FILE = 'dependency-cruiser.all.archprint.json';
@@ -214,7 +235,7 @@ function findConfig(cwd: string, names: readonly string[]): string | null {
 export const WIRING_TOOLS: readonly WiringTool[] = [
   {
     name: 'eslint',
-    hasOutputs: outDirHasEslintBlocks,
+    hasOutputs: outDirHasEslintOutputs,
     findConfig: findEslintConfig,
     canEdit: () => true,
     aggregatePath: (outDir) => path.join(outDir, AGGREGATOR_FILE),
