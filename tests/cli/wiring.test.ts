@@ -58,6 +58,22 @@ describe('wiring transforms', () => {
     expect(result.changed).toBe(true);
   });
 
+  it('wires a tseslint.config(...) call as the first spread arg and round-trips', () => {
+    const src = 'export default tseslint.config(\n  base,\n  extra,\n);\n';
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('tseslint.config(\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
+  it('wires an array inside a defineConfig([...]) call and round-trips', () => {
+    const src = 'export default defineConfig([\n  base,\n]);\n';
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('defineConfig([\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
   it('keeps a single-line empty array valid (the closer is not swallowed by the comment)', () => {
     const result = wireEslintContent('export default [];\n', './x.mjs');
     expect(result.changed).toBe(true);

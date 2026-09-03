@@ -7,7 +7,28 @@ export const MANAGED_START =
 export const MANAGED_END = '// archprint:end';
 const SPREAD_MARK = '// archprint:managed';
 const ESLINT_CONFIG_NAMES = ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs'];
-const ARRAY_OPEN = /(export\s+default\s+\[|module\.exports\s*=\s*\[)/;
+const CONFIG_DECL = /export\s+default\s+|module\.exports\s*=\s*/;
+const CONFIG_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
+
+// Find where to insert the spread so `...archprintRules` becomes the first config. Handles an array literal
+// (`export default [`), a config-call with spread args (`export default tseslint.config(`), and an array inside
+// a call (`export default defineConfig([`). Returns the character index to insert at, or null if none matches.
+function findInsertionPoint(content: string): number | null {
+  const decl = CONFIG_DECL.exec(content);
+  if (decl === null) return null;
+  let index = decl.index + decl[0].length;
+  const skipWhitespace = (): void => {
+    while (index < content.length && /\s/.test(content[index]!)) index += 1;
+  };
+  skipWhitespace();
+  if (content[index] === '[') return index + 1;
+  const call = CONFIG_CALL.exec(content.slice(index));
+  if (call === null) return null;
+  index += call[0].length;
+  const afterParen = index;
+  skipWhitespace();
+  return content[index] === '[' ? index + 1 : afterParen;
+}
 
 const AGGREGATOR_SOURCE = `${MANAGED_START.replace('run `archprint eject` to remove', 'regenerate with `archprint generate`')}
 import { readdirSync, readFileSync } from 'node:fs';
@@ -63,9 +84,8 @@ export interface WireResult {
 
 export function wireEslintContent(content: string, reference: string): WireResult {
   if (content.includes(MANAGED_START)) return { changed: false, reason: 'already-wired' };
-  const match = ARRAY_OPEN.exec(content);
-  if (!match) return { changed: false, reason: 'no-array-export' };
-  const insertAt = match.index + match[0].length;
+  const insertAt = findInsertionPoint(content);
+  if (insertAt === null) return { changed: false, reason: 'no-array-export' };
   const remainder = content.slice(insertAt);
   const separator = remainder.startsWith('\n') ? '' : '\n';
   const withSpread = `${content.slice(0, insertAt)}\n  ...archprintRules, ${SPREAD_MARK}${separator}${remainder}`;
