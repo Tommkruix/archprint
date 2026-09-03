@@ -1,0 +1,52 @@
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ESLint } from 'eslint';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { scanRepo } from '../../src/cli/scan.js';
+import { regenerateConfigs } from '../../src/cli/generate.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const fixture = path.join(here, '..', 'fixtures', 'console-isolation-auto');
+
+// End-to-end proof that a wired archprint eslint config actually enforces: generate the real output,
+// reference the aggregator the way `wire` does, then run the real eslint engine over violating and clean code.
+describe('eslint enforcement (end to end)', () => {
+  let tmp: string;
+  let eslint: ESLint;
+
+  beforeAll(() => {
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-e2e-'));
+    const outDir = path.join(tmp, 'archprint-rules');
+    regenerateConfigs(scanRepo(fixture), outDir, { version: '0.0.0' });
+    // The console-isolation fixture must have produced a wireable eslint block + aggregator.
+    expect(existsSync(path.join(outDir, 'eslint.console-isolation.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(outDir, 'eslint.archprint.mjs'))).toBe(true);
+    const configPath = path.join(tmp, 'eslint.config.mjs');
+    writeFileSync(
+      configPath,
+      "import archprintRules from './archprint-rules/eslint.archprint.mjs';\nexport default [...archprintRules];\n",
+    );
+    eslint = new ESLint({ cwd: tmp, overrideConfigFile: configPath });
+  });
+
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('reports a violation of the generated no-console rule', async () => {
+    const [result] = await eslint.lintText("export const f = () => console.log('x');\n", {
+      filePath: path.join(tmp, 'src', 'lib', 'thing.ts'),
+    });
+    const rules = result!.messages.map((m) => m.ruleId);
+    expect(rules).toContain('no-console');
+  });
+
+  it('passes clean code that does not violate the rule', async () => {
+    const [result] = await eslint.lintText('export const f = () => 1 + 1;\n', {
+      filePath: path.join(tmp, 'src', 'lib', 'thing.ts'),
+    });
+    expect(result!.messages.filter((m) => m.ruleId === 'no-console')).toHaveLength(0);
+  });
+});
