@@ -18,6 +18,7 @@ import { toDependencyCruiserStoriesIsolation } from '../generator/stories-isolat
 import { toDependencyCruiserUiData } from '../generator/ui-data-isolation-emitters.js';
 import { toDependencyCruiserServerClient } from '../generator/server-client-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
+import { renderTsArchTests, type BoundaryRule } from '../generator/tsarch-emitter.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import {
   buildForbiddenImportSpecs,
@@ -228,6 +229,26 @@ export function writeEslintPlugin(scan: ScanResult, outDir: string): string[] {
   return [file];
 }
 
+// The first-party file-to-file boundaries (layer, role-layering, UI/data) map 1:1 to a ts-arch dependency
+// test. Families whose target is an external package or that need a path exception (pathNot) are covered by
+// the eslint/dependency-cruiser outputs instead, where those shapes are expressible.
+export function writeTsArchTests(
+  scan: ScanResult,
+  outDir: string,
+  statuses: readonly GenerationStatus[] = ['AUTO'],
+): string[] {
+  const rules: BoundaryRule[] = [
+    ...toDependencyCruiser(scan.layerBoundaries, statuses).forbidden,
+    ...toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, statuses).forbidden,
+    ...toDependencyCruiserUiData(scan.uiDataIsolation).forbidden,
+  ];
+  if (rules.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'architecture.archprint.test.ts');
+  writeFileSync(file, renderTsArchTests(rules));
+  return [file];
+}
+
 export function writeGraph(scan: ScanResult, outDir: string): string[] {
   if (scan.layerBoundaries.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
@@ -325,6 +346,11 @@ export function writeEnforcementConfigs(
       'server / client boundary: dependency-cruiser no-server-only-in-client rule',
     );
   }
+  if (structural)
+    add(
+      writeTsArchTests(scan, outDir, ['AUTO']),
+      'architecture boundaries: ts-arch dependency tests',
+    );
   add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
   return configs;
 }
