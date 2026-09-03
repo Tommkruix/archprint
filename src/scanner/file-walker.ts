@@ -15,7 +15,27 @@ import { createIgnoreFilter } from './ignore-filter.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage']);
-const SOURCE_FILE = /\.(ts|tsx)$/;
+const SOURCE_FILE = /\.(ts|tsx|vue|svelte)$/;
+
+// Vue and Svelte single-file components are not valid TypeScript, but their <script> block is. Extracting the
+// script region (not the TS inside it) lets the raw TS parser read the imports; the AST still governs parsing.
+const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+const isSingleFileComponent = (filePath: string): boolean =>
+  filePath.endsWith('.vue') || filePath.endsWith('.svelte');
+
+function parseableSource(
+  absoluteFilePath: string,
+  text: string,
+): { source: string; scriptKind: ts.ScriptKind } {
+  if (isSingleFileComponent(absoluteFilePath)) {
+    const blocks = [...text.matchAll(SFC_SCRIPT)].map((match) => match[1] ?? '');
+    return { source: blocks.join('\n'), scriptKind: ts.ScriptKind.TS };
+  }
+  return {
+    source: text,
+    scriptKind: absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  };
+}
 
 export interface WalkedFile extends RoleClassification {
   absolutePath: string;
@@ -137,11 +157,13 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
     return cached.raw;
   }
-  const text = readFileSync(absoluteFilePath, 'utf8');
-  const scriptKind = absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const { source, scriptKind } = parseableSource(
+    absoluteFilePath,
+    readFileSync(absoluteFilePath, 'utf8'),
+  );
   const sourceFile = ts.createSourceFile(
     absoluteFilePath,
-    text,
+    source,
     ts.ScriptTarget.Latest,
     false,
     scriptKind,
@@ -175,18 +197,25 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
 // Fast import extraction with the raw TypeScript parser: same AST fidelity as ts-morph but without its
 // wrapper layer, which dominates fast-mode time. Used when we only need specifiers + value-binding, not
 // cross-file resolution.
+function specifierLevelImports(
+  absoluteFilePath: string,
+  classifyEdge: (specifier: string) => EdgeKind,
+): ResolvedImport[] {
+  return parseFastImports(absoluteFilePath).map((imp) => ({
+    specifier: imp.specifier,
+    edgeKind: classifyEdge(imp.specifier),
+    throughBarrel: false,
+    valueLeafPaths: [],
+    typeLeafPaths: [],
+    hasValueBinding: imp.hasValueBinding,
+  }));
+}
+
 function createFastImportAnalyzer(
   classifyEdge: (specifier: string) => EdgeKind,
 ): (absoluteFilePath: string) => ResolvedImport[] {
   return (absoluteFilePath: string): ResolvedImport[] =>
-    parseFastImports(absoluteFilePath).map((imp) => ({
-      specifier: imp.specifier,
-      edgeKind: classifyEdge(imp.specifier),
-      throughBarrel: false,
-      valueLeafPaths: [],
-      typeLeafPaths: [],
-      hasValueBinding: imp.hasValueBinding,
-    }));
+    specifierLevelImports(absoluteFilePath, classifyEdge);
 }
 
 export function createImportAnalyzer(
@@ -240,6 +269,13 @@ export function createImportAnalyzer(
   };
 
   return (absoluteFilePath: string): ResolvedImport[] => {
+    // ts-morph cannot parse an SFC envelope, so single-file components resolve at the specifier level even in
+    // deep mode; their first-party edges (relative/alias/workspace) are still classified correctly.
+    if (isSingleFileComponent(absoluteFilePath)) {
+      return specifierLevelImports(absoluteFilePath, (specifier) =>
+        classifyEdge(specifier, undefined),
+      );
+    }
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
     const results: ResolvedImport[] = sourceFile
       .getImportDeclarations()
