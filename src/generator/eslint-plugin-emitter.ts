@@ -5,6 +5,7 @@ export interface ForbiddenImportSpec {
   name: string;
   roles: string[];
   markers: string[];
+  ignore: string[];
   message: string;
 }
 
@@ -18,10 +19,14 @@ export function buildForbiddenImportSpecs(
       (ROLE_PATTERNS.get(role) ?? []).map((pattern) => pattern.source),
     );
     if (roles.length === 0 || config.forbidden.length === 0) continue;
+    // Grandfather the known exceptions: the rule was inferred from code that already follows it modulo
+    // these files, so enforcing it must not error on them. New violations elsewhere are still caught.
+    const ignore = [...new Set(result.violations.map((violation) => violation.file))].sort();
     specs.push({
       name: config.name,
       roles,
       markers: config.forbidden.map((marker) => marker.source),
+      ignore,
       message: config.description,
     });
   }
@@ -40,6 +45,7 @@ function makeRule(spec) {
     create(context) {
       const file = context.filename.replace(/\\\\/g, '/');
       if (!roles.some((role) => role.test(file))) return {};
+      if (spec.ignore.some((path) => file.endsWith(path))) return {};
       return {
         ImportDeclaration(node) {
           if (node.importKind === 'type') return;

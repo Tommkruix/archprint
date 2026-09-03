@@ -34,4 +34,27 @@ describe('eslint plugin emitter', () => {
   it('returns no specs when there are no AUTO patterns', () => {
     expect(buildForbiddenImportSpecs([])).toEqual([]);
   });
+
+  it('grandfathers the known exception files (deduped and sorted)', () => {
+    const pattern = {
+      config: {
+        id: 'AP-X',
+        name: 'no-x',
+        description: 'no x',
+        roles: ['ROUTE_HANDLER'],
+        forbidden: [/@\/x/],
+      },
+      result: {
+        gate: { status: 'AUTO' },
+        violations: [
+          { file: 'b.ts', specifier: '@/x', leaf: 'x' },
+          { file: 'a.ts', specifier: '@/x', leaf: 'x' },
+          { file: 'a.ts', specifier: '@/x', leaf: 'x' },
+        ],
+      },
+    } as unknown as Parameters<typeof buildForbiddenImportSpecs>[0][number];
+    const [spec] = buildForbiddenImportSpecs([pattern]);
+    expect(spec!.ignore).toEqual(['a.ts', 'b.ts']);
+    expect(renderEslintPluginSource([spec!])).toContain('spec.ignore.some');
+  });
 });

@@ -6,6 +6,7 @@ import { ESLint } from 'eslint';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { scanRepo } from '../../src/cli/scan.js';
 import { regenerateConfigs } from '../../src/cli/generate.js';
+import { renderEslintPluginSource } from '../../src/generator/eslint-plugin-emitter.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'console-isolation-auto');
@@ -94,5 +95,49 @@ describe('generated eslint plugin (AP- rules, end to end)', () => {
     expect(
       result!.messages.filter((m) => m.ruleId === 'archprint/no-ui-layer-in-server-entry'),
     ).toHaveLength(0);
+  });
+});
+
+// A generated AP- rule grandfathers its known exceptions (adoption is green) but still catches new violations.
+describe('generated eslint plugin grandfathering (end to end)', () => {
+  let tmp: string;
+  let eslint: ESLint;
+
+  beforeAll(() => {
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-grandfather-e2e-'));
+    const spec = {
+      name: 'no-forbidden',
+      roles: ['app\\/api\\/.*\\/route\\.tsx?$'],
+      markers: ['@/forbidden'],
+      ignore: ['app/api/legacy/route.ts'],
+      message: 'forbidden',
+    };
+    writeFileSync(path.join(tmp, 'eslint-plugin.archprint.mjs'), renderEslintPluginSource([spec]));
+    const configPath = path.join(tmp, 'eslint.config.mjs');
+    writeFileSync(
+      configPath,
+      "import plugin from './eslint-plugin.archprint.mjs';\nexport default plugin;\n",
+    );
+    eslint = new ESLint({ cwd: tmp, overrideConfigFile: configPath });
+  });
+
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  const offending = "import x from '@/forbidden';\nexport const GET = () => x;\n";
+
+  it('does not flag the grandfathered exception file', async () => {
+    const [result] = await eslint.lintText(offending, {
+      filePath: path.join(tmp, 'app', 'api', 'legacy', 'route.ts'),
+    });
+    expect(result!.messages.filter((m) => m.ruleId === 'archprint/no-forbidden')).toHaveLength(0);
+  });
+
+  it('flags the same violation in a new file', async () => {
+    const [result] = await eslint.lintText(offending, {
+      filePath: path.join(tmp, 'app', 'api', 'new', 'route.ts'),
+    });
+    expect(result!.messages.map((m) => m.ruleId)).toContain('archprint/no-forbidden');
   });
 });
