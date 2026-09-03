@@ -1,0 +1,53 @@
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+
+export interface AliasEntry {
+  prefix: string;
+  dir: string;
+}
+
+// ESM/NodeNext rewrites a `.js` import to its `.ts` source; map the JS-ish extensions to the TS ones so those
+// specifiers resolve. Without this, an ESM TypeScript project resolves to zero first-party edges.
+const JS_EXT_TO_TS: Record<string, readonly string[]> = {
+  '.js': ['.ts', '.tsx'],
+  '.jsx': ['.tsx'],
+  '.mjs': ['.ts', '.tsx'],
+  '.cjs': ['.ts', '.tsx'],
+};
+const BARE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
+
+function specifierBase(
+  specifier: string,
+  fromAbsPath: string,
+  aliases: readonly AliasEntry[],
+): string | null {
+  if (specifier.startsWith('.')) {
+    return path.resolve(path.dirname(fromAbsPath), specifier);
+  }
+  for (const { prefix, dir } of aliases) {
+    if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
+      return path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, ''));
+    }
+  }
+  return null;
+}
+
+export function resolveFirstPartyImport(
+  specifier: string,
+  fromAbsPath: string,
+  aliases: readonly AliasEntry[],
+): string | null {
+  const base = specifierBase(specifier, fromAbsPath, aliases);
+  if (base === null) return null;
+  const candidates: string[] = [];
+  const tsExtensions = JS_EXT_TO_TS[path.extname(base)];
+  if (tsExtensions !== undefined) {
+    const stem = base.slice(0, -path.extname(base).length);
+    for (const tsExt of tsExtensions) candidates.push(stem + tsExt);
+  }
+  for (const suffix of BARE_CANDIDATES) candidates.push(base + suffix);
+  for (const candidate of candidates) {
+    if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return candidate;
+  }
+  return null;
+}

@@ -1,12 +1,4 @@
-import {
-  closeSync,
-  existsSync,
-  openSync,
-  readFileSync,
-  readSync,
-  readdirSync,
-  statSync,
-} from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { type ImportDeclaration, Project, type SourceFile, SyntaxKind } from 'ts-morph';
 import * as ts from 'typescript';
@@ -19,6 +11,8 @@ import {
 } from './role-classifier.js';
 import { buildWorkspaceMap } from './workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from './workspace-packages.js';
+import { createIgnoreFilter } from './ignore-filter.js';
+import { resolveFirstPartyImport } from './resolve-import.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage']);
 const SOURCE_FILE = /\.(ts|tsx)$/;
@@ -59,18 +53,22 @@ function dynamicImportSpecifiers(sourceFile: SourceFile): string[] {
   return specifiers;
 }
 
-const DYNAMIC_FILE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
-
 export function listSourceFiles(rootDir: string): string[] {
   const files: string[] = [];
+  const isIgnored = createIgnoreFilter(rootDir);
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
-          walk(path.join(dir, entry.name));
+        if (
+          !SKIP_DIRS.has(entry.name) &&
+          !entry.name.startsWith('.') &&
+          !isIgnored(path.relative(rootDir, full), true)
+        ) {
+          walk(full);
         }
       } else if (entry.isFile() && SOURCE_FILE.test(entry.name) && !entry.name.endsWith('.d.ts')) {
-        files.push(path.join(dir, entry.name));
+        if (!isIgnored(path.relative(rootDir, full), false)) files.push(full);
       }
     }
   };
@@ -222,25 +220,8 @@ export function createImportAnalyzer(
     prefix: key.replace(/\/?\*$/, ''),
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
   }));
-  const resolveDynamicFile = (specifier: string, containingFile: string): string | undefined => {
-    let base: string | undefined;
-    if (specifier.startsWith('.')) {
-      base = path.resolve(path.dirname(containingFile), specifier);
-    } else {
-      for (const { prefix, dir } of aliasDirs) {
-        if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
-          base = path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, ''));
-          break;
-        }
-      }
-    }
-    if (base === undefined) return undefined;
-    for (const suffix of DYNAMIC_FILE_CANDIDATES) {
-      const candidate = base + suffix;
-      if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return candidate;
-    }
-    return undefined;
-  };
+  const resolveDynamicFile = (specifier: string, containingFile: string): string | undefined =>
+    resolveFirstPartyImport(specifier, containingFile, aliasDirs) ?? undefined;
 
   const exportedLeafCache = new Map<string, Map<string, Set<string>>>();
   const exportedLeaves = (target: SourceFile): Map<string, Set<string>> => {

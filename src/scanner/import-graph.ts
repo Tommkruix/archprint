@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import {
   createImportAnalyzer,
@@ -7,44 +6,13 @@ import {
   type WalkedFile,
 } from './file-walker.js';
 import { buildWorkspaceMap } from './workspace-resolver.js';
-
-interface AliasEntry {
-  prefix: string;
-  dir: string;
-}
+import { type AliasEntry, resolveFirstPartyImport } from './resolve-import.js';
 
 const buildAliasEntries = (appDir: string): AliasEntry[] =>
   Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
     prefix: key.replace(/\/?\*$/, ''),
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
   }));
-
-const FILE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
-
-function resolveImportFile(
-  specifier: string,
-  fromAbsPath: string,
-  aliases: readonly AliasEntry[],
-): string | null {
-  let base: string | null = null;
-  if (specifier.startsWith('.')) {
-    base = path.resolve(path.dirname(fromAbsPath), specifier);
-  } else {
-    for (const { prefix, dir } of aliases) {
-      if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
-        base = path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, ''));
-        break;
-      }
-    }
-  }
-  if (base === null) return null;
-  for (const suffix of FILE_CANDIDATES) {
-    const candidate = base + suffix;
-    if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return candidate;
-  }
-  /* v8 ignore next -- a first-party-looking specifier that resolves to no .ts file (missing/non-ts target) */
-  return null;
-}
 
 export interface ImportGraph {
   root: string;
@@ -87,7 +55,7 @@ export function buildImportGraph(appDir: string, options: ImportGraphOptions = {
           if (rel !== undefined) targets.add(rel);
         }
       } else {
-        const abs = resolveImportFile(imp.specifier, file.absolutePath, aliases);
+        const abs = resolveFirstPartyImport(imp.specifier, file.absolutePath, aliases);
         const rel = abs === null ? undefined : relByAbs.get(abs);
         if (rel !== undefined) targets.add(rel);
       }

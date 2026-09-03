@@ -1,11 +1,13 @@
 import { existsSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { listSourceFiles } from './file-walker.js';
+import { createIgnoreFilter } from './ignore-filter.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.next', '.git']);
 
 function findTsconfigDirs(root: string): string[] {
   const dirs: string[] = [];
+  const isIgnored = createIgnoreFilter(root);
   const walk = (dir: string): void => {
     if (existsSync(path.join(dir, 'tsconfig.json'))) dirs.push(dir);
     let entries;
@@ -16,8 +18,14 @@ function findTsconfigDirs(root: string): string[] {
       return;
     }
     for (const entry of entries) {
-      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
-        walk(path.join(dir, entry.name));
+      const full = path.join(dir, entry.name);
+      if (
+        entry.isDirectory() &&
+        !SKIP_DIRS.has(entry.name) &&
+        !entry.name.startsWith('.') &&
+        !isIgnored(path.relative(root, full), true)
+      ) {
+        walk(full);
       }
     }
   };
