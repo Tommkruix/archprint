@@ -120,7 +120,7 @@ A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 
 trimmed:
 
 ```
-Archprint v0.1.0
+Archprint v0.2.0
 Scanned 2,232 TypeScript files
 Workspace aliases: 18 resolved
 
@@ -146,6 +146,11 @@ Every number is measured from the import graph, not estimated.
 Ships as: **Auto** = auto-generated as enforcement (mechanical families, 0 false positives across the
 correctness audit). **Review** = held for human review by default; emit with `--include-structural` (the
 inferred layer/role can be wrong, so it is not enforced silently). **Report** = surfaced only, never enforced.
+
+Framework aware: Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and classifies UI
+components across React (`.tsx`), Angular (`.component.ts`, `.directive.ts`), and Vue and Svelte single-file
+components (it reads the `<script>` block of `.vue`/`.svelte` files), so the component-aware rules apply
+regardless of framework.
 
 | Detector                         | Rule it can infer                                                                                                    | Ships as |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
@@ -201,6 +206,11 @@ zero rules.
   import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
   failing fixture
+- **A shareable ESLint preset**: one self-contained `eslint-preset.archprint.mjs` that inlines the inferred
+  rules and needs only eslint, so you can commit it, publish it, or hand it to another repo and adopt the rules
+  in one line
+- **ts-arch tests** for the first-party boundaries (layer, role, UI/data), so the inferred architecture can run
+  inside your existing Vitest or Jest suite
 - **Mermaid** and **Graphviz DOT** of the layer dependency graph, so the inferred architecture is visible and
   its violations are marked
 
@@ -257,15 +267,16 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-`0.1.0`, pre-stable. The engine (twenty detectors, five output formats, the confidence gate) is in place and
-tested, and an adversarial correctness audit (three rounds, four real repositories) drove the false-positive
-rate on auto-generated rules to zero for the mechanical families, which is why those auto-enforce while the
-structural-inference families are held for review.
+Pre-stable (`0.x`). The engine (twenty detectors, the confidence gate, and emitters for ESLint, a shareable
+preset, dependency-cruiser, ts-arch, and the layer graph) is in place and tested, and an adversarial
+correctness audit (three rounds, four real repositories) drove the false-positive rate on auto-generated rules
+to zero for the mechanical families, which is why those auto-enforce while the structural-inference families
+are held for review.
 
-Production-ready today: `scan` and `recommend` (insight), and auto-enforcement of the mechanical families.
-Still ahead: hardening the structural families toward auto-enforcement (a real per-file role-confidence measure,
-layer-cohesion, role-classifier ordering), a self-consistency check at generate time, a pinned regression
-corpus, an `init` scaffolder for fresh repos, and broader framework role coverage.
+Production-ready today: `scan` and `recommend` (insight), and auto-enforcement of the mechanical families,
+with a self-consistency check at generate time, an `init` scaffolder for fresh repos, and framework coverage
+across React, Angular, Vue, and Svelte. Still ahead: hardening the structural families toward auto-enforcement
+(a real per-file role-confidence measure, layer-cohesion, role-classifier ordering).
 
 ## Contributing
 
