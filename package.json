@@ -1,6 +1,6 @@
 {
   "name": "archprint",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Mine the architecture rules your TypeScript repo already enforces, with the evidence attached.",
   "keywords": [
     "eslint",
