@@ -5,8 +5,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createImportAnalyzer, walkRepo } from '../../src/scanner/file-walker.js';
 import { resolveFirstPartyImport } from '../../src/scanner/resolve-import.js';
 
-// Vue/Svelte single-file components are not valid TypeScript; their imports live in the <script> block.
-// Lock in that they are walked, classified as components, and have their imports and targets resolved.
 describe('single-file component support', () => {
   let dir: string;
   beforeAll(() => {

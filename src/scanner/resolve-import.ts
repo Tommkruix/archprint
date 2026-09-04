@@ -6,8 +6,6 @@ export interface AliasEntry {
   dir: string;
 }
 
-// ESM/NodeNext rewrites a `.js` import to its `.ts` source; map the JS-ish extensions to the TS ones so those
-// specifiers resolve. Without this, an ESM TypeScript project resolves to zero first-party edges.
 const JS_EXT_TO_TS: Record<string, readonly string[]> = {
   '.js': ['.ts', '.tsx'],
   '.jsx': ['.tsx'],

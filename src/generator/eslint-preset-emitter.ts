@@ -4,9 +4,6 @@ import {
   PLUGIN_CONFIGS,
 } from './eslint-plugin-emitter.js';
 
-// A shareable, self-contained ESLint flat-config preset. Unlike the wiring aggregator (which reads sibling
-// files at runtime), this inlines every forbidden-import spec and every eslint block into one portable module,
-// so a teammate or another repository can adopt the inferred rules in one line with only eslint installed.
 export function renderEslintPreset(
   specs: readonly ForbiddenImportSpec[],
   blocks: readonly unknown[],

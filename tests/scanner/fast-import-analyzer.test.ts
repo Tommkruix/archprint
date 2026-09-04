@@ -4,8 +4,6 @@ import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createImportAnalyzer } from '../../src/scanner/file-walker.js';
 
-// The fast (non-resolving) analyzer uses the raw TypeScript parser; lock in its value-binding and
-// specifier semantics so they stay equivalent to the ts-morph path.
 describe('fast import analyzer', () => {
   let dir: string;
   let file: string;

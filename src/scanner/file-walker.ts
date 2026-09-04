@@ -17,8 +17,6 @@ import { resolveFirstPartyImport } from './resolve-import.js';
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage']);
 const SOURCE_FILE = /\.(ts|tsx|vue|svelte)$/;
 
-// Vue and Svelte single-file components are not valid TypeScript, but their <script> block is. Extracting the
-// script region (not the TS inside it) lets the raw TS parser read the imports; the AST still governs parsing.
 const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 const isSingleFileComponent = (filePath: string): boolean =>
   filePath.endsWith('.vue') || filePath.endsWith('.svelte');
@@ -144,10 +142,6 @@ interface RawImport {
   hasValueBinding: boolean;
 }
 
-// Content-keyed parse cache: the raw import extraction (specifier + value-binding) depends only on the file
-// content, not on the analyzer's alias set, so it is safe to share across every detector that scans the same
-// file within a run. Edge classification stays per-analyzer and is applied on top. Keyed by path + mtime + size
-// so an edit is picked up; capped as a backstop against unbounded growth in long-lived processes.
 const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
 const FAST_PARSE_CACHE_CAP = 50000;
 
@@ -194,9 +188,6 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   return raw;
 }
 
-// Fast import extraction with the raw TypeScript parser: same AST fidelity as ts-morph but without its
-// wrapper layer, which dominates fast-mode time. Used when we only need specifiers + value-binding, not
-// cross-file resolution.
 function specifierLevelImports(
   absoluteFilePath: string,
   classifyEdge: (specifier: string) => EdgeKind,
@@ -269,8 +260,6 @@ export function createImportAnalyzer(
   };
 
   return (absoluteFilePath: string): ResolvedImport[] => {
-    // ts-morph cannot parse an SFC envelope, so single-file components resolve at the specifier level even in
-    // deep mode; their first-party edges (relative/alias/workspace) are still classified correctly.
     if (isSingleFileComponent(absoluteFilePath)) {
       return specifierLevelImports(absoluteFilePath, (specifier) =>
         classifyEdge(specifier, undefined),

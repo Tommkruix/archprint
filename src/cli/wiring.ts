@@ -10,9 +10,6 @@ const ESLINT_CONFIG_NAMES = ['eslint.config.js', 'eslint.config.mjs', 'eslint.co
 const CONFIG_DECL = /export\s+default\s+|module\.exports\s*=\s*/;
 const CONFIG_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
 
-// Find where to insert the spread so `...archprintRules` becomes the first config. Handles an array literal
-// (`export default [`), a config-call with spread args (`export default tseslint.config(`), and an array inside
-// a call (`export default defineConfig([`). Returns the character index to insert at, or null if none matches.
 function findInsertionPoint(content: string): number | null {
   const decl = CONFIG_DECL.exec(content);
   if (decl === null) return null;

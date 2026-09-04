@@ -1,8 +1,3 @@
-// ts-arch (https://github.com/ts-arch/ts-arch) expresses an architecture boundary as a test: files matching one
-// pattern must not depend on files matching another. That is exactly the shape of archprint's first-party
-// boundary rules, so the inferred boundaries can run inside a repo's existing Vitest/Jest suite. `.check()` is
-// used directly (rather than the `toPassAsync` matcher) so no framework-specific matcher registration is needed.
-
 export interface BoundaryRule {
   name: string;
   comment: string;

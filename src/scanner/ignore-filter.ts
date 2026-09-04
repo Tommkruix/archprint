@@ -6,9 +6,6 @@ const DEFAULT_IGNORES = ['node_modules', 'dist', 'build', 'coverage', '.next', '
 
 export type IgnoreFilter = (relativePath: string, isDirectory: boolean) => boolean;
 
-// Skip anything git ignores, plus the always-noise directories, so a scan never descends into vendored repos,
-// build output, or dependencies. Patterns come from the walk root's .gitignore; paths are tested relative to
-// that root in POSIX form. A directory is tested with a trailing slash so directory-only patterns (`ab/`) match.
 export function createIgnoreFilter(root: string): IgnoreFilter {
   const matcher = ignore().add(DEFAULT_IGNORES);
   const gitignore = path.join(root, '.gitignore');

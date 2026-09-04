@@ -19,8 +19,6 @@ export function buildForbiddenImportSpecs(
       (ROLE_PATTERNS.get(role) ?? []).map((pattern) => pattern.source),
     );
     if (roles.length === 0 || config.forbidden.length === 0) continue;
-    // Grandfather the known exceptions: the rule was inferred from code that already follows it modulo
-    // these files, so enforcing it must not error on them. New violations elsewhere are still caught.
     const ignore = [...new Set(result.violations.map((violation) => violation.file))].sort();
     specs.push({
       name: config.name,
@@ -33,8 +31,6 @@ export function buildForbiddenImportSpecs(
   return specs;
 }
 
-// The rule runtime is shared verbatim by the plugin module and the self-contained preset, so both enforce
-// forbidden imports identically. Only the surrounding exports differ.
 export const MAKE_RULE_FUNCTION = `function makeRule(spec) {
   const roles = spec.roles.map((source) => new RegExp(source));
   const markers = spec.markers.map((source) => new RegExp(source));

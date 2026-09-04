@@ -221,8 +221,6 @@ export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string)
   return [file];
 }
 
-// The eslint blocks that inline cleanly into a portable preset: each is a single flat-config object. Structural
-// blocks (env access, workspace-package API) are included only when structural emission is requested.
 function presetBlocks(scan: ScanResult, structural: boolean): unknown[] {
   const blocks = [
     toEslintDeepRelative(scan.deepRelative),
@@ -260,9 +258,6 @@ export function writeEslintPlugin(scan: ScanResult, outDir: string): string[] {
   return [file];
 }
 
-// The first-party file-to-file boundaries (layer, role-layering, UI/data) map 1:1 to a ts-arch dependency
-// test. Families whose target is an external package or that need a path exception (pathNot) are covered by
-// the eslint/dependency-cruiser outputs instead, where those shapes are expressible.
 export function writeTsArchTests(
   scan: ScanResult,
   outDir: string,
