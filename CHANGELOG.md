@@ -4,16 +4,16 @@
 
 ### Minor Changes
 
-- 5b04337: Add Angular support: Archprint now detects Angular in your stack and recognizes Angular components, so the
+- Add Angular support: Archprint now detects Angular in your stack and recognizes Angular components, so the
   component-aware rules (such as UI/data separation) apply to Angular projects.
-- 5b04337: Generate a shareable ESLint preset. `archprint generate` now writes a single, self-contained
+- Generate a shareable ESLint preset. `archprint generate` now writes a single, self-contained
   `eslint-preset.archprint.mjs` that inlines the inferred rules and needs only eslint, so you can commit it,
   publish it, or hand it to another repository and adopt the rules in one line:
   `import archprint from './eslint-preset.archprint.mjs'`.
-- 5b04337: Scan Vue and Svelte single-file components. Archprint now reads the `<script>` block of `.vue` and `.svelte`
+- Scan Vue and Svelte single-file components. Archprint now reads the `<script>` block of `.vue` and `.svelte`
   files, treats them as UI components, and follows their imports, so the component-aware rules (such as UI/data
   separation) apply to Vue and Svelte projects.
-- 5b04337: Emit architecture boundary tests for ts-arch. Alongside the ESLint and dependency-cruiser outputs, Archprint
+- Emit architecture boundary tests for ts-arch. Alongside the ESLint and dependency-cruiser outputs, Archprint
   now writes a ts-arch test file for the inferred first-party boundaries (layer, role, and UI/data), so you can
   run them inside your existing Vitest or Jest suite.
 
