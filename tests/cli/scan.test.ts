@@ -45,6 +45,7 @@ import {
   writeRules,
   writeServerClientConfig,
   writeStoriesIsolationConfig,
+  writeEslintPreset,
   writeTestIsolationConfig,
   writeTsArchTests,
   writeUiDataConfig,
@@ -820,6 +821,20 @@ describe('cli generate', () => {
     };
     expect(config.forbidden[0]!.name).toBe('no-utils-to-api');
     expect(files.some((file) => file.endsWith('eslint-boundaries.archprint.json'))).toBe(true);
+  });
+
+  it('writes a portable, self-contained eslint preset from AUTO forbidden imports', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan = scanRepo(path.join(here, '..', 'fixtures', 'cli-auto'));
+    const files = writeEslintPreset(scan, outDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]!.endsWith('eslint-preset.archprint.mjs')).toBe(true);
+    const source = readFileSync(files[0]!, 'utf8');
+    expect(source).toContain('export default [...BLOCKS, ...pluginConfigs];');
+    expect(source).not.toContain('readdirSync');
+
+    const none = emptyScan({ fileCount: 10, aliasCount: 1 });
+    expect(writeEslintPreset(none, outDir)).toEqual([]);
   });
 
   it('writes ts-arch boundary tests from AUTO layer boundaries, none otherwise', () => {

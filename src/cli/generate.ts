@@ -24,6 +24,7 @@ import {
   buildForbiddenImportSpecs,
   renderEslintPluginSource,
 } from '../generator/eslint-plugin-emitter.js';
+import { renderEslintPreset } from '../generator/eslint-preset-emitter.js';
 import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
 import {
   hasDependencyCruiserBlocks,
@@ -220,6 +221,36 @@ export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string)
   return [file];
 }
 
+// The eslint blocks that inline cleanly into a portable preset: each is a single flat-config object. Structural
+// blocks (env access, workspace-package API) are included only when structural emission is requested.
+function presetBlocks(scan: ScanResult, structural: boolean): unknown[] {
+  const blocks = [
+    toEslintDeepRelative(scan.deepRelative),
+    toEslintConsoleIsolation(scan.consoleIsolation),
+  ];
+  if (structural) {
+    blocks.push(
+      toEslintEnvAccess(scan.envAccess),
+      toEslintWorkspacePackageApi(scan.workspacePackageApi),
+    );
+  }
+  return blocks.filter((block) => block !== null);
+}
+
+export function writeEslintPreset(
+  scan: ScanResult,
+  outDir: string,
+  options: { structural?: boolean } = {},
+): string[] {
+  const specs = buildForbiddenImportSpecs(scan.patterns);
+  const blocks = presetBlocks(scan, options.structural ?? false);
+  if (specs.length === 0 && blocks.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint-preset.archprint.mjs');
+  writeFileSync(file, renderEslintPreset(specs, blocks));
+  return [file];
+}
+
 export function writeEslintPlugin(scan: ScanResult, outDir: string): string[] {
   const specs = buildForbiddenImportSpecs(scan.patterns);
   if (specs.length === 0) return [];
@@ -284,6 +315,10 @@ export function writeEnforcementConfigs(
 
   add(writeRules(scan, outDir, ['AUTO']), null);
   add(writeEslintPlugin(scan, outDir), 'forbidden-import rules as a loadable eslint plugin');
+  add(
+    writeEslintPreset(scan, outDir, { structural }),
+    'shareable single-file eslint preset (portable; needs only eslint)',
+  );
   if (structural) {
     add(
       writeLayerConfig(scan, outDir, ['AUTO']),

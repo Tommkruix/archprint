@@ -33,11 +33,9 @@ export function buildForbiddenImportSpecs(
   return specs;
 }
 
-export function renderEslintPluginSource(specs: readonly ForbiddenImportSpec[]): string {
-  return `// archprint eslint plugin (generated). Regenerate with \`archprint generate\`; remove with \`archprint eject\`.
-const SPECS = ${JSON.stringify(specs, null, 2)};
-
-function makeRule(spec) {
+// The rule runtime is shared verbatim by the plugin module and the self-contained preset, so both enforce
+// forbidden imports identically. Only the surrounding exports differ.
+export const MAKE_RULE_FUNCTION = `function makeRule(spec) {
   const roles = spec.roles.map((source) => new RegExp(source));
   const markers = spec.markers.map((source) => new RegExp(source));
   return {
@@ -56,14 +54,22 @@ function makeRule(spec) {
       };
     },
   };
-}
+}`;
 
-const rules = Object.fromEntries(SPECS.map((spec) => [spec.name, makeRule(spec)]));
-export const plugin = { rules };
-export default SPECS.map((spec) => ({
+export const PLUGIN_CONFIGS = `SPECS.map((spec) => ({
   files: ['**/*.{ts,tsx}'],
   plugins: { archprint: plugin },
   rules: { ['archprint/' + spec.name]: 'error' },
-}));
+}))`;
+
+export function renderEslintPluginSource(specs: readonly ForbiddenImportSpec[]): string {
+  return `// archprint eslint plugin (generated). Regenerate with \`archprint generate\`; remove with \`archprint eject\`.
+const SPECS = ${JSON.stringify(specs, null, 2)};
+
+${MAKE_RULE_FUNCTION}
+
+const rules = Object.fromEntries(SPECS.map((spec) => [spec.name, makeRule(spec)]));
+export const plugin = { rules };
+export default ${PLUGIN_CONFIGS};
 `;
 }
