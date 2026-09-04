@@ -20,5 +20,5 @@ features:
   - title: Evidence-gated
     details: Each candidate is measured against the code with a Wilson-score confidence gate. Mechanical families auto-enforce; structural ones are held for review.
   - title: Enforced where you already lint
-    details: Emits into ESLint and dependency-cruiser, wires into your config with a managed, reversible reference, and ejects cleanly.
+    details: Emits into ESLint (including a shareable one-file preset), dependency-cruiser, and ts-arch, wires into your config with a managed, reversible reference, and ejects cleanly.
 ---

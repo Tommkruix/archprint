@@ -18,11 +18,13 @@ import { toDependencyCruiserStoriesIsolation } from '../generator/stories-isolat
 import { toDependencyCruiserUiData } from '../generator/ui-data-isolation-emitters.js';
 import { toDependencyCruiserServerClient } from '../generator/server-client-emitters.js';
 import { toGraphviz, toMermaid } from '../generator/graph-emitters.js';
+import { renderTsArchTests, type BoundaryRule } from '../generator/tsarch-emitter.js';
 import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import {
   buildForbiddenImportSpecs,
   renderEslintPluginSource,
 } from '../generator/eslint-plugin-emitter.js';
+import { renderEslintPreset } from '../generator/eslint-preset-emitter.js';
 import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
 import {
   hasDependencyCruiserBlocks,
@@ -219,12 +221,57 @@ export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string)
   return [file];
 }
 
+function presetBlocks(scan: ScanResult, structural: boolean): unknown[] {
+  const blocks = [
+    toEslintDeepRelative(scan.deepRelative),
+    toEslintConsoleIsolation(scan.consoleIsolation),
+  ];
+  if (structural) {
+    blocks.push(
+      toEslintEnvAccess(scan.envAccess),
+      toEslintWorkspacePackageApi(scan.workspacePackageApi),
+    );
+  }
+  return blocks.filter((block) => block !== null);
+}
+
+export function writeEslintPreset(
+  scan: ScanResult,
+  outDir: string,
+  options: { structural?: boolean } = {},
+): string[] {
+  const specs = buildForbiddenImportSpecs(scan.patterns);
+  const blocks = presetBlocks(scan, options.structural ?? false);
+  if (specs.length === 0 && blocks.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint-preset.archprint.mjs');
+  writeFileSync(file, renderEslintPreset(specs, blocks));
+  return [file];
+}
+
 export function writeEslintPlugin(scan: ScanResult, outDir: string): string[] {
   const specs = buildForbiddenImportSpecs(scan.patterns);
   if (specs.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'eslint-plugin.archprint.mjs');
   writeFileSync(file, renderEslintPluginSource(specs));
+  return [file];
+}
+
+export function writeTsArchTests(
+  scan: ScanResult,
+  outDir: string,
+  statuses: readonly GenerationStatus[] = ['AUTO'],
+): string[] {
+  const rules: BoundaryRule[] = [
+    ...toDependencyCruiser(scan.layerBoundaries, statuses).forbidden,
+    ...toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, statuses).forbidden,
+    ...toDependencyCruiserUiData(scan.uiDataIsolation).forbidden,
+  ];
+  if (rules.length === 0) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'architecture.archprint.test.ts');
+  writeFileSync(file, renderTsArchTests(rules));
   return [file];
 }
 
@@ -263,6 +310,10 @@ export function writeEnforcementConfigs(
 
   add(writeRules(scan, outDir, ['AUTO']), null);
   add(writeEslintPlugin(scan, outDir), 'forbidden-import rules as a loadable eslint plugin');
+  add(
+    writeEslintPreset(scan, outDir, { structural }),
+    'shareable single-file eslint preset (portable; needs only eslint)',
+  );
   if (structural) {
     add(
       writeLayerConfig(scan, outDir, ['AUTO']),
@@ -325,6 +376,11 @@ export function writeEnforcementConfigs(
       'server / client boundary: dependency-cruiser no-server-only-in-client rule',
     );
   }
+  if (structural)
+    add(
+      writeTsArchTests(scan, outDir, ['AUTO']),
+      'architecture boundaries: ts-arch dependency tests',
+    );
   add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
   return configs;
 }

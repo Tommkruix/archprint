@@ -5,7 +5,11 @@ the tools you already use.
 
 ## Install
 
-Until it is on npm, build from source:
+```bash
+npm install --save-dev archprint
+```
+
+Or run it without installing with `npx archprint scan .`, or build from source:
 
 ```bash
 git clone https://github.com/Tommkruix/archprint
@@ -62,6 +66,9 @@ archprint generate apps/web --include-structural
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
+Alongside the ESLint and dependency-cruiser configs it also writes a self-contained `eslint-preset.archprint.mjs`
+you can share or publish (adopt it in one line with `import archprint from './eslint-preset.archprint.mjs'`) and
+`ts-arch` tests for the first-party boundaries that run in your existing Vitest or Jest suite.
 
 ## For a fresh or thin repo
 

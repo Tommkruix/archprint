@@ -15,7 +15,25 @@ import { createIgnoreFilter } from './ignore-filter.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage']);
-const SOURCE_FILE = /\.(ts|tsx)$/;
+const SOURCE_FILE = /\.(ts|tsx|vue|svelte)$/;
+
+const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+const isSingleFileComponent = (filePath: string): boolean =>
+  filePath.endsWith('.vue') || filePath.endsWith('.svelte');
+
+function parseableSource(
+  absoluteFilePath: string,
+  text: string,
+): { source: string; scriptKind: ts.ScriptKind } {
+  if (isSingleFileComponent(absoluteFilePath)) {
+    const blocks = [...text.matchAll(SFC_SCRIPT)].map((match) => match[1] ?? '');
+    return { source: blocks.join('\n'), scriptKind: ts.ScriptKind.TS };
+  }
+  return {
+    source: text,
+    scriptKind: absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  };
+}
 
 export interface WalkedFile extends RoleClassification {
   absolutePath: string;
@@ -124,10 +142,6 @@ interface RawImport {
   hasValueBinding: boolean;
 }
 
-// Content-keyed parse cache: the raw import extraction (specifier + value-binding) depends only on the file
-// content, not on the analyzer's alias set, so it is safe to share across every detector that scans the same
-// file within a run. Edge classification stays per-analyzer and is applied on top. Keyed by path + mtime + size
-// so an edit is picked up; capped as a backstop against unbounded growth in long-lived processes.
 const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
 const FAST_PARSE_CACHE_CAP = 50000;
 
@@ -137,11 +151,13 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
     return cached.raw;
   }
-  const text = readFileSync(absoluteFilePath, 'utf8');
-  const scriptKind = absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const { source, scriptKind } = parseableSource(
+    absoluteFilePath,
+    readFileSync(absoluteFilePath, 'utf8'),
+  );
   const sourceFile = ts.createSourceFile(
     absoluteFilePath,
-    text,
+    source,
     ts.ScriptTarget.Latest,
     false,
     scriptKind,
@@ -172,21 +188,25 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   return raw;
 }
 
-// Fast import extraction with the raw TypeScript parser: same AST fidelity as ts-morph but without its
-// wrapper layer, which dominates fast-mode time. Used when we only need specifiers + value-binding, not
-// cross-file resolution.
+function specifierLevelImports(
+  absoluteFilePath: string,
+  classifyEdge: (specifier: string) => EdgeKind,
+): ResolvedImport[] {
+  return parseFastImports(absoluteFilePath).map((imp) => ({
+    specifier: imp.specifier,
+    edgeKind: classifyEdge(imp.specifier),
+    throughBarrel: false,
+    valueLeafPaths: [],
+    typeLeafPaths: [],
+    hasValueBinding: imp.hasValueBinding,
+  }));
+}
+
 function createFastImportAnalyzer(
   classifyEdge: (specifier: string) => EdgeKind,
 ): (absoluteFilePath: string) => ResolvedImport[] {
   return (absoluteFilePath: string): ResolvedImport[] =>
-    parseFastImports(absoluteFilePath).map((imp) => ({
-      specifier: imp.specifier,
-      edgeKind: classifyEdge(imp.specifier),
-      throughBarrel: false,
-      valueLeafPaths: [],
-      typeLeafPaths: [],
-      hasValueBinding: imp.hasValueBinding,
-    }));
+    specifierLevelImports(absoluteFilePath, classifyEdge);
 }
 
 export function createImportAnalyzer(
@@ -240,6 +260,11 @@ export function createImportAnalyzer(
   };
 
   return (absoluteFilePath: string): ResolvedImport[] => {
+    if (isSingleFileComponent(absoluteFilePath)) {
+      return specifierLevelImports(absoluteFilePath, (specifier) =>
+        classifyEdge(specifier, undefined),
+      );
+    }
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
     const results: ResolvedImport[] = sourceFile
       .getImportDeclarations()

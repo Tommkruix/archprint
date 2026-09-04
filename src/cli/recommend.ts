@@ -153,6 +153,7 @@ export function detectStack(appDir: string): Set<string> {
   if (has('@remix-run/react') || has('@remix-run/node')) tokens.add('remix');
   if (has('react')) tokens.add('react');
   if (has('vue')) tokens.add('vue');
+  if (some('@angular/')) tokens.add('angular');
   if (some('@storybook/') || has('storybook')) tokens.add('storybook');
   if (Object.keys(buildWorkspacePackageMap(workspaceRoot)).length > 0) tokens.add('monorepo');
   return tokens;

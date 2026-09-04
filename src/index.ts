@@ -197,6 +197,7 @@ export {
   layerGraphEdges,
   type LayerGraphEdge,
 } from './generator/graph-emitters.js';
+export { renderTsArchTests, type BoundaryRule } from './generator/tsarch-emitter.js';
 export {
   toDependencyCruiserPublicApi,
   type DeepImportConfig,

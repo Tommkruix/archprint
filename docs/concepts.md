@@ -61,7 +61,10 @@ deep pass before enforcing).
 `generate` (and `init`) write into `archprint-rules/`:
 
 - ESLint rule blocks and a plugin for the forbidden-import rules,
+- a shareable, self-contained ESLint preset (`eslint-preset.archprint.mjs`) that inlines the rules and needs
+  only eslint, so it can be committed, published, or shared and adopted in one line,
 - dependency-cruiser forbidden-rule configs,
+- ts-arch tests for the first-party boundaries (layer, role, UI/data), runnable in your existing test suite,
 - a rule card, passing fixture, and failing fixture for each forbidden-import rule,
 - an outputs manifest (`.archprint-outputs.json`) that records exactly what Archprint owns.
 

@@ -53,6 +53,10 @@ const ROLE_RULES: readonly RoleRule[] = [
     confidence: 1,
   },
   { role: 'PROMPT_FILE', id: 'prompt-skill-suffix', test: /\.(prompt|skill)\.ts$/, confidence: 1 },
+  { role: 'COMPONENT', id: 'angular-component', test: /\.component\.ts$/, confidence: 0.9 },
+  { role: 'COMPONENT', id: 'angular-directive', test: /\.directive\.ts$/, confidence: 0.85 },
+  { role: 'COMPONENT', id: 'vue-sfc', test: /\.vue$/, confidence: 0.9 },
+  { role: 'COMPONENT', id: 'svelte-sfc', test: /\.svelte$/, confidence: 0.9 },
   {
     role: 'ROUTE_HANDLER',
     id: 'next-app-router-route',

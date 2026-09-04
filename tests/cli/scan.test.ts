@@ -45,7 +45,9 @@ import {
   writeRules,
   writeServerClientConfig,
   writeStoriesIsolationConfig,
+  writeEslintPreset,
   writeTestIsolationConfig,
+  writeTsArchTests,
   writeUiDataConfig,
   writeWorkspacePackageConfig,
 } from '../../src/cli/generate.js';
@@ -819,6 +821,38 @@ describe('cli generate', () => {
     };
     expect(config.forbidden[0]!.name).toBe('no-utils-to-api');
     expect(files.some((file) => file.endsWith('eslint-boundaries.archprint.json'))).toBe(true);
+  });
+
+  it('writes a portable, self-contained eslint preset from AUTO forbidden imports', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan = scanRepo(path.join(here, '..', 'fixtures', 'cli-auto'));
+    const files = writeEslintPreset(scan, outDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]!.endsWith('eslint-preset.archprint.mjs')).toBe(true);
+    const source = readFileSync(files[0]!, 'utf8');
+    expect(source).toContain('export default [...BLOCKS, ...pluginConfigs];');
+    expect(source).not.toContain('readdirSync');
+
+    const none = emptyScan({ fileCount: 10, aliasCount: 1 });
+    expect(writeEslintPreset(none, outDir)).toEqual([]);
+  });
+
+  it('writes ts-arch boundary tests from AUTO layer boundaries, none otherwise', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const scan = emptyScan({
+      fileCount: 10,
+      aliasCount: 1,
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+    });
+    const files = writeTsArchTests(scan, outDir, ['AUTO']);
+    expect(files).toHaveLength(1);
+    expect(files[0]!.endsWith('architecture.archprint.test.ts')).toBe(true);
+    const source = readFileSync(files[0]!, 'utf8');
+    expect(source).toContain("import { filesOfProject } from 'tsarch';");
+    expect(source).toContain('no-utils-to-api');
+
+    const none = emptyScan({ fileCount: 10, aliasCount: 1 });
+    expect(writeTsArchTests(none, outDir, ['AUTO'])).toEqual([]);
   });
 
   it('writes a public-API deep-import config for AUTO groups, none otherwise', () => {

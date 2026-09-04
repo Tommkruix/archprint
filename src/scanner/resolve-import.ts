@@ -6,15 +6,14 @@ export interface AliasEntry {
   dir: string;
 }
 
-// ESM/NodeNext rewrites a `.js` import to its `.ts` source; map the JS-ish extensions to the TS ones so those
-// specifiers resolve. Without this, an ESM TypeScript project resolves to zero first-party edges.
 const JS_EXT_TO_TS: Record<string, readonly string[]> = {
   '.js': ['.ts', '.tsx'],
   '.jsx': ['.tsx'],
   '.mjs': ['.ts', '.tsx'],
   '.cjs': ['.ts', '.tsx'],
 };
-const BARE_CANDIDATES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
+const BARE_CANDIDATES = ['', '.ts', '.tsx', '.vue', '.svelte', '/index.ts', '/index.tsx'];
+const FIRST_PARTY_TARGET = /\.(ts|tsx|vue|svelte)$/;
 
 function specifierBase(
   specifier: string,
@@ -47,7 +46,7 @@ export function resolveFirstPartyImport(
   }
   for (const suffix of BARE_CANDIDATES) candidates.push(base + suffix);
   for (const candidate of candidates) {
-    if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return candidate;
+    if (FIRST_PARTY_TARGET.test(candidate) && existsSync(candidate)) return candidate;
   }
   return null;
 }

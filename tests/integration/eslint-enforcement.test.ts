@@ -11,8 +11,6 @@ import { renderEslintPluginSource } from '../../src/generator/eslint-plugin-emit
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'console-isolation-auto');
 
-// End-to-end proof that a wired archprint eslint config actually enforces: generate the real output,
-// reference the aggregator the way `wire` does, then run the real eslint engine over violating and clean code.
 describe('eslint enforcement (end to end)', () => {
   let tmp: string;
   let eslint: ESLint;
@@ -21,7 +19,6 @@ describe('eslint enforcement (end to end)', () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'archprint-e2e-'));
     const outDir = path.join(tmp, 'archprint-rules');
     regenerateConfigs(scanRepo(fixture), outDir, { version: '0.0.0' });
-    // The console-isolation fixture must have produced a wireable eslint block + aggregator.
     expect(existsSync(path.join(outDir, 'eslint.console-isolation.archprint.json'))).toBe(true);
     expect(existsSync(path.join(outDir, 'eslint.archprint.mjs'))).toBe(true);
     const configPath = path.join(tmp, 'eslint.config.mjs');
@@ -52,7 +49,6 @@ describe('eslint enforcement (end to end)', () => {
   });
 });
 
-// The flagship AP- forbidden-import rules ship as a generated eslint plugin. Prove one loads and fires.
 describe('generated eslint plugin (AP- rules, end to end)', () => {
   let tmp: string;
   let eslint: ESLint;
@@ -98,7 +94,6 @@ describe('generated eslint plugin (AP- rules, end to end)', () => {
   });
 });
 
-// A generated AP- rule grandfathers its known exceptions (adoption is green) but still catches new violations.
 describe('generated eslint plugin grandfathering (end to end)', () => {
   let tmp: string;
   let eslint: ESLint;

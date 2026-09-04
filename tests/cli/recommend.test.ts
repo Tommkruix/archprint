@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -15,6 +17,19 @@ describe('detectStack', () => {
 
   it('detects a monorepo from workspaces', () => {
     expect(detectStack(fixture('workspace-package')).has('monorepo')).toBe(true);
+  });
+
+  it('detects angular from @angular/* dependencies', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'archprint-ng-'));
+    try {
+      writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { '@angular/core': '^17.0.0' } }),
+      );
+      expect(detectStack(dir).has('angular')).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

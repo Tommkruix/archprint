@@ -1,6 +1,5 @@
 import { defineConfig } from 'vitepress';
 
-// Project pages live under /archprint/. The README is the GitHub directory index; the site home is index.md.
 export default defineConfig({
   title: 'Archprint',
   description:

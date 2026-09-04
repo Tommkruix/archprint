@@ -20,3 +20,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:coverage
       - run: npm run build
+      # Dogfood: run the built CLI on Archprint's own code. Fails the build if a scan crashes on a
+      # real repo, and the JSON is validated so the machine output stays well-formed.
+      - run: node dist/cli.js scan . --json | node -e "JSON.parse(require('node:fs').readFileSync(0,'utf8'))"
