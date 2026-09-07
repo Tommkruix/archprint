@@ -85,9 +85,6 @@ export function detectRoleLayering(
       if (ab === 0 && ba === 0) continue;
       const [from, to, violating, reverseFlow] = ab <= ba ? [a, b, ab, ba] : [b, a, ba, ab];
       const count = roleFileCount.get(from)!;
-      // Two things must both hold for a role boundary to be trustworthy: the files really are that role (the
-      // classifier's average confidence), and the inferred direction is real, not a near-even coin flip (the
-      // Wilson lower bound on the dominant direction's share of the crossing edges). Take the weakest link.
       const classificationConfidence = confidenceSum.get(from)! / count;
       const directionalConfidence = wilsonLowerBound(reverseFlow, violating + reverseFlow);
       const roleConfidence = Math.min(classificationConfidence, directionalConfidence);

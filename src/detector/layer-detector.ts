@@ -197,10 +197,6 @@ export function detectLayerBoundaries(
       if (ab === 0 && ba === 0) continue;
       const [from, to, violating, reverseFlow] = ab <= ba ? [a, b, ab, ba] : [b, a, ba, ab];
       const roleFileCount = layerFileCount.get(from)!;
-      // Confidence that the inferred DIRECTION is real, not noise: the Wilson lower bound on the dominant
-      // direction's share of the edges that actually cross this boundary. A lopsided, well-sampled flow
-      // (ba >> ab, large ab+ba) scores high; a near-even or thin one (ab ~ ba, few edges) scores low and cannot
-      // AUTO on direction alone. This replaces an unconditional roleConfidence of 1.
       const directionalConfidence = wilsonLowerBound(reverseFlow, violating + reverseFlow);
       const gate = evaluateGate({
         roleFileCount,
