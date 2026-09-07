@@ -45,12 +45,18 @@ function countStructuralAuto(scan: ScanResult): number {
 
 function resolveApp(input: string): string {
   const appDir = path.resolve(input);
-  if (!hasTsConfig(appDir)) {
+  if (hasTsConfig(appDir)) return appDir;
+  const discovered = discoverAppDirs(appDir);
+  if (discovered.length === 1) return discovered[0]!;
+  if (discovered.length > 1) {
+    const list = discovered.map((dir) => `  ${displayPath(dir, appDir)}`).join('\n');
     throw new Error(
-      `No tsconfig.json in ${appDir}. Point archprint at an app directory (for a monorepo, e.g. apps/web).`,
+      `No tsconfig.json in ${displayPath(appDir)}, but found ${discovered.length} app directories. Point archprint at one (e.g. \`${displayPath(discovered[0]!, appDir)}\`):\n${list}`,
     );
   }
-  return appDir;
+  throw new Error(
+    `No tsconfig.json in ${appDir}. Point archprint at an app directory (for a monorepo, e.g. apps/web).`,
+  );
 }
 
 function displayPath(target: string, cwd: string = process.cwd()): string {
@@ -268,14 +274,28 @@ export function buildProgram(version = readVersion()): Command {
     .argument('[path]', 'app directory', '.')
     .option('--json', 'emit a machine-readable JSON summary instead of the human report')
     .action((input: string, options: { json?: boolean }) => {
-      const appDir = resolveApp(input);
-      const scan = scanRepo(appDir, { deep: false });
-      const recommendations = buildRecommendations(scan, detectStack(appDir));
+      const root = path.resolve(input);
+      const appDirs = discoverAppDirs(root);
+      if (appDirs.length === 0) {
+        throw new Error(
+          `No tsconfig.json found under ${root}. Point archprint at an app directory (a directory with a tsconfig.json); a monorepo root is fine.`,
+        );
+      }
+      const recommendFor = (appDir: string) =>
+        buildRecommendations(scanRepo(appDir, { deep: false }), detectStack(appDir));
       if (options.json) {
-        console.log(JSON.stringify({ archprintVersion: version, ...recommendations }, null, 2));
+        const apps = appDirs.map((appDir) => ({
+          app: displayPath(appDir, root),
+          ...recommendFor(appDir),
+        }));
+        console.log(JSON.stringify({ archprintVersion: version, apps }, null, 2));
         return;
       }
-      console.log(renderRecommendations(recommendations, version));
+      const reports = appDirs.map((appDir) => {
+        const label = appDirs.length > 1 ? `### ${path.relative(root, appDir) || '.'}\n` : '';
+        return label + renderRecommendations(recommendFor(appDir), version);
+      });
+      console.log(reports.join('\n\n'));
     });
 
   program

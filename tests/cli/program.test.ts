@@ -71,17 +71,27 @@ describe('cli program', () => {
     expect(parsed.apps[0]!.rules.every((rule) => rule.status !== 'REJECT')).toBe(true);
   });
 
-  it('recommend --json emits the three tiers as parseable JSON', async () => {
+  it('recommend --json emits per-app tiers as parseable JSON', async () => {
     await run(['recommend', auto, '--json']);
     const parsed = JSON.parse(output()) as {
       archprintVersion: string;
-      enforceNow: unknown[];
-      review: unknown[];
-      adopt: unknown[];
+      apps: { app: string; enforceNow: unknown[]; review: unknown[]; adopt: unknown[] }[];
     };
     expect(parsed.archprintVersion).toBe('9.9.9');
-    expect(Array.isArray(parsed.enforceNow)).toBe(true);
-    expect(Array.isArray(parsed.adopt)).toBe(true);
+    expect(Array.isArray(parsed.apps)).toBe(true);
+    expect(parsed.apps.length).toBeGreaterThan(0);
+    expect(Array.isArray(parsed.apps[0]!.enforceNow)).toBe(true);
+    expect(Array.isArray(parsed.apps[0]!.adopt)).toBe(true);
+  });
+
+  it('recommend discovers every app under a monorepo root', async () => {
+    await run(['recommend', multiApp, '--json']);
+    const parsed = JSON.parse(output()) as { apps: { app: string }[] };
+    expect(parsed.apps.map((a) => a.app).sort()).toEqual(['app-a', 'app-b']);
+  });
+
+  it('generate on a monorepo root guides to the discovered app dirs', async () => {
+    await expect(run(['generate', multiApp])).rejects.toThrow(/found 2 app directories/);
   });
 
   it('generate writes all four artifacts (deep by default, no warning)', async () => {

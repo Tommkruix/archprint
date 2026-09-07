@@ -6,7 +6,12 @@ import {
   type WalkedFile,
 } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
-import { evaluateGate, type GateResult, type GenerationStatus } from './confidence-gate.js';
+import {
+  evaluateGate,
+  type GateResult,
+  type GenerationStatus,
+  wilsonLowerBound,
+} from './confidence-gate.js';
 
 const STRUCTURAL_SEGMENTS = new Set([
   'src',
@@ -192,10 +197,11 @@ export function detectLayerBoundaries(
       if (ab === 0 && ba === 0) continue;
       const [from, to, violating, reverseFlow] = ab <= ba ? [a, b, ab, ba] : [b, a, ba, ab];
       const roleFileCount = layerFileCount.get(from)!;
+      const directionalConfidence = wilsonLowerBound(reverseFlow, violating + reverseFlow);
       const gate = evaluateGate({
         roleFileCount,
         violatingFileCount: violating,
-        roleConfidence: 1,
+        roleConfidence: directionalConfidence,
       });
       const violations = [...(edges.get(`${from}>${to}`)?.entries() ?? [])].map(
         ([file, specifier]) => ({ file, specifier }),
@@ -211,7 +217,7 @@ export function detectLayerBoundaries(
           conformingFileCount: roleFileCount - violating,
           violatingFileCount: violating,
           ratio: gate.observedConformance,
-          roleConfidence: 1,
+          roleConfidence: directionalConfidence,
         },
         gate,
         violations,

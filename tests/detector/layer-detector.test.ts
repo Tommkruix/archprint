@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { detectLayerBoundaries, evaluateGate, layerOfPath } from '../../src/index.js';
+import { detectLayerBoundaries, layerOfPath } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'layers');
@@ -38,9 +38,10 @@ describe('detectLayerBoundaries', () => {
     expect(uc).toBeDefined();
     expect(uc!.stats.violatingFileCount).toBe(0);
     expect(uc!.reverseFlow).toBe(3);
-    expect(uc!.gate.status).toBe(
-      evaluateGate({ roleFileCount: 3, violatingFileCount: 0, roleConfidence: 1 }).status,
-    );
+    // Direction is clean but the evidence is only 3 cross-layer edges, too thin to trust the direction, so the
+    // boundary does not reach AUTO (its directional confidence is well below the role-confidence threshold).
+    expect(uc!.stats.roleConfidence).toBeLessThan(0.5);
+    expect(uc!.gate.status).not.toBe('AUTO');
   });
 
   it('counts the real leak on the components -> features boundary', () => {

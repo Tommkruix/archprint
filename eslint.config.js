@@ -12,6 +12,7 @@ export default tseslint.config(
       'tests/fixtures/**',
       'docs/.vitepress/dist/**',
       'docs/.vitepress/cache/**',
+      '.changeset/**',
     ],
   },
   js.configs.recommended,
