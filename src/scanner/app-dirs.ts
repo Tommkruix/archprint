@@ -9,7 +9,12 @@ function findTsconfigDirs(root: string): string[] {
   const dirs: string[] = [];
   const isIgnored = createIgnoreFilter(root);
   const walk = (dir: string): void => {
-    if (existsSync(path.join(dir, 'tsconfig.json'))) dirs.push(dir);
+    if (
+      existsSync(path.join(dir, 'tsconfig.json')) ||
+      existsSync(path.join(dir, 'tsconfig.base.json'))
+    ) {
+      dirs.push(dir);
+    }
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -58,7 +63,7 @@ export function discoverAppDirs(root: string, minFiles = 25): string[] {
   }
 
   const sizable = tsconfigDirs.filter((dir) => (ownCount.get(dir) ?? 0) >= minFiles);
-  const chosen =
-    sizable.length > 0 ? sizable : tsconfigDirs.filter((dir) => (ownCount.get(dir) ?? 0) > 0);
+  const withFiles = tsconfigDirs.filter((dir) => (ownCount.get(dir) ?? 0) > 0);
+  const chosen = sizable.length > 0 ? sizable : withFiles.length > 0 ? withFiles : tsconfigDirs;
   return chosen.sort();
 }
