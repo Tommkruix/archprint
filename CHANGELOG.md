@@ -1,5 +1,25 @@
 # archprint
 
+## 0.4.0
+
+### Minor Changes
+
+- Monorepo-friendly `recommend`, `generate`, and `init`. `recommend` now discovers every app directory under a
+  monorepo root and reports per app (its `--json` output gains an `apps` array, matching `scan`). `generate` and
+  `init` automatically use the single app directory they find under a root, or, when a monorepo has several, list
+  the directories to point at instead of failing with a generic message.
+
+### Patch Changes
+
+- More accurate layer-boundary inference. A layer boundary is now trusted for auto-enforcement only when the
+  evidence for its direction is strong (many imports consistently flow the dominant way). Boundaries inferred from
+  just a handful of cross-layer imports, where the direction could be noise, are held for review instead, which
+  removes spurious layer rules while keeping the well-evidenced ones.
+- More accurate role-layering inference. A role boundary (for example, a repository must not import a service) is
+  now trusted for auto-enforcement only when both the file roles are confidently classified and the direction is
+  strongly evidenced. Boundaries whose direction rests on just a couple of imports, where it could be a coin flip,
+  are held for review instead.
+
 ## 0.3.0
 
 ### Minor Changes
