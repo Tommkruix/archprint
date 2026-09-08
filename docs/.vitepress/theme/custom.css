@@ -1,6 +1,3 @@
-/* Archprint docs: mobile refinements over the default VitePress theme. The rule, comparison, and command
-   tables are wide; on a phone they must scroll inside their own box rather than force the page sideways. */
-
 .vp-doc table {
   display: block;
   width: 100%;
