@@ -1,12 +1,3 @@
-CLAUDE.md
-AGENTS.md
-GEMINI.md
-.claude/
-.cursor/
-.cursorrules
-.gemini/
-.github/copilot-instructions.md
-
 .DS_Store
 *.swp
 .idea/
@@ -21,17 +12,11 @@ npm-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-/tmp-repos/
 *.local
 .env
 .env.*
 
-ab/
-
-docs/*.html
-
 tests/generator/__generated__/
-
 tests/cli/__generated__/
 tests/cli/__prog__/
 
