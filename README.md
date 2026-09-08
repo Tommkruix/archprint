@@ -17,10 +17,10 @@ Your `CLAUDE.md` is guidance. Your lint rules are enforcement. Archprint closes 
 enforcement from patterns your codebase already demonstrates, so you adopt rules you can trust instead of
 authoring them by hand.
 
-Validated at scale: the full CLI workflow (`scan`, `recommend`, `generate`, `wire`, `eject`) was run across
-92,861 real public TypeScript repositories with zero crashes, and the reversible install/uninstall round-trip
-held. A companion benchmark, [AgentRuleBench](https://github.com/Tommkruix/agentrulebench), measures the
-guidance-vs-enforcement question directly (a pre-registered, honest null result on the boundary it tested).
+Validated at scale: `scan` and `recommend` ran across all 92,861 real public TypeScript repositories with zero
+crashes, and the full `init`/`wire`/`eject` round-trip ran clean on a 2,000-repo stratified sample. A companion
+benchmark, [AgentRuleBench](https://github.com/Tommkruix/agentrulebench), measures the guidance-vs-enforcement
+question directly (a pre-registered, honest null result on the boundary it tested).
 
 **What auto-enforces vs. what you review.** Archprint is honest about which of its inferences it will stand
 behind unattended. An adversarial correctness audit (three rounds over four real repositories) found that the
