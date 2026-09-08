@@ -3,20 +3,18 @@ name: Release
 on:
   push:
     branches: [main]
-  workflow_dispatch: # allow manual re-runs from the Actions tab
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: write # create git tags + GitHub Releases
-  pull-requests: write # open the "Version Packages" PR
-  id-token: write # OIDC: npm provenance + trusted publishing (no long-lived token)
+  contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Do not install husky git hooks in CI: the Changesets "Version Packages" bot commit is not
-    # Conventional-Commits shaped and would be rejected by the commit-msg (commitlint) hook.
     env:
       HUSKY: 0
     steps:
@@ -26,20 +24,12 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
-      # OIDC trusted publishing requires npm >= 11.5.1; Node 22 ships npm 10.x, so upgrade.
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
-      # Changesets opens/updates a "Version Packages" PR when there are unreleased
-      # changesets on main. When that PR is merged, `publish` runs: it publishes to
-      # npm (with provenance), then creates a git tag (vX.Y.Z) and a GitHub Release.
       - uses: changesets/action@v1
         with:
           version: npx changeset version
           publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # One-time setup on npmjs.com: configure this GitHub repo/workflow as a
-          # Trusted Publisher for the "archprint" package, then OIDC needs no token.
-          # Fallback if you prefer a token instead of OIDC trusted publishing:
-          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

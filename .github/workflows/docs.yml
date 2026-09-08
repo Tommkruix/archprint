@@ -1,7 +1,5 @@
 name: Docs
 
-# Builds the VitePress site from docs/ and deploys it to GitHub Pages.
-# One-time setup: repo Settings -> Pages -> Source: GitHub Actions (needs a public repo).
 on:
   push:
     branches: [main]
@@ -16,7 +14,6 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one concurrent deployment; do not cancel an in-progress run.
 concurrency:
   group: pages
   cancel-in-progress: false

@@ -38,8 +38,6 @@ describe('detectLayerBoundaries', () => {
     expect(uc).toBeDefined();
     expect(uc!.stats.violatingFileCount).toBe(0);
     expect(uc!.reverseFlow).toBe(3);
-    // Direction is clean but the evidence is only 3 cross-layer edges, too thin to trust the direction, so the
-    // boundary does not reach AUTO (its directional confidence is well below the role-confidence threshold).
     expect(uc!.stats.roleConfidence).toBeLessThan(0.5);
     expect(uc!.gate.status).not.toBe('AUTO');
   });

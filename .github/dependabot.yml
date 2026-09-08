@@ -2,7 +2,6 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: '/'
-    # Contributions flow through develop; keep dependency PRs on the same path.
     target-branch: develop
     schedule:
       interval: weekly
@@ -12,8 +11,6 @@ updates:
         dependency-type: development
         update-types: ['minor', 'patch']
     ignore:
-      # The analysis engine is pinned exact and updated manually + retested before a release
-      # (determinism: identical repo + version => identical output). Not auto-bumped.
       - dependency-name: typescript
       - dependency-name: ts-morph
   - package-ecosystem: github-actions
