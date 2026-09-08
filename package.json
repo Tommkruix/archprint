@@ -88,7 +88,7 @@
     "eslint-config-prettier": "^10.1.8",
     "get-tsconfig": "^4.14.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.4.1",
     "oxc-resolver": "^11.22.0",
     "prettier": "^3.9.4",
     "tsconfig-paths": "^4.2.0",
