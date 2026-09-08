@@ -27,7 +27,18 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
+      - id: state
+        run: |
+          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l)
+          version=$(node -p "require('./package.json').version")
+          published=$(npm view "archprint@$version" version 2>/dev/null || true)
+          if [ "$pending" -eq 0 ] && [ "$published" = "$version" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: changesets/action@v1
+        if: steps.state.outputs.skip != 'true'
         with:
           version: npx changeset version
           publish: npm run release
