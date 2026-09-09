@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
-import { detectEnforcers } from '../scanner/enforcers.js';
+import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
 import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
@@ -42,6 +42,21 @@ function countStructuralAuto(scan: ScanResult): number {
     groups.reduce((n, g) => n + g.filter((x) => x.gate.status === 'AUTO').length, 0) +
     singles.filter((s) => s.gate.status === 'AUTO').length
   );
+}
+
+const EMIT_TARGETS = ['eslint', 'dependency-cruiser', 'all'];
+
+function applyEmitOverride(detected: InstalledEnforcers, emit?: string): InstalledEnforcers {
+  switch (emit) {
+    case 'eslint':
+      return { ...detected, eslint: true, dependencyCruiser: false };
+    case 'dependency-cruiser':
+      return { ...detected, eslint: false, dependencyCruiser: true };
+    case 'all':
+      return { ...detected, eslint: true, dependencyCruiser: true };
+    default:
+      return detected;
+  }
 }
 
 function resolveApp(input: string): string {
@@ -209,11 +224,30 @@ export function buildProgram(version = readVersion()): Command {
       '--rule <id>',
       'emit a single rule by id (e.g. AP-001) after reviewing its evidence with `explain`, including a SUGGEST rule',
     )
+    .option(
+      '--emit <target>',
+      'force the output format regardless of detected tooling: eslint, dependency-cruiser, or all',
+    )
+    .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz)')
     .action(
       (
         input: string,
-        options: { out: string; fast?: boolean; includeStructural?: boolean; rule?: string },
+        options: {
+          out: string;
+          fast?: boolean;
+          includeStructural?: boolean;
+          rule?: string;
+          emit?: string;
+          graph?: boolean;
+        },
       ) => {
+        if (options.emit !== undefined && !EMIT_TARGETS.includes(options.emit)) {
+          console.error(
+            `Invalid --emit target '${options.emit}'. Use: ${EMIT_TARGETS.join(', ')}.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
         if (options.rule !== undefined) {
           const { appDir, pattern } = findPattern(input, options.rule, !options.fast);
           const dir = emitOne(pattern, appDir, path.resolve(options.out));
@@ -243,7 +277,8 @@ export function buildProgram(version = readVersion()): Command {
         const { configs, removed } = regenerateConfigs(scan, outDir, {
           structural,
           version,
-          enforcers: detectEnforcers(scan.appDir),
+          enforcers: applyEmitOverride(detectEnforcers(scan.appDir), options.emit),
+          graph: options.graph,
         });
         if (removed.length > 0) {
           console.log(

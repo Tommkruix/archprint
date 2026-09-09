@@ -326,7 +326,7 @@ const countAuto = (items: readonly { gate: { status: GenerationStatus } }[]): nu
 export function writeEnforcementConfigs(
   scan: ScanResult,
   outDir: string,
-  options: { structural?: boolean; enforcers: InstalledEnforcers },
+  options: { structural?: boolean; enforcers: InstalledEnforcers; graph?: boolean },
 ): WrittenConfig[] {
   const structural = options.structural ?? false;
   const emitDepcruise = options.enforcers.dependencyCruiser;
@@ -444,19 +444,26 @@ export function writeEnforcementConfigs(
       writeTsArchTests(scan, outDir, ['AUTO']),
       'architecture boundaries: ts-arch dependency tests',
     );
-  add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
+  if (options.graph !== false)
+    add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
   return configs;
 }
 
 export function regenerateConfigs(
   scan: ScanResult,
   outDir: string,
-  options: { structural?: boolean; version: string; enforcers: InstalledEnforcers },
+  options: {
+    structural?: boolean;
+    version: string;
+    enforcers: InstalledEnforcers;
+    graph?: boolean;
+  },
 ): { configs: WrittenConfig[]; removed: string[] } {
   const removed = cleanPreviousOutputs(outDir);
   const configs = writeEnforcementConfigs(scan, outDir, {
     structural: options.structural,
     enforcers: options.enforcers,
+    graph: options.graph,
   });
   const allPaths = configs.flatMap((config) => config.files);
   if (hasEslintOutputs(allPaths)) allPaths.push(writeEslintAggregator(outDir));

@@ -150,6 +150,34 @@ describe('cli program', () => {
     expect(output()).toContain('test isolation');
   });
 
+  it('generate --emit eslint forces the eslint form of a dual-tool family', async () => {
+    await run(['generate', testIsolationAuto, '--emit', 'eslint', '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.test-isolation.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
+      false,
+    );
+  });
+
+  it('generate --no-graph skips the layer dependency graph', async () => {
+    await run([
+      'generate',
+      layerAuto,
+      '--include-structural',
+      '--no-graph',
+      '--fast',
+      '--out',
+      out,
+    ]);
+    expect(existsSync(path.join(out, 'layer-graph.archprint.mmd'))).toBe(false);
+  });
+
+  it('generate rejects an invalid --emit target', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(['generate', layerAuto, '--emit', 'biome', '--out', out]);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Invalid --emit target');
+    process.exitCode = 0;
+  });
+
   it('generate writes the app-isolation config for AUTO app isolation', async () => {
     await run(['generate', appIsolationAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(
