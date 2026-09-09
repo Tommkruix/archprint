@@ -53,6 +53,27 @@ describe('wiring transforms', () => {
     expect(result.reason).toBe('no-array-export');
   });
 
+  it('wires the indirect Next.js shape (const config = [...]; export default config) and round-trips', () => {
+    const src = "import next from 'x';\nconst config = [\n  ...next,\n];\nexport default config;\n";
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('const config = [\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
+  it('resolves an identifier export to a defineConfig([...]) declaration', () => {
+    const src = 'const config = defineConfig([\n  base,\n]);\nexport default config;\n';
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('defineConfig([\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
+  it('resolves a let-declared config array', () => {
+    const result = wireEslintContent('let config = [\n];\nexport default config;\n', './x.mjs');
+    expect(result.changed).toBe(true);
+  });
+
   it('supports the module.exports = [ ] form', () => {
     const result = wireEslintContent('module.exports = [\n];\n', './x.mjs');
     expect(result.changed).toBe(true);

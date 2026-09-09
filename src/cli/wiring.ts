@@ -9,22 +9,40 @@ const SPREAD_MARK = '// archprint:managed';
 const ESLINT_CONFIG_NAMES = ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs'];
 const CONFIG_DECL = /export\s+default\s+|module\.exports\s*=\s*/;
 const CONFIG_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
+const IDENTIFIER = /^[A-Za-z_$][\w$]*/;
+
+function skipWhitespaceFrom(content: string, from: number): number {
+  let index = from;
+  while (index < content.length && /\s/.test(content[index]!)) index += 1;
+  return index;
+}
+
+function insertionPointFrom(content: string, from: number): number | null {
+  const index = skipWhitespaceFrom(content, from);
+  if (content[index] === '[') return index + 1;
+  const call = CONFIG_CALL.exec(content.slice(index));
+  if (call === null) return null;
+  const afterParen = index + call[0].length;
+  const arrayStart = skipWhitespaceFrom(content, afterParen);
+  return content[arrayStart] === '[' ? arrayStart + 1 : afterParen;
+}
+
+function resolveIdentifierExport(content: string, from: number): number | null {
+  const start = skipWhitespaceFrom(content, from);
+  const match = IDENTIFIER.exec(content.slice(start));
+  if (match === null) return null;
+  const name = match[0];
+  const after = skipWhitespaceFrom(content, start + name.length);
+  if (content[after] !== undefined && content[after] !== ';') return null;
+  const decl = new RegExp(`(?:const|let)\\s+${name.replace(/\$/g, '\\$&')}\\s*=\\s*`).exec(content);
+  return decl === null ? null : insertionPointFrom(content, decl.index + decl[0].length);
+}
 
 function findInsertionPoint(content: string): number | null {
   const decl = CONFIG_DECL.exec(content);
   if (decl === null) return null;
-  let index = decl.index + decl[0].length;
-  const skipWhitespace = (): void => {
-    while (index < content.length && /\s/.test(content[index]!)) index += 1;
-  };
-  skipWhitespace();
-  if (content[index] === '[') return index + 1;
-  const call = CONFIG_CALL.exec(content.slice(index));
-  if (call === null) return null;
-  index += call[0].length;
-  const afterParen = index;
-  skipWhitespace();
-  return content[index] === '[' ? index + 1 : afterParen;
+  const start = decl.index + decl[0].length;
+  return insertionPointFrom(content, start) ?? resolveIdentifierExport(content, start);
 }
 
 const AGGREGATOR_SOURCE = `${MANAGED_START.replace('run `archprint eject` to remove', 'regenerate with `archprint generate`')}
