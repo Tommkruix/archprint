@@ -4,12 +4,19 @@ import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
 import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
-import { toDependencyCruiserTestIsolation } from '../generator/test-isolation-emitters.js';
+import {
+  toDependencyCruiserTestIsolation,
+  toEslintTestIsolation,
+} from '../generator/test-isolation-emitters.js';
 import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emitters.js';
 import { toDependencyCruiserDependencyInternals } from '../generator/dependency-internals-emitters.js';
 import { toDependencyCruiserRoleLayering } from '../generator/role-layering-emitters.js';
 import { toDependencyCruiserEntryPurity } from '../generator/entry-purity-emitters.js';
-import { toDependencyCruiserPhantomDependencies } from '../generator/phantom-dependency-emitters.js';
+import {
+  toDependencyCruiserPhantomDependencies,
+  toEslintPhantomDependencies,
+} from '../generator/phantom-dependency-emitters.js';
+import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { toEslintDeepRelative } from '../generator/deep-relative-emitters.js';
 import { toEslintConsoleIsolation } from '../generator/console-isolation-emitters.js';
 import { toEslintEnvAccess } from '../generator/env-access-emitters.js';
@@ -149,6 +156,24 @@ export function writeConsoleIsolationConfig(scan: ScanResult, outDir: string): s
   return [file];
 }
 
+export function writeEslintTestIsolationConfig(scan: ScanResult, outDir: string): string[] {
+  const config = toEslintTestIsolation(scan.testIsolation);
+  if (config === null) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint.test-isolation.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
+export function writeEslintPhantomDependencyConfig(scan: ScanResult, outDir: string): string[] {
+  const config = toEslintPhantomDependencies(scan.phantomDependencies);
+  if (config === null) return [];
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, 'eslint.phantom-deps.archprint.json');
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return [file];
+}
+
 export function writeServerClientConfig(scan: ScanResult, outDir: string): string[] {
   const config = toDependencyCruiserServerClient(scan.serverClient);
   if (config.forbidden.length === 0) return [];
@@ -225,6 +250,7 @@ function presetBlocks(scan: ScanResult, structural: boolean): unknown[] {
   const blocks = [
     toEslintDeepRelative(scan.deepRelative),
     toEslintConsoleIsolation(scan.consoleIsolation),
+    toEslintTestIsolation(scan.testIsolation),
   ];
   if (structural) {
     blocks.push(
@@ -300,21 +326,32 @@ const countAuto = (items: readonly { gate: { status: GenerationStatus } }[]): nu
 export function writeEnforcementConfigs(
   scan: ScanResult,
   outDir: string,
-  options: { structural?: boolean } = {},
+  options: { structural?: boolean; enforcers: InstalledEnforcers },
 ): WrittenConfig[] {
   const structural = options.structural ?? false;
+  const emitDepcruise = options.enforcers.dependencyCruiser;
+  const emitEslint = options.enforcers.eslint || !options.enforcers.dependencyCruiser;
+  const emitImportPlugin = emitEslint && options.enforcers.eslintPluginImport;
   const configs: WrittenConfig[] = [];
   const add = (files: string[], label: string | null): void => {
     if (files.length > 0) configs.push({ files, label });
   };
+  const addIf = (condition: boolean, files: string[], label: string | null): void => {
+    if (condition) add(files, label);
+  };
 
-  add(writeRules(scan, outDir, ['AUTO']), null);
-  add(writeEslintPlugin(scan, outDir), 'forbidden-import rules as a loadable eslint plugin');
-  add(
+  addIf(emitEslint, writeRules(scan, outDir, ['AUTO']), null);
+  addIf(
+    emitEslint,
+    writeEslintPlugin(scan, outDir),
+    'forbidden-import rules as a loadable eslint plugin',
+  );
+  addIf(
+    emitEslint,
     writeEslintPreset(scan, outDir, { structural }),
     'shareable single-file eslint preset (portable; needs only eslint)',
   );
-  if (structural) {
+  if (structural && emitDepcruise) {
     add(
       writeLayerConfig(scan, outDir, ['AUTO']),
       `${countAuto(scan.layerBoundaries)} layer boundaries: dependency-cruiser and eslint-plugin-boundaries`,
@@ -324,11 +361,12 @@ export function writeEnforcementConfigs(
       `${countAuto(scan.roleLayering.boundaries)} role-layering boundaries: dependency-cruiser rules`,
     );
   }
-  add(
+  addIf(
+    emitDepcruise,
     writePublicApiConfig(scan, outDir, ['AUTO']),
     `${countAuto(scan.publicApi.groups)} public API boundaries: dependency-cruiser deep-import rules`,
   );
-  if (structural) {
+  if (structural && emitDepcruise) {
     add(
       writeFeatureSliceConfig(scan, outDir, ['AUTO']),
       `${countAuto(scan.featureSlices.groups)} feature-slice boundaries: dependency-cruiser cross-slice rules`,
@@ -338,31 +376,56 @@ export function writeEnforcementConfigs(
       `${countAuto(scan.appIsolation.groups)} app boundaries: dependency-cruiser cross-app rules`,
     );
   }
-  add(
-    writeTestIsolationConfig(scan, outDir),
-    'test isolation: dependency-cruiser not-to-test rule',
-  );
-  add(
+  if (emitEslint) {
+    add(
+      writeEslintTestIsolationConfig(scan, outDir),
+      'test isolation: eslint no-restricted-imports rule',
+    );
+  } else if (emitDepcruise) {
+    add(
+      writeTestIsolationConfig(scan, outDir),
+      'test isolation: dependency-cruiser not-to-test rule',
+    );
+  }
+  addIf(
+    emitDepcruise,
     writeDependencyInternalsConfig(scan, outDir),
     'dependency hygiene: dependency-cruiser no-internals rule',
   );
-  if (structural)
+  if (structural && emitDepcruise)
     add(
       writeEntryPurityConfig(scan, outDir),
       'entry purity: dependency-cruiser no-import-entry rule',
     );
-  add(
-    writePhantomDependencyConfig(scan, outDir),
-    'dependency declaration: dependency-cruiser no-phantom-deps rule',
+  if (emitImportPlugin) {
+    add(
+      writeEslintPhantomDependencyConfig(scan, outDir),
+      'dependency declaration: eslint import/no-extraneous-dependencies rule',
+    );
+  } else if (emitDepcruise) {
+    add(
+      writePhantomDependencyConfig(scan, outDir),
+      'dependency declaration: dependency-cruiser no-phantom-deps rule',
+    );
+  }
+  addIf(
+    emitEslint,
+    writeDeepRelativeConfig(scan, outDir),
+    'import style: eslint no-restricted-imports rule',
   );
-  add(writeDeepRelativeConfig(scan, outDir), 'import style: eslint no-restricted-imports rule');
-  add(writeConsoleIsolationConfig(scan, outDir), 'console isolation: eslint no-console rule');
-  if (structural) {
+  addIf(
+    emitEslint,
+    writeConsoleIsolationConfig(scan, outDir),
+    'console isolation: eslint no-console rule',
+  );
+  if (structural && emitEslint) {
     add(writeEnvAccessConfig(scan, outDir), 'env access: eslint no-restricted-properties rule');
     add(
       writeWorkspacePackageConfig(scan, outDir),
       'workspace package API: eslint no-restricted-imports rule',
     );
+  }
+  if (structural && emitDepcruise) {
     add(
       writeStoriesIsolationConfig(scan, outDir),
       'stories isolation: dependency-cruiser no-import-stories rule',
@@ -388,10 +451,13 @@ export function writeEnforcementConfigs(
 export function regenerateConfigs(
   scan: ScanResult,
   outDir: string,
-  options: { structural?: boolean; version: string },
+  options: { structural?: boolean; version: string; enforcers: InstalledEnforcers },
 ): { configs: WrittenConfig[]; removed: string[] } {
   const removed = cleanPreviousOutputs(outDir);
-  const configs = writeEnforcementConfigs(scan, outDir, { structural: options.structural });
+  const configs = writeEnforcementConfigs(scan, outDir, {
+    structural: options.structural,
+    enforcers: options.enforcers,
+  });
   const allPaths = configs.flatMap((config) => config.files);
   if (hasEslintOutputs(allPaths)) allPaths.push(writeEslintAggregator(outDir));
   if (hasDependencyCruiserBlocks(allPaths)) allPaths.push(writeDependencyCruiserAggregate(outDir));

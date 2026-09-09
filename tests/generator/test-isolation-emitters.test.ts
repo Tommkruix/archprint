@@ -3,6 +3,7 @@ import {
   evaluateGate,
   type TestIsolationAnalysis,
   toDependencyCruiserTestIsolation,
+  toEslintTestIsolation,
 } from '../../src/index.js';
 
 function analysis(
@@ -40,5 +41,18 @@ describe('toDependencyCruiserTestIsolation', () => {
 
   it('emits nothing when the rule is not enforceable (below AUTO)', () => {
     expect(toDependencyCruiserTestIsolation(analysis(5, 3, 2)).forbidden).toEqual([]);
+  });
+});
+
+describe('toEslintTestIsolation', () => {
+  it('emits an eslint no-restricted-imports block banning test paths when clean (AUTO)', () => {
+    const config = toEslintTestIsolation(analysis(40, 0, 3));
+    expect(config?.rules['no-restricted-imports']).toBeDefined();
+    expect(config?.ignores).toContain('**/*.test.{ts,tsx}');
+  });
+
+  it('emits null with no test files or below AUTO', () => {
+    expect(toEslintTestIsolation(analysis(40, 0, 0))).toBeNull();
+    expect(toEslintTestIsolation(analysis(5, 3, 2))).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
+import { detectEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
 import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
@@ -128,7 +129,11 @@ export function buildProgram(version = readVersion()): Command {
         /* v8 ignore stop */
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
-        const { configs } = regenerateConfigs(scan, outDir, { structural, version });
+        const { configs } = regenerateConfigs(scan, outDir, {
+          structural,
+          version,
+          enforcers: detectEnforcers(scan.appDir),
+        });
         const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
         const recommendations = buildRecommendations(scan, detectStack(appDir));
         const cwd = process.cwd();
@@ -231,7 +236,11 @@ export function buildProgram(version = readVersion()): Command {
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
-        const { configs, removed } = regenerateConfigs(scan, outDir, { structural, version });
+        const { configs, removed } = regenerateConfigs(scan, outDir, {
+          structural,
+          version,
+          enforcers: detectEnforcers(scan.appDir),
+        });
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,

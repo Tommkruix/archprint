@@ -1,4 +1,5 @@
 import type { TestIsolationAnalysis } from '../detector/test-isolation-detector.js';
+import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
 
 const TEST_PATH = '\\.(test|spec)\\.(ts|tsx)$';
 
@@ -28,5 +29,28 @@ export function toDependencyCruiserTestIsolation(analysis: TestIsolationAnalysis
         to: { path: TEST_PATH },
       },
     ],
+  };
+}
+
+export function toEslintTestIsolation(
+  analysis: TestIsolationAnalysis,
+): EslintFlatConfigBlock | null {
+  if (analysis.testFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
+  return {
+    files: ['**/*.{ts,tsx}'],
+    ignores: withMinedExemptions(['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'], analysis.violations),
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '\\.(test|spec)(\\.|$)',
+              message: 'Do not import a test file from production code.',
+            },
+          ],
+        },
+      ],
+    },
   };
 }

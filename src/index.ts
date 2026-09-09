@@ -210,9 +210,11 @@ export {
 } from './generator/feature-slice-emitters.js';
 export {
   toDependencyCruiserTestIsolation,
+  toEslintTestIsolation,
   type NotToTestConfig,
   type NotToTestRule,
 } from './generator/test-isolation-emitters.js';
+export { detectEnforcers, type InstalledEnforcers } from './scanner/enforcers.js';
 export {
   toDependencyCruiserAppIsolation,
   type CrossAppConfig,
@@ -235,6 +237,7 @@ export {
 } from './generator/entry-purity-emitters.js';
 export {
   toDependencyCruiserPhantomDependencies,
+  toEslintPhantomDependencies,
   type PhantomDependencyConfig,
   type PhantomDependencyRule,
 } from './generator/phantom-dependency-emitters.js';

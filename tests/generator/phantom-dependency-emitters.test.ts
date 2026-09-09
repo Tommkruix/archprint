@@ -3,6 +3,7 @@ import {
   evaluateGate,
   type PhantomDependencyAnalysis,
   toDependencyCruiserPhantomDependencies,
+  toEslintPhantomDependencies,
 } from '../../src/index.js';
 
 function analysis(externalImporterCount: number, offenderCount: number): PhantomDependencyAnalysis {
@@ -31,5 +32,18 @@ describe('toDependencyCruiserPhantomDependencies', () => {
   it('emits nothing with no external imports or below AUTO', () => {
     expect(toDependencyCruiserPhantomDependencies(analysis(0, 0)).forbidden).toEqual([]);
     expect(toDependencyCruiserPhantomDependencies(analysis(5, 3)).forbidden).toEqual([]);
+  });
+});
+
+describe('toEslintPhantomDependencies', () => {
+  it('emits an eslint import/no-extraneous-dependencies block when clean (AUTO)', () => {
+    const config = toEslintPhantomDependencies(analysis(40, 0));
+    expect(config?.rules['import/no-extraneous-dependencies']).toBeDefined();
+    expect(config?.files).toEqual(['**/*.{ts,tsx}']);
+  });
+
+  it('emits null with no external imports or below AUTO', () => {
+    expect(toEslintPhantomDependencies(analysis(0, 0))).toBeNull();
+    expect(toEslintPhantomDependencies(analysis(5, 3))).toBeNull();
   });
 });
