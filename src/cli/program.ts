@@ -135,7 +135,11 @@ export function buildProgram(version = readVersion()): Command {
           enforcers: detectEnforcers(scan.appDir),
         });
         const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
-        const recommendations = buildRecommendations(scan, detectStack(appDir));
+        const recommendations = buildRecommendations(
+          scan,
+          detectStack(appDir),
+          detectEnforcers(appDir),
+        );
         const cwd = process.cwd();
         const manifest = buildInitManifest(recommendations, version, {
           app: displayPath(appDir, cwd),
@@ -291,7 +295,11 @@ export function buildProgram(version = readVersion()): Command {
         );
       }
       const recommendFor = (appDir: string) =>
-        buildRecommendations(scanRepo(appDir, { deep: false }), detectStack(appDir));
+        buildRecommendations(
+          scanRepo(appDir, { deep: false }),
+          detectStack(appDir),
+          detectEnforcers(appDir),
+        );
       if (options.json) {
         const apps = appDirs.map((appDir) => ({
           app: displayPath(appDir, root),

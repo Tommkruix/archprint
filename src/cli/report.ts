@@ -526,6 +526,9 @@ export function renderExplain(pattern: ScannedPattern, appDir: string): string {
   return lines.join('\n');
 }
 
+const enforcerTag = (r: { enforcer?: string }): string =>
+  r.enforcer ? dim(`  [${r.enforcer}]`) : '';
+
 export function renderRecommendations(rec: Recommendations, version: string): string {
   const evidence = (r: { rate: number | null }): string =>
     r.rate === null ? '' : dim(`  (${r.rate}% of comparable repos)`);
@@ -537,12 +540,13 @@ export function renderRecommendations(rec: Recommendations, version: string): st
   ];
   if (rec.enforceNow.length > 0) {
     lines.push(green(bold('ENFORCE NOW (your code already follows these)')));
-    for (const r of rec.enforceNow) lines.push(green(`  + ${r.title}`) + evidence(r));
+    for (const r of rec.enforceNow)
+      lines.push(green(`  + ${r.title}`) + enforcerTag(r) + evidence(r));
     lines.push(dim('  Run: archprint generate'), '');
   }
   if (rec.review.length > 0) {
     lines.push(yellow(bold('REVIEW AND ADOPT (close, thin evidence)')));
-    for (const r of rec.review) lines.push(yellow(`  ~ ${r.title}`) + evidence(r));
+    for (const r of rec.review) lines.push(yellow(`  ~ ${r.title}`) + enforcerTag(r) + evidence(r));
     lines.push('');
   }
   if (rec.adopt.length > 0) {
@@ -576,7 +580,8 @@ export function renderInit(
     lines.push(
       green(bold(`Enforcing now -> ${manifest.rulesDir}/ (${writtenCount} rule config(s))`)),
     );
-    for (const r of manifest.enforced) lines.push(green(`  + ${r.title}`) + evidence(r));
+    for (const r of manifest.enforced)
+      lines.push(green(`  + ${r.title}`) + enforcerTag(r) + evidence(r));
     if (structural)
       lines.push(dim('  (includes structural-inference families; review before you trust them)'));
     lines.push('');

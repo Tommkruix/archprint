@@ -3,8 +3,58 @@ import * as path from 'node:path';
 import { ADOPTION_CATALOG } from '../data/adoption-catalog.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { type FamilyKey, isStableFamily } from '../detector/family-maturity.js';
+import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import type { ScanResult } from './scan.js';
+
+type ToolCategory =
+  'eslint' | 'eslint-import' | 'dependency-cruiser' | 'eslint-or-depcruise' | 'none';
+
+const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
+  'forbidden-imports': 'eslint',
+  'import-style': 'eslint',
+  'console-isolation': 'eslint',
+  'env-access': 'eslint',
+  'workspace-package-api': 'eslint',
+  'test-isolation': 'eslint-or-depcruise',
+  'phantom-deps': 'eslint-import',
+  'dependency-hygiene': 'dependency-cruiser',
+  layer: 'dependency-cruiser',
+  'role-layering': 'dependency-cruiser',
+  'public-api': 'dependency-cruiser',
+  'feature-slice': 'dependency-cruiser',
+  'app-isolation': 'dependency-cruiser',
+  'entry-purity': 'dependency-cruiser',
+  'stories-isolation': 'dependency-cruiser',
+  'ui-data': 'dependency-cruiser',
+  'server-client': 'dependency-cruiser',
+  cycles: 'none',
+  orphans: 'none',
+  reachability: 'none',
+};
+
+export function resolveEnforcer(key: FamilyKey, enforcers: InstalledEnforcers): string {
+  const depcruise = enforcers.dependencyCruiser;
+  const eslint = enforcers.eslint || !enforcers.dependencyCruiser;
+  const importPlugin = eslint && enforcers.eslintPluginImport;
+  switch (FAMILY_TOOL[key]) {
+    case 'none':
+      return '';
+    case 'eslint':
+      return eslint ? 'eslint' : 'needs eslint';
+    case 'dependency-cruiser':
+      return depcruise ? 'dependency-cruiser' : 'needs dependency-cruiser';
+    case 'eslint-or-depcruise':
+      // eslint is false only when dependency-cruiser is present, so that is the fallback.
+      return eslint ? 'eslint' : 'dependency-cruiser';
+    case 'eslint-import':
+      return importPlugin
+        ? 'eslint-plugin-import'
+        : depcruise
+          ? 'dependency-cruiser'
+          : 'needs eslint-plugin-import or dependency-cruiser';
+  }
+}
 
 type FamilyStatus = 'AUTO' | 'SUGGEST' | 'NONE';
 
@@ -162,6 +212,7 @@ export function detectStack(appDir: string): Set<string> {
 export interface Recommendation {
   title: string;
   rate: number | null;
+  enforcer: string;
 }
 
 export interface Recommendations {
@@ -186,13 +237,18 @@ function adoptionRate(title: string, stack: ReadonlySet<string>): number | null 
 export function buildRecommendations(
   scan: ScanResult,
   stack: ReadonlySet<string>,
+  enforcers: InstalledEnforcers,
 ): Recommendations {
   const enforceNow: Recommendation[] = [];
   const review: Recommendation[] = [];
   const adopt: Recommendation[] = [];
   for (const family of FAMILIES) {
     const status = family.status(scan);
-    const entry: Recommendation = { title: family.title, rate: adoptionRate(family.title, stack) };
+    const entry: Recommendation = {
+      title: family.title,
+      rate: adoptionRate(family.title, stack),
+      enforcer: resolveEnforcer(family.key, enforcers),
+    };
     if (status === 'AUTO' && isStableFamily(family.key)) enforceNow.push(entry);
     else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);
     else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);

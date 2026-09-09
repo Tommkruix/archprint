@@ -5,9 +5,9 @@ import type { Recommendations } from '../../src/cli/recommend.js';
 const recommendations: Recommendations = {
   stack: ['next', 'react'],
   evidence: { apps: 100, asOf: '2026-09-01' },
-  enforceNow: [{ title: 'Circular dependencies', rate: 56.8 }],
-  review: [{ title: 'Entry purity', rate: 2.7 }],
-  adopt: [{ title: 'Test isolation', rate: 33.4 }],
+  enforceNow: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
+  review: [{ title: 'Entry purity', rate: 2.7, enforcer: 'dependency-cruiser' }],
+  adopt: [{ title: 'Test isolation', rate: 33.4, enforcer: 'eslint' }],
 };
 
 describe('buildInitManifest', () => {
@@ -21,9 +21,9 @@ describe('buildInitManifest', () => {
       app: '.',
       stack: ['next', 'react'],
       rulesDir: 'archprint-rules',
-      enforced: [{ title: 'Circular dependencies', rate: 56.8 }],
-      review: [{ title: 'Entry purity', rate: 2.7 }],
-      adopt: [{ title: 'Test isolation', rate: 33.4 }],
+      enforced: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
+      review: [{ title: 'Entry purity', rate: 2.7, enforcer: 'dependency-cruiser' }],
+      adopt: [{ title: 'Test isolation', rate: 33.4, enforcer: 'eslint' }],
       evidence: { apps: 100, asOf: '2026-09-01' },
     });
   });
