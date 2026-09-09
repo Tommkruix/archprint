@@ -178,6 +178,15 @@ describe('cli program', () => {
     process.exitCode = 0;
   });
 
+  it('generate --readme writes an ADOPTION.md tracked by the manifest', async () => {
+    await run(['generate', auto, '--readme', '--out', out]);
+    const readme = path.join(out, 'ADOPTION.md');
+    expect(existsSync(readme)).toBe(true);
+    expect(readFileSync(readme, 'utf8')).toContain('# Archprint adoption notes');
+    const manifest = JSON.parse(readFileSync(path.join(out, '.archprint-outputs.json'), 'utf8'));
+    expect((manifest.outputs as string[]).some((f) => f.endsWith('ADOPTION.md'))).toBe(true);
+  });
+
   it('generate writes the app-isolation config for AUTO app isolation', async () => {
     await run(['generate', appIsolationAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(

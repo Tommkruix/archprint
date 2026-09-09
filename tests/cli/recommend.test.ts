@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { scanRepo } from '../../src/cli/scan.js';
 import { buildRecommendations, detectStack, resolveEnforcer } from '../../src/cli/recommend.js';
-import { renderRecommendations } from '../../src/cli/report.js';
+import { renderAdoptionMarkdown, renderRecommendations } from '../../src/cli/report.js';
 import type { InstalledEnforcers } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +69,26 @@ describe('resolveEnforcer', () => {
       'needs eslint-plugin-import or dependency-cruiser',
     );
     expect(resolveEnforcer('cycles', only({ eslint: true }))).toBe('');
+  });
+});
+
+describe('renderAdoptionMarkdown', () => {
+  it('renders populated sections with tool and rate, and omits empty ones', () => {
+    const md = renderAdoptionMarkdown(
+      {
+        stack: [],
+        evidence: { apps: 1, asOf: 'x' },
+        enforceNow: [{ title: 'Console isolation', rate: 50, enforcer: 'eslint' }],
+        review: [{ title: 'Layer boundaries', rate: null, enforcer: 'dependency-cruiser' }],
+        adopt: [],
+      },
+      '1.0.0',
+    );
+    expect(md).toContain('# Archprint adoption notes');
+    expect(md).toContain('## Enforcing now');
+    expect(md).toContain('- Console isolation (eslint) — 50% of comparable repos');
+    expect(md).toContain('- Layer boundaries (dependency-cruiser)');
+    expect(md).not.toContain('## Worth adopting');
   });
 });
 

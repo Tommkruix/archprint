@@ -457,6 +457,7 @@ export function regenerateConfigs(
     version: string;
     enforcers: InstalledEnforcers;
     graph?: boolean;
+    adoptionReadme?: string;
   },
 ): { configs: WrittenConfig[]; removed: string[] } {
   const removed = cleanPreviousOutputs(outDir);
@@ -468,6 +469,11 @@ export function regenerateConfigs(
   const allPaths = configs.flatMap((config) => config.files);
   if (hasEslintOutputs(allPaths)) allPaths.push(writeEslintAggregator(outDir));
   if (hasDependencyCruiserBlocks(allPaths)) allPaths.push(writeDependencyCruiserAggregate(outDir));
+  if (options.adoptionReadme !== undefined && allPaths.length > 0) {
+    const readmePath = path.join(outDir, 'ADOPTION.md');
+    writeFileSync(readmePath, options.adoptionReadme);
+    allPaths.push(readmePath);
+  }
   if (allPaths.length > 0) writeOutputsManifest(outDir, allPaths, options.version);
   else removeIfEmpty(outDir);
   return { configs, removed };

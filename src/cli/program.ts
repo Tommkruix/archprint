@@ -6,7 +6,13 @@ import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
+import {
+  renderAdoptionMarkdown,
+  renderExplain,
+  renderInit,
+  renderReport,
+  renderRecommendations,
+} from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
 import { emitOne, regenerateConfigs } from './generate.js';
@@ -229,6 +235,10 @@ export function buildProgram(version = readVersion()): Command {
       'force the output format regardless of detected tooling: eslint, dependency-cruiser, or all',
     )
     .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz)')
+    .option(
+      '--readme',
+      'also write an ADOPTION.md summarizing what is enforced, reviewed, and to adopt',
+    )
     .action(
       (
         input: string,
@@ -239,6 +249,7 @@ export function buildProgram(version = readVersion()): Command {
           rule?: string;
           emit?: string;
           graph?: boolean;
+          readme?: boolean;
         },
       ) => {
         if (options.emit !== undefined && !EMIT_TARGETS.includes(options.emit)) {
@@ -274,11 +285,18 @@ export function buildProgram(version = readVersion()): Command {
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
+        const adoptionReadme = options.readme
+          ? renderAdoptionMarkdown(
+              buildRecommendations(scan, detectStack(scan.appDir), detectEnforcers(scan.appDir)),
+              version,
+            )
+          : undefined;
         const { configs, removed } = regenerateConfigs(scan, outDir, {
           structural,
           version,
           enforcers: applyEmitOverride(detectEnforcers(scan.appDir), options.emit),
           graph: options.graph,
+          adoptionReadme,
         });
         if (removed.length > 0) {
           console.log(
