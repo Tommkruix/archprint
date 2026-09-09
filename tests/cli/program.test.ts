@@ -187,6 +187,39 @@ describe('cli program', () => {
     expect((manifest.outputs as string[]).some((f) => f.endsWith('ADOPTION.md'))).toBe(true);
   });
 
+  it('generate --rules emits only the named forbidden-import rule ids', async () => {
+    await run(['generate', auto, '--rules', 'AP-002', '--out', out]);
+    expect(existsSync(path.join(out, 'no-ui-layer-in-server-entry'))).toBe(true);
+    expect(existsSync(path.join(out, 'no-db-client-in-request-entry'))).toBe(false);
+  });
+
+  it('generate --only emits just that family and skips the bundles and graph', async () => {
+    await run([
+      'generate',
+      layerAuto,
+      '--only',
+      'layer',
+      '--include-structural',
+      '--fast',
+      '--out',
+      out,
+    ]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'layer-graph.archprint.mmd'))).toBe(false);
+  });
+
+  it('generate rejects an invalid --only family', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(['generate', layerAuto, '--only', 'nonsense', '--out', out]);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Invalid --only family');
+    process.exitCode = 0;
+  });
+
+  it('generate --check runs the generated eslint rules against the repo', async () => {
+    await run(['generate', auto, '--check', '--out', out]);
+    expect(output()).toContain('Check: the generated eslint rules pass clean');
+  });
+
   it('generate writes the app-isolation config for AUTO app isolation', async () => {
     await run(['generate', appIsolationAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(

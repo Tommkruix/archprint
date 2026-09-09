@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
@@ -15,7 +15,7 @@ import {
 } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
-import { emitOne, regenerateConfigs } from './generate.js';
+import { emitOne, FAMILY_NAMES, regenerateConfigs } from './generate.js';
 import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
 import { WIRING_TOOLS } from './wiring.js';
@@ -63,6 +63,50 @@ function applyEmitOverride(detected: InstalledEnforcers, emit?: string): Install
     default:
       return detected;
   }
+}
+
+export async function runEslintCheck(appDir: string, outDir: string): Promise<void> {
+  const aggregator = path.join(outDir, 'eslint.archprint.mjs');
+  if (!existsSync(aggregator)) {
+    console.log('Check: no eslint rules were generated to check.');
+    return;
+  }
+  const [{ ESLint }, tseslint, generated] = await Promise.all([
+    import('eslint'),
+    import('typescript-eslint'),
+    import(pathToFileURL(aggregator).href) as Promise<{ default: unknown[] }>,
+  ]);
+  const config = [
+    { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.default.parser } },
+    ...generated.default,
+  ];
+  const eslint = new ESLint({
+    cwd: appDir,
+    overrideConfigFile: true,
+    overrideConfig: config as never,
+  });
+  let results;
+  /* v8 ignore start -- defensive: eslint throws only on an unresolved rule (e.g. an unregistered plugin) */
+  try {
+    results = await eslint.lintFiles(['**/*.{ts,tsx}']);
+  } catch (error) {
+    console.log(`Check: could not run eslint (${(error as Error).message}).`);
+    return;
+  }
+  /* v8 ignore stop */
+  const errorCount = results.reduce((total, result) => total + result.errorCount, 0);
+  if (errorCount === 0) {
+    console.log('Check: the generated eslint rules pass clean on this repo.');
+    return;
+  }
+  console.log(`Check: ${errorCount} violation(s) of the generated rules:`);
+  for (const result of results.filter((r) => r.errorCount > 0).slice(0, 10)) {
+    const rules = [
+      ...new Set(result.messages.filter((m) => m.severity === 2).map((m) => m.ruleId)),
+    ];
+    console.log(`  ${path.relative(appDir, result.filePath)}: ${rules.join(', ')}`);
+  }
+  process.exitCode = 1;
 }
 
 function resolveApp(input: string): string {
@@ -239,8 +283,17 @@ export function buildProgram(version = readVersion()): Command {
       '--readme',
       'also write an ADOPTION.md summarizing what is enforced, reviewed, and to adopt',
     )
+    .option('--only <family>', `emit only one rule family (${FAMILY_NAMES.join(', ')})`)
+    .option(
+      '--rules <ids>',
+      'emit only these forbidden-import rule ids (comma-separated, e.g. AP-001,AP-002)',
+    )
+    .option(
+      '--check',
+      'after generating, run the eslint rules against the repo and report pass/fail',
+    )
     .action(
-      (
+      async (
         input: string,
         options: {
           out: string;
@@ -250,11 +303,24 @@ export function buildProgram(version = readVersion()): Command {
           emit?: string;
           graph?: boolean;
           readme?: boolean;
+          only?: string;
+          rules?: string;
+          check?: boolean;
         },
       ) => {
         if (options.emit !== undefined && !EMIT_TARGETS.includes(options.emit)) {
           console.error(
             `Invalid --emit target '${options.emit}'. Use: ${EMIT_TARGETS.join(', ')}.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        if (
+          options.only !== undefined &&
+          !(FAMILY_NAMES as readonly string[]).includes(options.only)
+        ) {
+          console.error(
+            `Invalid --only family '${options.only}'. Use one of: ${FAMILY_NAMES.join(', ')}.`,
           );
           process.exitCode = 1;
           return;
@@ -291,12 +357,20 @@ export function buildProgram(version = readVersion()): Command {
               version,
             )
           : undefined;
+        const ruleIds = options.rules
+          ? options.rules
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : undefined;
         const { configs, removed } = regenerateConfigs(scan, outDir, {
           structural,
           version,
           enforcers: applyEmitOverride(detectEnforcers(scan.appDir), options.emit),
           graph: options.graph,
           adoptionReadme,
+          only: options.only,
+          ruleIds,
         });
         if (removed.length > 0) {
           console.log(
@@ -331,6 +405,7 @@ export function buildProgram(version = readVersion()): Command {
             'Warning: generated from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
           );
         }
+        if (options.check) await runEslintCheck(scan.appDir, outDir);
       },
     );
 
