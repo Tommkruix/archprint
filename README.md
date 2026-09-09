@@ -33,9 +33,11 @@ from paths, which can be wrong, so Archprint holds them for human review by defa
 enforcing them. Nothing whose inferred layer or role could be wrong is written as enforcement without you
 opting in.
 
-> Status: published on npm, pre-stable (0.x may break between minor versions). Production-ready today: the
-> insight commands (`scan`, `recommend`) and the auto-enforcement of the mechanical families above. The
-> structural families are review-only while they are hardened.
+> Status: published on npm and safe to try on your real repo. Every rule is review-gated by default,
+> reversible in one command (`archprint eject`), and deterministic, and a rule archprint marks
+> "enforce now" is checked to pass on your code before it says so. `scan` and `recommend` are stable;
+> the structural families stay review-only while they are hardened. Versioning is 0.x: the CLI surface
+> and rule-card format may still change before 1.0. The analysis is not experimental.
 
 ## What makes it different
 
@@ -272,7 +274,9 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-Pre-stable (`0.x`). The engine (twenty detectors, the confidence gate, and emitters for ESLint, a shareable
+Versioning is 0.x (pre-1.0): the CLI surface and rule-card format may still change between minor versions,
+but the analysis is not experimental and the tool is safe to adopt (every rule is review-gated and reversible
+via `archprint eject`). The engine (twenty detectors, the confidence gate, and emitters for ESLint, a shareable
 preset, dependency-cruiser, ts-arch, and the layer graph) is in place and tested, and an adversarial
 correctness audit (three rounds, four real repositories) drove the false-positive rate on auto-generated rules
 to zero for the mechanical families, which is why those auto-enforce while the structural-inference families
