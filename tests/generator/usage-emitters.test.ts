@@ -7,20 +7,20 @@ import {
   toEslintEnvAccess,
 } from '../../src/index.js';
 
-const consoleAnalysis = (n: number, v: number): ConsoleIsolationAnalysis => ({
+const consoleAnalysis = (n: number, v: number, files: string[] = []): ConsoleIsolationAnalysis => ({
   appDir: 'x',
   libraryFileCount: n,
   offenderCount: v,
   gate: evaluateGate({ roleFileCount: n, violatingFileCount: v, roleConfidence: 1 }),
-  violations: [],
+  violations: files.map((file) => ({ file })),
 });
 
-const envAnalysis = (n: number, v: number): EnvAccessAnalysis => ({
+const envAnalysis = (n: number, v: number, files: string[] = []): EnvAccessAnalysis => ({
   appDir: 'x',
   subjectFileCount: n,
   offenderCount: v,
   gate: evaluateGate({ roleFileCount: n, violatingFileCount: v, roleConfidence: 1 }),
-  violations: [],
+  violations: files.map((file) => ({ file })),
 });
 
 describe('toEslintConsoleIsolation', () => {
@@ -34,6 +34,14 @@ describe('toEslintConsoleIsolation', () => {
     expect(toEslintConsoleIsolation(consoleAnalysis(0, 0))).toBeNull();
     expect(toEslintConsoleIsolation(consoleAnalysis(5, 3))).toBeNull();
   });
+
+  it('exempts the tolerated files the gate accepted, so the rule is green by construction', () => {
+    const analysis = consoleAnalysis(200, 1, ['src/lib/storage.ts']);
+    expect(analysis.gate.status).toBe('AUTO');
+    const config = toEslintConsoleIsolation(analysis);
+    expect(config?.ignores).toContain('src/lib/storage.ts');
+    expect(config?.ignores).toContain('**/cli/**');
+  });
 });
 
 describe('toEslintEnvAccess', () => {
@@ -46,5 +54,13 @@ describe('toEslintEnvAccess', () => {
   it('emits null with no env users or below AUTO', () => {
     expect(toEslintEnvAccess(envAnalysis(0, 0))).toBeNull();
     expect(toEslintEnvAccess(envAnalysis(5, 3))).toBeNull();
+  });
+
+  it('exempts the tolerated process.env readers the gate accepted', () => {
+    const analysis = envAnalysis(200, 1, ['src/lib/runtime.ts']);
+    expect(analysis.gate.status).toBe('AUTO');
+    const config = toEslintEnvAccess(analysis);
+    expect(config?.ignores).toContain('src/lib/runtime.ts');
+    expect(config?.ignores).toContain('**/config/**');
   });
 });

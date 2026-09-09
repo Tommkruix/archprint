@@ -9,6 +9,7 @@ function analysis(
   consumerCount: number,
   offenderCount: number,
   packages: string[],
+  files: string[] = [],
 ): WorkspacePackageAnalysis {
   return {
     appDir: 'x',
@@ -20,7 +21,11 @@ function analysis(
       violatingFileCount: offenderCount,
       roleConfidence: 1,
     }),
-    violations: [],
+    violations: files.map((file) => ({
+      file,
+      specifier: '@scope/pkg/deep',
+      package: '@scope/pkg',
+    })),
   };
 }
 
@@ -37,5 +42,12 @@ describe('toEslintWorkspacePackageApi', () => {
     expect(toEslintWorkspacePackageApi(analysis(0, 0, []))).toBeNull();
     expect(toEslintWorkspacePackageApi(analysis(40, 0, []))).toBeNull();
     expect(toEslintWorkspacePackageApi(analysis(5, 3, ['@scope/pkg']))).toBeNull();
+  });
+
+  it('exempts the tolerated deep-into-package importers the gate accepted', () => {
+    const config = toEslintWorkspacePackageApi(
+      analysis(200, 1, ['@scope/pkg'], ['src/app/deep.ts']),
+    );
+    expect(config!.ignores).toEqual(['src/app/deep.ts']);
   });
 });

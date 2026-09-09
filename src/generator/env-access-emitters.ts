@@ -1,11 +1,14 @@
 import type { EnvAccessAnalysis } from '../detector/env-access-detector.js';
-import type { EslintFlatConfigBlock } from './console-isolation-emitters.js';
+import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
 
 export function toEslintEnvAccess(analysis: EnvAccessAnalysis): EslintFlatConfigBlock | null {
   if (analysis.subjectFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {
     files: ['**/*.{ts,tsx}'],
-    ignores: ['**/config/**', '**/env/**', '**/environment/**', '**/*.config.*'],
+    ignores: withMinedExemptions(
+      ['**/config/**', '**/env/**', '**/environment/**', '**/*.config.*'],
+      analysis.violations,
+    ),
     rules: {
       'no-restricted-properties': [
         'error',
