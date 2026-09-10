@@ -207,10 +207,10 @@ zero rules.
 
 ## Output formats
 
-`archprint generate` writes only for the linters your repo actually uses, it detects ESLint,
-eslint-plugin-import, and dependency-cruiser and emits each rule for a tool you already run, so you are
-not left with config for a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the
-format. The formats it can produce:
+`archprint generate` writes only for the linters your repo actually uses, it detects ESLint and
+dependency-cruiser and emits each rule for a tool you already run, so you are not left with config for a
+tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format. The formats it can
+produce:
 
 - **dependency-cruiser** `forbidden` rulesets (when dependency-cruiser is present): by default the
   mechanical boundaries (public-API deep-import, test-isolation, dependency-internals); the structural ones

@@ -31,7 +31,7 @@ archprint init apps/web
 ```
 
 `init` scans the repo, writes the auto-trusted (mechanical) rules into `archprint-rules/` (only for the linters
-your repo uses, it detects ESLint, eslint-plugin-import, and dependency-cruiser), adds a plain-language
+your repo uses, it detects ESLint and dependency-cruiser), adds a plain-language
 `ADOPTION.md` explaining what it did, and prints three tiers: what is enforced now, what to review before
 enforcing, and what comparable repos commonly adopt that you do not yet. Then reference the generated rules from
 your linter:

@@ -59,8 +59,8 @@ deep pass before enforcing).
 ## The generated output and the lifecycle
 
 `generate` (and `init`) write into `archprint-rules/`, and only for the linters your repo actually uses,
-Archprint detects ESLint, eslint-plugin-import, and dependency-cruiser and emits each rule for a tool you
-already run, so you are never left with config for a tool you do not have (`--emit all` forces every format):
+Archprint detects ESLint and dependency-cruiser and emits each rule for a tool you already run, so you are
+never left with config for a tool you do not have (`--emit all` forces every format):
 
 - ESLint rule blocks and a plugin for the forbidden-import rules,
 - a shareable, self-contained ESLint preset (`eslint-preset.archprint.mjs`) that inlines the rules and needs
