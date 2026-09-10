@@ -204,11 +204,15 @@ zero rules.
 
 ## Output formats
 
-`archprint generate` writes into the formats your existing tools already read:
+`archprint generate` writes only for the linters your repo actually uses, it detects ESLint,
+eslint-plugin-import, and dependency-cruiser and emits each rule for a tool you already run, so you are
+not left with config for a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the
+format. The formats it can produce:
 
-- **dependency-cruiser** `forbidden` rulesets: by default the mechanical boundaries (public-API deep-import,
-  test-isolation, dependency-internals); the structural ones (layer, role-layering, feature-slice,
-  app-isolation, entry-purity) are written only with `--include-structural`, after you review them
+- **dependency-cruiser** `forbidden` rulesets (when dependency-cruiser is present): by default the
+  mechanical boundaries (public-API deep-import, test-isolation, dependency-internals); the structural ones
+  (layer, role-layering, feature-slice, app-isolation, entry-purity) are written only with
+  `--include-structural`, after you review them
 - **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
   import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
@@ -220,6 +224,11 @@ zero rules.
   inside your existing Vitest or Jest suite
 - **Mermaid** and **Graphviz DOT** of the layer dependency graph, so the inferred architecture is visible and
   its violations are marked
+- **`ADOPTION.md`**, a plain-language summary of what is enforced now, what is held for review, and what is
+  worth adopting, with the tool that enforces each rule (written by `init`, or `generate --readme`)
+
+`generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
+can confirm before wiring.
 
 ## How it compares
 
@@ -243,15 +252,15 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 
 ## Commands
 
-| Command                         | What it does                                                                                                                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write an `archprint.json` with the adopt tiers. `--include-structural`, `--out <dir>`, `--fast`, `--force`.             |
-| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                     |
-| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--rule <id>` emits one reviewed rule (including a SUGGEST rule). `--include-structural`, `--out <dir>`, `--fast`. |
-| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                   |
-| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                                                                                                |
-| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                    |
-| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                     |
+| Command                         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write `archprint.json` plus a plain-language `ADOPTION.md`. `--include-structural`, `--out <dir>`, `--fast`, `--force`.                                                                                                                                                                                                                       |
+| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                                                                                                                                                                                                                                           |
+| `archprint generate [path]`     | Write the auto-trusted mechanical rules for the linters your repo uses; structural rules held for review. `--emit <eslint\|dependency-cruiser\|all>` forces the format, `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo, `--readme` writes `ADOPTION.md`, `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`. |
+| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                                                                                                                                                                                                                                         |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                |
+| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                          |
+| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                           |
 
 ## Documentation
 

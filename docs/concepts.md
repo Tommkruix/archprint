@@ -58,15 +58,21 @@ deep pass before enforcing).
 
 ## The generated output and the lifecycle
 
-`generate` (and `init`) write into `archprint-rules/`:
+`generate` (and `init`) write into `archprint-rules/`, and only for the linters your repo actually uses,
+Archprint detects ESLint, eslint-plugin-import, and dependency-cruiser and emits each rule for a tool you
+already run, so you are never left with config for a tool you do not have (`--emit all` forces every format):
 
 - ESLint rule blocks and a plugin for the forbidden-import rules,
 - a shareable, self-contained ESLint preset (`eslint-preset.archprint.mjs`) that inlines the rules and needs
   only eslint, so it can be committed, published, or shared and adopted in one line,
-- dependency-cruiser forbidden-rule configs,
+- dependency-cruiser forbidden-rule configs (when dependency-cruiser is present),
 - ts-arch tests for the first-party boundaries (layer, role, UI/data), runnable in your existing test suite,
 - a rule card, passing fixture, and failing fixture for each forbidden-import rule,
+- a plain-language `ADOPTION.md` explaining what is enforced, held for review, and worth adopting,
 - an outputs manifest (`.archprint-outputs.json`) that records exactly what Archprint owns.
+
+`generate --check` runs the generated ESLint rules against your repo and reports pass/fail, so you can
+confirm they are green before wiring.
 
 Re-running `generate` **cleans its previous outputs first**, so a rule the evidence no longer supports stops
 being enforced instead of lingering. `wire` inserts a single managed, reversible reference into the enforcement

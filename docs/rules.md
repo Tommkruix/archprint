@@ -35,7 +35,8 @@ purpose, add an ignore for those files.
 
 ### Console isolation — Auto
 
-Detects library (non-CLI) code calling `console.*`. CLI/scripts/bin/tools directories are excluded.
+Detects library (non-CLI) code calling `console.*`. Test files and cli/scripts/bin/tools paths are excluded,
+and the emitted rule is scoped to exactly those measured files so wiring it stays green.
 **When not to use:** if a package legitimately logs to the console as its purpose (a logger, a CLI you did not
 place under those directories), scope or skip it.
 
