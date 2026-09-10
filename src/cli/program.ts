@@ -95,9 +95,7 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
   try {
     results = await eslint.lintFiles(['**/*.{ts,tsx}']);
   } catch (error) {
-    console.log(
-      `Check: could not run eslint (${(error as Error).message}). If the generated rules use a plugin (e.g. eslint-plugin-import), it must be registered in your eslint config.`,
-    );
+    console.log(`Check: could not run eslint (${(error as Error).message}).`);
     process.exitCode = 1;
     return;
   }

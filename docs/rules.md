@@ -56,16 +56,18 @@ Detects an imported third-party package that is not declared in `package.json` (
 dependency). Resolves monorepo hoisting to the workspace root. **When not to use:** rarely; undeclared deps are
 a real fragility.
 
-### Dependency hygiene (no build/impl internals) — Auto
+## Held for review families
 
-Detects code reaching into a dependency's `/src/` or `/internal(s)/` rather than its public entry. A package's
-documented public `dist`/`lib`/`esm` subpaths are allowed. **When not to use:** if a dependency documents a deep
-path as public API and it happens to live under `src`.
-
-## Review-only (structural-inference) families
-
-These infer a layer or role from paths and can be wrong, so they are held for review even at AUTO. Emit with
+These are held for review even at AUTO. The structural ones infer a layer or role from paths that can be
+wrong; dependency hygiene is held because its enforcement can over-flag. Emit any of them with
 `--include-structural` after reading the evidence.
+
+### Dependency hygiene (no build/impl internals) — Review
+
+Detects code reaching into a dependency's `/src/` or `/internal(s)/` rather than its public entry. Held for
+review because the dependency-cruiser rule matches resolved paths, so it can flag a package whose own public
+entry resolves through `src/`. **When not to use:** if a dependency documents a deep path (or its entry) under
+`src` as public API.
 
 ### Layer boundaries — Review
 

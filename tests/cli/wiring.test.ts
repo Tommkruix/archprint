@@ -83,10 +83,16 @@ describe('wiring transforms', () => {
     expect(unwireEslintContent(result.content!)).toBe(src);
   });
 
-  it('bails on a direct default export that is a bare factory call with no arguments', () => {
-    const result = wireEslintContent('export default loadConfig();\n', './x.mjs');
-    expect(result.changed).toBe(false);
-    expect(result.reason).toBe('no-array-export');
+  it('bails on an unrecognized factory call, whatever its arguments', () => {
+    for (const src of [
+      'export default loadConfig();\n',
+      'export default loadConfig(base);\n',
+      'export default loadConfig([]);\n',
+    ]) {
+      const result = wireEslintContent(src, './x.mjs');
+      expect(result.changed).toBe(false);
+      expect(result.reason).toBe('no-array-export');
+    }
   });
 
   it('bails instead of splicing into a non-array call the identifier resolves to', () => {

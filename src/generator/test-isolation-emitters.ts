@@ -1,10 +1,9 @@
 import type { TestIsolationAnalysis } from '../detector/test-isolation-detector.js';
 import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
 import { TEST_GLOBS } from './eslint-scope.js';
-import { exemptDepcruiseFrom } from './depcruise-exempt.js';
+import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
-const TEST_PATH =
-  '(\\.(test|spec|e2e-spec|e2e)\\.(ts|tsx)$)|((^|/)(__tests__|__mocks__|e2e|cypress|playwright|test|tests)/)';
+const TEST_PATH = TEST_ROLE_REGEX;
 
 export interface NotToTestRule {
   name: string;

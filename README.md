@@ -25,13 +25,12 @@ question directly (a pre-registered, honest null result on the boundary it teste
 **What auto-enforces vs. what you review.** Archprint is honest about which of its inferences it will stand
 behind unattended. An adversarial correctness audit (three rounds over four real repositories) found that the
 _mechanical_ families, ones grounded in unambiguous signals (no cycles, production must not import tests, no
-`console` in library code, no undeclared dependencies, deep-relative import style, public-API barrels, no
-reaching into a dependency's internals, and the DB/UI-in-server-entry rule), had zero false positives every
-round. So those auto-generate as enforcement. The _structural-inference_ families (layer and role boundaries,
-UI/data separation, entry purity, server/client, feature-slice and app isolation) infer a "layer" or "role"
-from paths, which can be wrong, so Archprint holds them for human review by default rather than silently
-enforcing them. Nothing whose inferred layer or role could be wrong is written as enforcement without you
-opting in.
+`console` in library code, no undeclared dependencies, deep-relative import style, public-API barrels, and the
+DB/UI-in-server-entry rule), had zero false positives every round. So those auto-generate as enforcement. The
+families held for human review by default, emitted only with `--include-structural`, are the ones that infer a
+"layer" or "role" from paths, which can be wrong (layer and role boundaries, UI/data separation, entry purity,
+server/client, feature-slice and app isolation), plus dependency hygiene, whose enforcement can over-flag.
+Nothing that could be wrong is written as enforcement without you opting in.
 
 > Status: published on npm and safe to try on your real repo. Every rule is review-gated by default,
 > reversible in one command (`archprint eject`), and deterministic, and a rule archprint marks
@@ -167,7 +166,7 @@ regardless of framework.
 | Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          | Auto     |
 | Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         | Auto     |
 | Test isolation                   | Production (non-test) code must not import test or spec files                                                        | Auto     |
-| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Auto     |
+| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Review   |
 | Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Auto     |
 | Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    | Auto     |
 | Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     | Auto     |
@@ -213,9 +212,9 @@ tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format
 produce:
 
 - **dependency-cruiser** `forbidden` rulesets (when dependency-cruiser is present): by default the
-  mechanical boundaries (public-API deep-import, test-isolation, dependency-internals); the structural ones
-  (layer, role-layering, feature-slice, app-isolation, entry-purity) are written only with
-  `--include-structural`, after you review them
+  mechanical boundaries (public-API deep-import, test-isolation, phantom deps); the review-held ones
+  (layer, role-layering, feature-slice, app-isolation, entry-purity, dependency-internals) are written only
+  with `--include-structural`, after you review them
 - **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
   import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a

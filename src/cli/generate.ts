@@ -392,7 +392,7 @@ export function writeEnforcementConfigs(
       'test isolation: dependency-cruiser not-to-test rule',
     );
   addIf(
-    emitDepcruise && pick('dependency-hygiene'),
+    structural && emitDepcruise && pick('dependency-hygiene'),
     () => writeDependencyInternalsConfig(scan, outDir),
     'dependency hygiene: dependency-cruiser no-internals rule',
   );

@@ -1,5 +1,5 @@
 import type { PhantomDependencyAnalysis } from '../detector/phantom-dependency-detector.js';
-import { exemptDepcruiseFrom } from './depcruise-exempt.js';
+import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
 export interface PhantomDependencyRule {
   name: string;
@@ -27,7 +27,9 @@ export function toDependencyCruiserPhantomDependencies(
         name: 'no-phantom-dependencies',
         comment: `Archprint inferred dependency declaration: ${conform}/${analysis.externalImporterCount} files import only packages declared in package.json; importing an undeclared (phantom/transitive) dependency is forbidden (confidence ${floor}).`,
         severity: 'error',
-        from: { pathNot: exemptDepcruiseFrom('node_modules', analysis.violations) },
+        from: {
+          pathNot: exemptDepcruiseFrom([TEST_ROLE_REGEX, 'node_modules'], analysis.violations),
+        },
         to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] },
       },
     ],

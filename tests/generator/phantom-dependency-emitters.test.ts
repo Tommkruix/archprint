@@ -33,8 +33,9 @@ describe('toDependencyCruiserPhantomDependencies', () => {
     expect(toDependencyCruiserPhantomDependencies(analysis(5, 3)).forbidden).toEqual([]);
   });
 
-  it('exempts the tolerated importers the gate accepted via from.pathNot', () => {
-    const clean = toDependencyCruiserPhantomDependencies(analysis(200, 0));
-    expect(clean.forbidden[0]!.from.pathNot).toBe('node_modules');
+  it('excludes node_modules and test files via from.pathNot', () => {
+    const rule = toDependencyCruiserPhantomDependencies(analysis(200, 0)).forbidden[0]!;
+    expect(rule.from.pathNot).toContain('node_modules');
+    expect((rule.from.pathNot as string[]).some((p) => p.includes('__tests__'))).toBe(true);
   });
 });

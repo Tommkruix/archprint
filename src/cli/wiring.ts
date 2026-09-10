@@ -16,10 +16,13 @@ const ESLINT_CONFIG_NAMES = [
 function arrayInsertionOffset(node: Node, allowCallArg: boolean): number | null {
   if (Node.isArrayLiteralExpression(node)) return node.getStart() + 1;
   if (Node.isCallExpression(node)) {
-    const args = node.getArguments();
-    const arrayArg = args.find((argument) => Node.isArrayLiteralExpression(argument));
+    const callee = node.getExpression().getText().split('.').pop();
+    if (callee !== 'config' && callee !== 'defineConfig') return null;
+    const arrayArg = node
+      .getArguments()
+      .find((argument) => Node.isArrayLiteralExpression(argument));
     if (arrayArg) return arrayArg.getStart() + 1;
-    if (!allowCallArg || args.length === 0) return null;
+    if (!allowCallArg) return null;
     const openParen = node.getFirstChildByKind(SyntaxKind.OpenParenToken);
     return openParen ? openParen.getEnd() : null;
   }

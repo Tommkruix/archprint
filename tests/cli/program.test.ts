@@ -228,8 +228,12 @@ describe('cli program', () => {
     expect(output()).toContain('app boundaries');
   });
 
-  it('generate writes the dependency-internals config when packages are imported cleanly', async () => {
+  it('writes the dependency-internals config only with --include-structural (held for review)', async () => {
     await run(['generate', depInternalsAuto, '--fast', '--out', out]);
+    expect(
+      existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
+    ).toBe(false);
+    await run(['generate', depInternalsAuto, '--include-structural', '--fast', '--out', out]);
     expect(
       existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
     ).toBe(true);

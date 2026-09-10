@@ -28,7 +28,8 @@ describe('toDependencyCruiserDependencyInternals', () => {
     expect(config.forbidden).toHaveLength(1);
     const rule = config.forbidden[0]!;
     expect(rule.name).toBe('no-dependency-internals');
-    expect(rule.from.pathNot).toBe('node_modules');
+    expect(rule.from.pathNot).toContain('node_modules');
+    expect((rule.from.pathNot as string[]).some((p) => p.includes('__tests__'))).toBe(true);
     expect(rule.to.path).toContain('node_modules/');
     expect(rule.to.path).toContain('src|internal|internals');
     expect(rule.to.path).not.toContain('dist');
