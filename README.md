@@ -82,9 +82,12 @@ archprint init apps/web
 # See the rules your repo already follows, with the evidence
 archprint scan apps/web
 
-# Write the auto-trusted (mechanical) rules to disk (rule files + tool configs).
+# Write the auto-trusted (mechanical) rules to disk, only for the linters your repo uses.
 # Structural-inference rules are held for review; add --include-structural to emit them too.
 archprint generate apps/web --out archprint-rules
+
+# Confirm the generated rules pass on your repo before wiring
+archprint generate apps/web --check
 
 # Inspect the gate evidence behind one rule
 archprint explain AP-002 apps/web
