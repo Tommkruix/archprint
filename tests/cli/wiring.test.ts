@@ -74,6 +74,15 @@ describe('wiring transforms', () => {
     expect(result.changed).toBe(true);
   });
 
+  it('bails instead of splicing into a non-array call the identifier resolves to', () => {
+    const result = wireEslintContent(
+      'const config = loadConfig();\nexport default config;\n',
+      './x.mjs',
+    );
+    expect(result.changed).toBe(false);
+    expect(result.reason).toBe('no-array-export');
+  });
+
   it('supports the module.exports = [ ] form', () => {
     const result = wireEslintContent('module.exports = [\n];\n', './x.mjs');
     expect(result.changed).toBe(true);

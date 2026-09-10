@@ -32,6 +32,10 @@ import {
   renderEslintPluginSource,
 } from '../generator/eslint-plugin-emitter.js';
 import { renderEslintPreset } from '../generator/eslint-preset-emitter.js';
+import {
+  mergeNoRestrictedImports,
+  type NoRestrictedImportsBlock,
+} from '../generator/eslint-scope.js';
 import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
 import {
   hasDependencyCruiserBlocks,
@@ -141,15 +145,6 @@ export function writeRoleLayeringConfig(
   return [file];
 }
 
-export function writeDeepRelativeConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toEslintDeepRelative(scan.deepRelative);
-  if (config === null) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.deep-relative.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
 export function writeConsoleIsolationConfig(scan: ScanResult, outDir: string): string[] {
   const config = toEslintConsoleIsolation(scan.consoleIsolation);
   if (config === null) return [];
@@ -159,12 +154,15 @@ export function writeConsoleIsolationConfig(scan: ScanResult, outDir: string): s
   return [file];
 }
 
-export function writeEslintTestIsolationConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toEslintTestIsolation(scan.testIsolation);
-  if (config === null) return [];
+export function writeMergedNoRestrictedImports(
+  blocks: readonly (NoRestrictedImportsBlock | null)[],
+  outDir: string,
+): string[] {
+  const merged = mergeNoRestrictedImports(blocks);
+  if (merged === null) return [];
   mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.test-isolation.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  const file = path.join(outDir, 'eslint.no-restricted-imports.archprint.json');
+  writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
   return [file];
 }
 
@@ -200,15 +198,6 @@ export function writeStoriesIsolationConfig(scan: ScanResult, outDir: string): s
   if (config.forbidden.length === 0) return [];
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'dependency-cruiser.stories-isolation.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeWorkspacePackageConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toEslintWorkspacePackageApi(scan.workspacePackageApi);
-  if (config === null) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.workspace-package.archprint.json');
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }
@@ -250,17 +239,16 @@ export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string)
 }
 
 function presetBlocks(scan: ScanResult, structural: boolean): unknown[] {
-  const blocks = [
+  const noRestrictedImports: (NoRestrictedImportsBlock | null)[] = [
     toEslintDeepRelative(scan.deepRelative),
-    toEslintConsoleIsolation(scan.consoleIsolation),
     toEslintTestIsolation(scan.testIsolation),
   ];
-  if (structural) {
-    blocks.push(
-      toEslintEnvAccess(scan.envAccess),
-      toEslintWorkspacePackageApi(scan.workspacePackageApi),
-    );
-  }
+  if (structural) noRestrictedImports.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
+  const blocks = [
+    mergeNoRestrictedImports(noRestrictedImports),
+    toEslintConsoleIsolation(scan.consoleIsolation),
+  ];
+  if (structural) blocks.push(toEslintEnvAccess(scan.envAccess));
   return blocks.filter((block) => block !== null);
 }
 
@@ -411,18 +399,11 @@ export function writeEnforcementConfigs(
       writeAppIsolationConfig(scan, outDir, ['AUTO']),
       `${countAuto(scan.appIsolation.groups)} app boundaries: dependency-cruiser cross-app rules`,
     );
-  if (pick('test-isolation')) {
-    if (emitEslint)
-      add(
-        writeEslintTestIsolationConfig(scan, outDir),
-        'test isolation: eslint no-restricted-imports rule',
-      );
-    else if (emitDepcruise)
-      add(
-        writeTestIsolationConfig(scan, outDir),
-        'test isolation: dependency-cruiser not-to-test rule',
-      );
-  }
+  if (pick('test-isolation') && !emitEslint && emitDepcruise)
+    add(
+      writeTestIsolationConfig(scan, outDir),
+      'test isolation: dependency-cruiser not-to-test rule',
+    );
   addIf(
     emitDepcruise && pick('dependency-hygiene'),
     writeDependencyInternalsConfig(scan, outDir),
@@ -445,10 +426,16 @@ export function writeEnforcementConfigs(
         'dependency declaration: dependency-cruiser no-phantom-deps rule',
       );
   }
-  addIf(
-    emitEslint && pick('import-style'),
-    writeDeepRelativeConfig(scan, outDir),
-    'import style: eslint no-restricted-imports rule',
+  const noRestrictedImports: (NoRestrictedImportsBlock | null)[] = [];
+  if (emitEslint && pick('import-style'))
+    noRestrictedImports.push(toEslintDeepRelative(scan.deepRelative));
+  if (emitEslint && pick('test-isolation'))
+    noRestrictedImports.push(toEslintTestIsolation(scan.testIsolation));
+  if (structural && emitEslint && pick('workspace-package'))
+    noRestrictedImports.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
+  add(
+    writeMergedNoRestrictedImports(noRestrictedImports, outDir),
+    'import boundaries: eslint no-restricted-imports (deep-relative / test / workspace, merged)',
   );
   addIf(
     emitEslint && pick('console'),
@@ -457,11 +444,6 @@ export function writeEnforcementConfigs(
   );
   if (structural && emitEslint && pick('env-access'))
     add(writeEnvAccessConfig(scan, outDir), 'env access: eslint no-restricted-properties rule');
-  if (structural && emitEslint && pick('workspace-package'))
-    add(
-      writeWorkspacePackageConfig(scan, outDir),
-      'workspace package API: eslint no-restricted-imports rule',
-    );
   if (structural && emitDepcruise && pick('stories-isolation'))
     add(
       writeStoriesIsolationConfig(scan, outDir),

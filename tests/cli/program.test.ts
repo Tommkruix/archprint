@@ -152,7 +152,7 @@ describe('cli program', () => {
 
   it('generate --emit eslint forces the eslint form of a dual-tool family', async () => {
     await run(['generate', testIsolationAuto, '--emit', 'eslint', '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.test-isolation.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
       false,
     );
@@ -258,8 +258,8 @@ describe('cli program', () => {
 
   it('generate writes the deep-relative eslint config when relatives are shallow', async () => {
     await run(['generate', deepRelativeAuto, '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.deep-relative.archprint.json'))).toBe(true);
-    expect(output()).toContain('import style');
+    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(output()).toContain('no-restricted-imports');
   });
 
   it('generate writes the console-isolation eslint config when library avoids console', async () => {
@@ -276,8 +276,8 @@ describe('cli program', () => {
 
   it('generate writes the workspace-package eslint config when packages import by name', async () => {
     await run(['generate', wpkgAuto, '--include-structural', '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.workspace-package.archprint.json'))).toBe(true);
-    expect(output()).toContain('workspace package API');
+    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(output()).toContain('no-restricted-imports');
   });
 
   it('generate writes the stories-isolation config when stories are unimported', async () => {

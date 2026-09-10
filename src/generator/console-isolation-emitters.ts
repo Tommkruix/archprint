@@ -1,4 +1,5 @@
 import type { ConsoleIsolationAnalysis } from '../detector/console-isolation-detector.js';
+import { CLI_GLOBS, TEST_GLOBS } from './eslint-scope.js';
 
 export interface EslintFlatConfigBlock {
   files: string[];
@@ -19,10 +20,7 @@ export function toEslintConsoleIsolation(
   if (analysis.libraryFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {
     files: ['**/*.{ts,tsx}'],
-    ignores: withMinedExemptions(
-      ['**/cli/**', '**/scripts/**', '**/bin/**', '**/tools/**'],
-      analysis.violations,
-    ),
+    ignores: withMinedExemptions([...TEST_GLOBS, ...CLI_GLOBS], analysis.violations),
     rules: { 'no-console': 'error' },
   };
 }

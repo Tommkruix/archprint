@@ -6,7 +6,12 @@ export const MANAGED_START =
   '// archprint:start (managed by archprint; run `archprint eject` to remove)';
 export const MANAGED_END = '// archprint:end';
 const SPREAD_MARK = '// archprint:managed';
-const ESLINT_CONFIG_NAMES = ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs'];
+const ESLINT_CONFIG_NAMES = [
+  'eslint.config.js',
+  'eslint.config.mjs',
+  'eslint.config.cjs',
+  'eslint.config.ts',
+];
 const CONFIG_DECL = /export\s+default\s+|module\.exports\s*=\s*/;
 const CONFIG_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*/;
@@ -17,14 +22,18 @@ function skipWhitespaceFrom(content: string, from: number): number {
   return index;
 }
 
-function insertionPointFrom(content: string, from: number): number | null {
+// requireArray: when resolving `export default <ident>`, only splice into a real array literal (its
+// own or one inside a `defineConfig([...])` wrapper). Splicing into the args of an arbitrary call
+// such as `const config = loadConfig()` would corrupt the config, so bail there.
+function insertionPointFrom(content: string, from: number, requireArray = false): number | null {
   const index = skipWhitespaceFrom(content, from);
   if (content[index] === '[') return index + 1;
   const call = CONFIG_CALL.exec(content.slice(index));
   if (call === null) return null;
   const afterParen = index + call[0].length;
   const arrayStart = skipWhitespaceFrom(content, afterParen);
-  return content[arrayStart] === '[' ? arrayStart + 1 : afterParen;
+  if (content[arrayStart] === '[') return arrayStart + 1;
+  return requireArray ? null : afterParen;
 }
 
 function resolveIdentifierExport(content: string, from: number): number | null {
@@ -35,7 +44,7 @@ function resolveIdentifierExport(content: string, from: number): number | null {
   const after = skipWhitespaceFrom(content, start + name.length);
   if (content[after] !== undefined && content[after] !== ';') return null;
   const decl = new RegExp(`(?:const|let)\\s+${name.replace(/\$/g, '\\$&')}\\s*=\\s*`).exec(content);
-  return decl === null ? null : insertionPointFrom(content, decl.index + decl[0].length);
+  return decl === null ? null : insertionPointFrom(content, decl.index + decl[0].length, true);
 }
 
 function findInsertionPoint(content: string): number | null {

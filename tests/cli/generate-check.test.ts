@@ -51,4 +51,20 @@ describe('runEslintCheck', () => {
     expect(logged()).toContain('violation');
     expect(process.exitCode).toBe(1);
   });
+
+  it('does not flag a test file that logs (excluded from the scored population)', async () => {
+    const outDir = path.join(dir, 'out');
+    regenerateConfigs(scanRepo(fixture('console-isolation-auto')), outDir, {
+      version: '0',
+      enforcers: eslintOnly,
+    });
+    const appDir = path.join(dir, 'app');
+    cpSync(fixture('console-isolation-auto'), appDir, { recursive: true });
+    writeFileSync(
+      path.join(appDir, 'src', 'foo.test.ts'),
+      "export const f = () => console.log('in a test');\n",
+    );
+    await runEslintCheck(appDir, outDir);
+    expect(logged()).toContain('pass clean');
+  });
 });

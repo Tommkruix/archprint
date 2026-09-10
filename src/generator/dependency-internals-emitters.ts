@@ -1,4 +1,5 @@
 import type { DependencyInternalsAnalysis } from '../detector/dependency-internals-detector.js';
+import { exemptDepcruiseFrom } from './depcruise-exempt.js';
 
 const INTERNAL_PATH =
   'node_modules/(?:@[^/]+/)?[^/]+/(?:dist|src|lib|esm|cjs|build|out|internal|internals)/';
@@ -7,7 +8,7 @@ export interface NoInternalsRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { pathNot: string };
+  from: { pathNot: string | string[] };
   to: { path: string };
 }
 
@@ -29,7 +30,7 @@ export function toDependencyCruiserDependencyInternals(
         name: 'no-dependency-internals',
         comment: `Archprint inferred dependency hygiene: ${conform}/${analysis.externalImporterCount} files import third-party packages only by their public entry; reaching into a package's build/impl directory is forbidden (confidence ${floor}).`,
         severity: 'error',
-        from: { pathNot: 'node_modules' },
+        from: { pathNot: exemptDepcruiseFrom('node_modules', analysis.violations) },
         to: { path: INTERNAL_PATH },
       },
     ],

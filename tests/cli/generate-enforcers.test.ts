@@ -31,7 +31,7 @@ describe('writeEnforcementConfigs enforcer gating', () => {
     writeEnforcementConfigs(scanRepo(fixture('test-isolation-auto')), out, {
       enforcers: enforcers({ eslint: true }),
     });
-    expect(has('eslint.test-isolation.archprint.json')).toBe(true);
+    expect(has('eslint.no-restricted-imports.archprint.json')).toBe(true);
     expect(has('dependency-cruiser.test-isolation.archprint.json')).toBe(false);
   });
 
@@ -40,7 +40,7 @@ describe('writeEnforcementConfigs enforcer gating', () => {
       enforcers: enforcers({ dependencyCruiser: true }),
     });
     expect(has('dependency-cruiser.test-isolation.archprint.json')).toBe(true);
-    expect(has('eslint.test-isolation.archprint.json')).toBe(false);
+    expect(has('eslint.no-restricted-imports.archprint.json')).toBe(false);
   });
 
   it('emits the eslint phantom-deps rule when eslint-plugin-import is present', () => {
