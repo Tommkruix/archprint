@@ -3,7 +3,8 @@ import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isola
 import { TEST_GLOBS } from './eslint-scope.js';
 import { exemptDepcruiseFrom } from './depcruise-exempt.js';
 
-const TEST_PATH = '\\.(test|spec)\\.(ts|tsx)$';
+const TEST_PATH =
+  '(\\.(test|spec|e2e-spec|e2e)\\.(ts|tsx)$)|((^|/)(__tests__|__mocks__|e2e|cypress|playwright|test|tests)/)';
 
 export interface NotToTestRule {
   name: string;

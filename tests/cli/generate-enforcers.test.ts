@@ -43,19 +43,20 @@ describe('writeEnforcementConfigs enforcer gating', () => {
     expect(has('eslint.no-restricted-imports.archprint.json')).toBe(false);
   });
 
-  it('emits the eslint phantom-deps rule when eslint-plugin-import is present', () => {
-    writeEnforcementConfigs(scanRepo(fixture('phantom-deps-auto')), out, {
-      enforcers: enforcers({ eslint: true, eslintPluginImport: true }),
-    });
-    expect(has('eslint.phantom-deps.archprint.json')).toBe(true);
-    expect(has('dependency-cruiser.phantom-deps.archprint.json')).toBe(false);
-  });
-
-  it('falls back to the depcruise phantom-deps rule without the import plugin', () => {
+  it('emits phantom-deps only for dependency-cruiser, not ESLint', () => {
     writeEnforcementConfigs(scanRepo(fixture('phantom-deps-auto')), out, {
       enforcers: enforcers({ dependencyCruiser: true }),
     });
     expect(has('dependency-cruiser.phantom-deps.archprint.json')).toBe(true);
+    expect(has('eslint.phantom-deps.archprint.json')).toBe(false);
+  });
+
+  it('does not emit phantom-deps at all on an eslint-only repo (no safe ESLint form)', () => {
+    writeEnforcementConfigs(scanRepo(fixture('phantom-deps-auto')), out, {
+      enforcers: enforcers({ eslint: true, eslintPluginImport: true }),
+    });
+    expect(has('eslint.phantom-deps.archprint.json')).toBe(false);
+    expect(has('dependency-cruiser.phantom-deps.archprint.json')).toBe(false);
   });
 
   it('writes no dependency-cruiser file to disk for an eslint-only repo (no orphaned outputs)', () => {

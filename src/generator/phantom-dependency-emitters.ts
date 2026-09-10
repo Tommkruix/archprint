@@ -1,5 +1,4 @@
 import type { PhantomDependencyAnalysis } from '../detector/phantom-dependency-detector.js';
-import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
 import { exemptDepcruiseFrom } from './depcruise-exempt.js';
 
 export interface PhantomDependencyRule {
@@ -32,21 +31,5 @@ export function toDependencyCruiserPhantomDependencies(
         to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] },
       },
     ],
-  };
-}
-
-export function toEslintPhantomDependencies(
-  analysis: PhantomDependencyAnalysis,
-): EslintFlatConfigBlock | null {
-  if (analysis.externalImporterCount === 0 || analysis.gate.status !== 'AUTO') return null;
-  return {
-    files: ['**/*.{ts,tsx}'],
-    ignores: withMinedExemptions([], analysis.violations),
-    rules: {
-      'import/no-extraneous-dependencies': [
-        'error',
-        { devDependencies: true, peerDependencies: true, optionalDependencies: true },
-      ],
-    },
   };
 }

@@ -12,10 +12,7 @@ import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emit
 import { toDependencyCruiserDependencyInternals } from '../generator/dependency-internals-emitters.js';
 import { toDependencyCruiserRoleLayering } from '../generator/role-layering-emitters.js';
 import { toDependencyCruiserEntryPurity } from '../generator/entry-purity-emitters.js';
-import {
-  toDependencyCruiserPhantomDependencies,
-  toEslintPhantomDependencies,
-} from '../generator/phantom-dependency-emitters.js';
+import { toDependencyCruiserPhantomDependencies } from '../generator/phantom-dependency-emitters.js';
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { toEslintDeepRelative } from '../generator/deep-relative-emitters.js';
 import { toEslintConsoleIsolation } from '../generator/console-isolation-emitters.js';
@@ -163,15 +160,6 @@ export function writeMergedNoRestrictedImports(
   mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'eslint.no-restricted-imports.archprint.json');
   writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
-  return [file];
-}
-
-export function writeEslintPhantomDependencyConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toEslintPhantomDependencies(scan.phantomDependencies);
-  if (config === null) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.phantom-deps.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return [file];
 }
 
@@ -348,7 +336,6 @@ export function writeEnforcementConfigs(
   const structural = options.structural ?? false;
   const emitDepcruise = options.enforcers.dependencyCruiser;
   const emitEslint = options.enforcers.eslint || !options.enforcers.dependencyCruiser;
-  const emitImportPlugin = emitEslint && options.enforcers.eslintPluginImport;
   const pick = (family: string): boolean => !options.only || options.only === family;
   const bundles = options.only === undefined;
   const configs: WrittenConfig[] = [];
@@ -414,18 +401,11 @@ export function writeEnforcementConfigs(
       writeEntryPurityConfig(scan, outDir),
       'entry purity: dependency-cruiser no-import-entry rule',
     );
-  if (pick('phantom-deps')) {
-    if (emitImportPlugin)
-      add(
-        writeEslintPhantomDependencyConfig(scan, outDir),
-        'dependency declaration: eslint import/no-extraneous-dependencies rule',
-      );
-    else if (emitDepcruise)
-      add(
-        writePhantomDependencyConfig(scan, outDir),
-        'dependency declaration: dependency-cruiser no-phantom-deps rule',
-      );
-  }
+  if (emitDepcruise && pick('phantom-deps'))
+    add(
+      writePhantomDependencyConfig(scan, outDir),
+      'dependency declaration: dependency-cruiser no-phantom-deps rule',
+    );
   const noRestrictedImports: (NoRestrictedImportsBlock | null)[] = [];
   if (emitEslint && pick('import-style'))
     noRestrictedImports.push(toEslintDeepRelative(scan.deepRelative));

@@ -7,8 +7,7 @@ import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import type { ScanResult } from './scan.js';
 
-type ToolCategory =
-  'eslint' | 'eslint-import' | 'dependency-cruiser' | 'eslint-or-depcruise' | 'none';
+type ToolCategory = 'eslint' | 'dependency-cruiser' | 'eslint-or-depcruise' | 'none';
 
 const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   'forbidden-imports': 'eslint',
@@ -17,7 +16,7 @@ const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   'env-access': 'eslint',
   'workspace-package-api': 'eslint',
   'test-isolation': 'eslint-or-depcruise',
-  'phantom-deps': 'eslint-import',
+  'phantom-deps': 'dependency-cruiser',
   'dependency-hygiene': 'dependency-cruiser',
   layer: 'dependency-cruiser',
   'role-layering': 'dependency-cruiser',
@@ -36,7 +35,6 @@ const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
 export function resolveEnforcer(key: FamilyKey, enforcers: InstalledEnforcers): string {
   const depcruise = enforcers.dependencyCruiser;
   const eslint = enforcers.eslint || !enforcers.dependencyCruiser;
-  const importPlugin = eslint && enforcers.eslintPluginImport;
   switch (FAMILY_TOOL[key]) {
     case 'none':
       return '';
@@ -45,14 +43,7 @@ export function resolveEnforcer(key: FamilyKey, enforcers: InstalledEnforcers): 
     case 'dependency-cruiser':
       return depcruise ? 'dependency-cruiser' : 'needs dependency-cruiser';
     case 'eslint-or-depcruise':
-      // eslint is false only when dependency-cruiser is present, so that is the fallback.
       return eslint ? 'eslint' : 'dependency-cruiser';
-    case 'eslint-import':
-      return importPlugin
-        ? 'eslint-plugin-import'
-        : depcruise
-          ? 'dependency-cruiser'
-          : 'needs eslint-plugin-import or dependency-cruiser';
   }
 }
 

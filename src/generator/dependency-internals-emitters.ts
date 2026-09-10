@@ -1,8 +1,7 @@
 import type { DependencyInternalsAnalysis } from '../detector/dependency-internals-detector.js';
 import { exemptDepcruiseFrom } from './depcruise-exempt.js';
 
-const INTERNAL_PATH =
-  'node_modules/(?:@[^/]+/)?[^/]+/(?:dist|src|lib|esm|cjs|build|out|internal|internals)/';
+const INTERNAL_PATH = 'node_modules/(?:@[^/]+/)?[^/]+/(?:src|internal|internals)/';
 
 export interface NoInternalsRule {
   name: string;

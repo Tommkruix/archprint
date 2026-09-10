@@ -106,8 +106,16 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
     message.severity === 2 && message.ruleId !== null && archprintRuleIds.has(message.ruleId);
   const offenders = results.filter((result) => result.messages.some(offends));
   const count = offenders.reduce((total, r) => total + r.messages.filter(offends).length, 0);
+  const unparsed = results.filter((result) => result.messages.some((m) => m.fatal));
+  if (unparsed.length > 0) {
+    console.log(`Check: ${unparsed.length} file(s) could not be parsed, so they were not checked:`);
+    for (const result of unparsed.slice(0, 10))
+      console.log(`  ${path.relative(appDir, result.filePath)}`);
+    process.exitCode = 1;
+  }
   if (count === 0) {
-    console.log('Check: the generated eslint rules pass clean on this repo.');
+    if (unparsed.length === 0)
+      console.log('Check: the generated eslint rules pass clean on this repo.');
     return;
   }
   console.log(`Check: ${count} violation(s) of the generated rules:`);

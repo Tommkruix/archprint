@@ -59,14 +59,11 @@ describe('resolveEnforcer', () => {
     expect(resolveEnforcer('test-isolation', only({ dependencyCruiser: true }))).toBe(
       'dependency-cruiser',
     );
-    expect(resolveEnforcer('phantom-deps', only({ eslint: true, eslintPluginImport: true }))).toBe(
-      'eslint-plugin-import',
-    );
     expect(resolveEnforcer('phantom-deps', only({ dependencyCruiser: true }))).toBe(
       'dependency-cruiser',
     );
     expect(resolveEnforcer('phantom-deps', only({ eslint: true }))).toBe(
-      'needs eslint-plugin-import or dependency-cruiser',
+      'needs dependency-cruiser',
     );
     expect(resolveEnforcer('cycles', only({ eslint: true }))).toBe('');
   });

@@ -237,7 +237,6 @@ export {
 } from './generator/entry-purity-emitters.js';
 export {
   toDependencyCruiserPhantomDependencies,
-  toEslintPhantomDependencies,
   type PhantomDependencyConfig,
   type PhantomDependencyRule,
 } from './generator/phantom-dependency-emitters.js';
