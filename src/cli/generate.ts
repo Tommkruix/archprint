@@ -355,7 +355,6 @@ export function writeEnforcementConfigs(
   const add = (files: string[], label: string | null): void => {
     if (files.length > 0) configs.push({ files, label });
   };
-  // Lazy: write a file only when its enforcer/family gate passes, so an unused tool leaves no orphans.
   const addIf = (condition: boolean, write: () => string[], label: string | null): void => {
     if (condition) add(write(), label);
   };

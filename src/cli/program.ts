@@ -76,8 +76,6 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
     import('typescript-eslint'),
     import(pathToFileURL(aggregator).href) as Promise<{ default: unknown[] }>,
   ]);
-  // overrideConfigFile: true isolates to the generated rules; report only their violations. A repo's
-  // inline eslint-disable for another plugin surfaces as a harmless "definition not found" message.
   const archprintRuleIds = new Set<string>();
   for (const block of generated.default) {
     const rules = (block as { rules?: Record<string, unknown> }).rules;
