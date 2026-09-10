@@ -255,7 +255,7 @@ describe('cli program', () => {
   });
 
   it('generate writes the phantom-dependency config when imports are all declared', async () => {
-    await run(['generate', phantomDepsAuto, '--fast', '--out', out]);
+    await run(['generate', phantomDepsAuto, '--fast', '--include-structural', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.phantom-deps.archprint.json'))).toBe(true);
     expect(output()).toContain('dependency declaration');
   });
@@ -500,7 +500,7 @@ describe('init', () => {
     const config = path.join(tmp, '.dependency-cruiser.json');
     const original = '{\n  "forbidden": [],\n  "options": {}\n}\n';
     writeFileSync(config, original);
-    await run(['init', phantomDepsAuto, '--fast']);
+    await run(['init', phantomDepsAuto, '--fast', '--include-structural']);
     await run(['wire', '--out', 'archprint-rules']);
     const wired = JSON.parse(readFileSync(config, 'utf8')) as { extends?: string };
     expect(wired.extends).toContain('dependency-cruiser.all.archprint.json');

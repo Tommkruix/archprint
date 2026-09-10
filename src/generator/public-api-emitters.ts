@@ -1,5 +1,6 @@
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import type { PublicApiGroup } from '../detector/public-api-detector.js';
+import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -12,7 +13,7 @@ export interface DeepImportRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { pathNot: string };
+  from: { pathNot: string | string[] };
   to: { path: string; pathNot: string };
 }
 
@@ -32,7 +33,7 @@ export function toDependencyCruiserPublicApi(
         name: `no-deep-import-${slug(group.dir)}`,
         comment: `Archprint inferred public API: files outside "${group.dir}" import it through its barrel (${group.consumerCount - group.deepImporterCount}/${group.consumerCount} consumers); deep imports into its internals are forbidden (confidence ${confidencePct(group)}).`,
         severity: 'error' as const,
-        from: { pathNot: `^${dir}/` },
+        from: { pathNot: exemptDepcruiseFrom([TEST_ROLE_REGEX, `^${dir}/`], group.violations) },
         to: { path: `^${dir}/`, pathNot: `^${dir}/index\\.(ts|tsx)$` },
       };
     });

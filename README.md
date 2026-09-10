@@ -167,7 +167,7 @@ regardless of framework.
 | Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         | Auto     |
 | Test isolation                   | Production (non-test) code must not import test or spec files                                                        | Auto     |
 | Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Review   |
-| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Auto     |
+| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Review   |
 | Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    | Auto     |
 | Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     | Auto     |
 | Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          | Auto     |
@@ -212,9 +212,9 @@ tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format
 produce:
 
 - **dependency-cruiser** `forbidden` rulesets (when dependency-cruiser is present): by default the
-  mechanical boundaries (public-API deep-import, test-isolation, phantom deps); the review-held ones
-  (layer, role-layering, feature-slice, app-isolation, entry-purity, dependency-internals) are written only
-  with `--include-structural`, after you review them
+  mechanical boundaries (public-API deep-import, test-isolation); the review-held ones
+  (layer, role-layering, feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are
+  written only with `--include-structural`, after you review them
 - **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
   import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a

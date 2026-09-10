@@ -46,6 +46,7 @@ describe('writeEnforcementConfigs enforcer gating', () => {
   it('emits phantom-deps only for dependency-cruiser, not ESLint', () => {
     writeEnforcementConfigs(scanRepo(fixture('phantom-deps-auto')), out, {
       enforcers: enforcers({ dependencyCruiser: true }),
+      structural: true,
     });
     expect(has('dependency-cruiser.phantom-deps.archprint.json')).toBe(true);
     expect(has('eslint.phantom-deps.archprint.json')).toBe(false);

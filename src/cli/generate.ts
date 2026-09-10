@@ -401,7 +401,7 @@ export function writeEnforcementConfigs(
       writeEntryPurityConfig(scan, outDir),
       'entry purity: dependency-cruiser no-import-entry rule',
     );
-  if (emitDepcruise && pick('phantom-deps'))
+  if (structural && emitDepcruise && pick('phantom-deps'))
     add(
       writePhantomDependencyConfig(scan, outDir),
       'dependency declaration: dependency-cruiser no-phantom-deps rule',

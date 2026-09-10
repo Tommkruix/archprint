@@ -50,17 +50,11 @@ Detects `../../../` deep relative imports where a workspace alias exists. A styl
 Detects a file outside a module deep-importing the module's internals, bypassing its `index` barrel. Only fires
 when a barrel actually exists. **When not to use:** modules you intentionally expose without a barrel.
 
-### Dependency declaration (no phantom deps) — Auto
-
-Detects an imported third-party package that is not declared in `package.json` (a phantom/transitive
-dependency). Resolves monorepo hoisting to the workspace root. **When not to use:** rarely; undeclared deps are
-a real fragility.
-
 ## Held for review families
 
 These are held for review even at AUTO. The structural ones infer a layer or role from paths that can be
-wrong; dependency hygiene is held because its enforcement can over-flag. Emit any of them with
-`--include-structural` after reading the evidence.
+wrong; the dependency families are held because their enforcement matches resolved paths and can over-flag.
+Emit any of them with `--include-structural` after reading the evidence.
 
 ### Dependency hygiene (no build/impl internals) — Review
 
@@ -68,6 +62,14 @@ Detects code reaching into a dependency's `/src/` or `/internal(s)/` rather than
 review because the dependency-cruiser rule matches resolved paths, so it can flag a package whose own public
 entry resolves through `src/`. **When not to use:** if a dependency documents a deep path (or its entry) under
 `src` as public API.
+
+### Dependency declaration (no phantom deps) — Review
+
+Detects an imported third-party package that is not declared in `package.json` (a phantom/transitive
+dependency). Resolves monorepo hoisting to the workspace root. Held for review because the dependency-cruiser
+rule matches resolved dependency types, so a workspace package with no local `package.json` entry can surface
+as phantom. **When not to use:** rarely; undeclared deps are a real fragility once the workspace edge cases are
+reviewed.
 
 ### Layer boundaries — Review
 
