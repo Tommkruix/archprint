@@ -32,7 +32,7 @@ import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
   writeAppIsolationConfig,
   writeConsoleIsolationConfig,
-  writeDeepRelativeConfig,
+  writeMergedNoRestrictedImports,
   writeDependencyInternalsConfig,
   writeEntryPurityConfig,
   writeEnvAccessConfig,
@@ -49,7 +49,6 @@ import {
   writeTestIsolationConfig,
   writeTsArchTests,
   writeUiDataConfig,
-  writeWorkspacePackageConfig,
 } from '../../src/cli/generate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -830,7 +829,9 @@ describe('cli generate', () => {
     expect(files).toHaveLength(1);
     expect(files[0]!.endsWith('eslint-preset.archprint.mjs')).toBe(true);
     const source = readFileSync(files[0]!, 'utf8');
-    expect(source).toContain('export default [...BLOCKS, ...pluginConfigs];');
+    expect(source).toContain(
+      "export default [{ ignores: ['**/*.archprint.mjs'] }, ...BLOCKS, ...pluginConfigs];",
+    );
     expect(source).not.toContain('readdirSync');
 
     const none = emptyScan({ fileCount: 10, aliasCount: 1 });
@@ -920,12 +921,11 @@ describe('cli generate', () => {
     expect(writeStoriesIsolationConfig(emptyScan(), outDir)).toEqual([]);
   });
 
-  it('writes a workspace-package eslint config when packages are imported by name, none otherwise', () => {
+  it('writes one consolidated no-restricted-imports config, none when there are no patterns', () => {
     rmSync(outDir, { recursive: true, force: true });
-    expect(
-      writeWorkspacePackageConfig(emptyScan({ workspacePackageApi: fakeWpkg(40, 0) }), outDir),
-    ).toHaveLength(1);
-    expect(writeWorkspacePackageConfig(emptyScan(), outDir)).toEqual([]);
+    const block = { rules: { 'no-restricted-imports': ['error', { patterns: [{ regex: 'X' }] }] } };
+    expect(writeMergedNoRestrictedImports([block], outDir)).toHaveLength(1);
+    expect(writeMergedNoRestrictedImports([null], outDir)).toEqual([]);
   });
 
   it('writes eslint configs for console isolation and env access when clean, none otherwise', () => {
@@ -936,20 +936,6 @@ describe('cli generate', () => {
     expect(writeConsoleIsolationConfig(emptyScan(), outDir)).toEqual([]);
     expect(writeEnvAccessConfig(emptyScan({ envAccess: fakeEnv(40, 0) }), outDir)).toHaveLength(1);
     expect(writeEnvAccessConfig(emptyScan(), outDir)).toEqual([]);
-  });
-
-  it('writes a deep-relative eslint config when relative imports are shallow, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const files = writeDeepRelativeConfig(
-      emptyScan({ deepRelative: fakeDeepRelative(40, 0) }),
-      outDir,
-    );
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as {
-      rules: Record<string, unknown>;
-    };
-    expect(config.rules['no-restricted-imports']).toBeDefined();
-    expect(writeDeepRelativeConfig(emptyScan(), outDir)).toEqual([]);
   });
 
   it('writes a phantom-dependency config when all imports are declared, none otherwise', () => {

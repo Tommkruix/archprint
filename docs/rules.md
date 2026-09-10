@@ -35,7 +35,8 @@ purpose, add an ignore for those files.
 
 ### Console isolation — Auto
 
-Detects library (non-CLI) code calling `console.*`. CLI/scripts/bin/tools directories are excluded.
+Detects library (non-CLI) code calling `console.*`. Test files and cli/scripts/bin/tools paths are excluded,
+and the emitted rule is scoped to exactly those measured files so wiring it stays green.
 **When not to use:** if a package legitimately logs to the console as its purpose (a logger, a CLI you did not
 place under those directories), scope or skip it.
 
@@ -49,22 +50,26 @@ Detects `../../../` deep relative imports where a workspace alias exists. A styl
 Detects a file outside a module deep-importing the module's internals, bypassing its `index` barrel. Only fires
 when a barrel actually exists. **When not to use:** modules you intentionally expose without a barrel.
 
-### Dependency declaration (no phantom deps) — Auto
+## Held for review families
+
+These are held for review even at AUTO. The structural ones infer a layer or role from paths that can be
+wrong; the dependency families are held because their enforcement matches resolved paths and can over-flag.
+Emit any of them with `--include-structural` after reading the evidence.
+
+### Dependency hygiene (no build/impl internals) — Review
+
+Detects code reaching into a dependency's `/src/` or `/internal(s)/` rather than its public entry. Held for
+review because the dependency-cruiser rule matches resolved paths, so it can flag a package whose own public
+entry resolves through `src/`. **When not to use:** if a dependency documents a deep path (or its entry) under
+`src` as public API.
+
+### Dependency declaration (no phantom deps) — Review
 
 Detects an imported third-party package that is not declared in `package.json` (a phantom/transitive
-dependency). Resolves monorepo hoisting to the workspace root. **When not to use:** rarely; undeclared deps are
-a real fragility.
-
-### Dependency hygiene (no build/impl internals) — Auto
-
-Detects code reaching into a dependency's `/src/` or `/internal(s)/` rather than its public entry. A package's
-documented public `dist`/`lib`/`esm` subpaths are allowed. **When not to use:** if a dependency documents a deep
-path as public API and it happens to live under `src`.
-
-## Review-only (structural-inference) families
-
-These infer a layer or role from paths and can be wrong, so they are held for review even at AUTO. Emit with
-`--include-structural` after reading the evidence.
+dependency). Resolves monorepo hoisting to the workspace root. Held for review because the dependency-cruiser
+rule matches resolved dependency types, so a workspace package with no local `package.json` entry can surface
+as phantom. **When not to use:** rarely; undeclared deps are a real fragility once the workspace edge cases are
+reviewed.
 
 ### Layer boundaries — Review
 

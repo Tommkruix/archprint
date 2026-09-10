@@ -1,12 +1,15 @@
 import type { TestIsolationAnalysis } from '../detector/test-isolation-detector.js';
+import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
+import { TEST_GLOBS } from './eslint-scope.js';
+import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
-const TEST_PATH = '\\.(test|spec)\\.(ts|tsx)$';
+const TEST_PATH = TEST_ROLE_REGEX;
 
 export interface NotToTestRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { pathNot: string };
+  from: { pathNot: string | string[] };
   to: { path: string };
 }
 
@@ -24,9 +27,32 @@ export function toDependencyCruiserTestIsolation(analysis: TestIsolationAnalysis
         name: 'not-to-test',
         comment: `Archprint inferred test isolation: ${conform}/${analysis.productionFileCount} production files do not import a test file; importing tests from production code is forbidden (confidence ${floor}).`,
         severity: 'error',
-        from: { pathNot: TEST_PATH },
+        from: { pathNot: exemptDepcruiseFrom(TEST_PATH, analysis.violations) },
         to: { path: TEST_PATH },
       },
     ],
+  };
+}
+
+export function toEslintTestIsolation(
+  analysis: TestIsolationAnalysis,
+): EslintFlatConfigBlock | null {
+  if (analysis.testFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
+  return {
+    files: ['**/*.{ts,tsx}'],
+    ignores: withMinedExemptions([...TEST_GLOBS], analysis.violations),
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '\\.(test|spec)(\\.|$)',
+              message: 'Do not import a test file from production code.',
+            },
+          ],
+        },
+      ],
+    },
   };
 }

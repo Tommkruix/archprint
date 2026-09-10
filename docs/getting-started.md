@@ -30,9 +30,11 @@ as `apps/web`; a monorepo root works too, Archprint discovers the app directorie
 archprint init apps/web
 ```
 
-`init` scans the repo, writes the auto-trusted (mechanical) rules into `archprint-rules/`, and prints three
-tiers: what is enforced now, what to review before enforcing, and what comparable repos commonly adopt that you
-do not yet. Then reference the generated rules from your linter:
+`init` scans the repo, writes the auto-trusted (mechanical) rules into `archprint-rules/` (only for the linters
+your repo uses, it detects ESLint and dependency-cruiser), adds a plain-language
+`ADOPTION.md` explaining what it did, and prints three tiers: what is enforced now, what to review before
+enforcing, and what comparable repos commonly adopt that you do not yet. Then reference the generated rules from
+your linter:
 
 ```bash
 archprint wire      # inserts a managed, reversible reference into your eslint / dependency-cruiser config
@@ -58,8 +60,15 @@ archprint explain AP-002 apps/web
 # Write the auto-trusted mechanical rules (structural ones are held for review)
 archprint generate apps/web
 
+# Check the generated rules pass on your repo before you wire them
+archprint generate apps/web --check
+
 # Emit one specific rule after reviewing it (including a SUGGEST rule)
 archprint generate apps/web --rule AP-001
+
+# Narrow the output, or force a format regardless of detected tooling
+archprint generate apps/web --only console
+archprint generate apps/web --emit all
 
 # Also emit the structural-inference families (review these first)
 archprint generate apps/web --include-structural
@@ -77,8 +86,9 @@ archprint recommend apps/web
 ```
 
 `recommend` works even with little code to learn from: it sorts every rule family into enforce-now / review /
-adopt-from-day-one, and the adopt tier is backed by a census of tens of thousands of public TypeScript repos
-(stack-aware), not hand-picked defaults.
+adopt-from-day-one, names the installed tool that will enforce each rule (or what to install), and the adopt
+tier is backed by a census of tens of thousands of public TypeScript repos (stack-aware), not hand-picked
+defaults.
 
 ## CI
 

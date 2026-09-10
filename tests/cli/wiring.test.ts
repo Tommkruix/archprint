@@ -53,6 +53,57 @@ describe('wiring transforms', () => {
     expect(result.reason).toBe('no-array-export');
   });
 
+  it('wires the indirect Next.js shape (const config = [...]; export default config) and round-trips', () => {
+    const src = "import next from 'x';\nconst config = [\n  ...next,\n];\nexport default config;\n";
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('const config = [\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
+  it('resolves an identifier export to a defineConfig([...]) declaration', () => {
+    const src = 'const config = defineConfig([\n  base,\n]);\nexport default config;\n';
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('defineConfig([\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
+  it('resolves a let-declared config array', () => {
+    const result = wireEslintContent('let config = [\n];\nexport default config;\n', './x.mjs');
+    expect(result.changed).toBe(true);
+  });
+
+  it('is not fooled by "export default" inside a string literal (real-world Next config)', () => {
+    const src =
+      "const config = [\n  { rules: { m: 'export default it at the end of the file' } },\n];\nexport default config;\n";
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('const config = [\n  ...archprintRules,');
+    expect(unwireEslintContent(result.content!)).toBe(src);
+  });
+
+  it('bails on an unrecognized factory call, whatever its arguments', () => {
+    for (const src of [
+      'export default loadConfig();\n',
+      'export default loadConfig(base);\n',
+      'export default loadConfig([]);\n',
+    ]) {
+      const result = wireEslintContent(src, './x.mjs');
+      expect(result.changed).toBe(false);
+      expect(result.reason).toBe('no-array-export');
+    }
+  });
+
+  it('bails instead of splicing into a non-array call the identifier resolves to', () => {
+    const result = wireEslintContent(
+      'const config = loadConfig();\nexport default config;\n',
+      './x.mjs',
+    );
+    expect(result.changed).toBe(false);
+    expect(result.reason).toBe('no-array-export');
+  });
+
   it('supports the module.exports = [ ] form', () => {
     const result = wireEslintContent('module.exports = [\n];\n', './x.mjs');
     expect(result.changed).toBe(true);
@@ -118,10 +169,11 @@ describe('wiring filesystem helpers', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('writeEslintAggregator writes the aggregator file', () => {
+  it('writeEslintAggregator writes the aggregator file that ignores archprint outputs', () => {
     const file = writeEslintAggregator(dir);
     expect(existsSync(file)).toBe(true);
     expect(path.basename(file)).toBe(AGGREGATOR_FILE);
+    expect(readFileSync(file, 'utf8')).toContain("ignores: ['**/*.archprint.mjs']");
   });
 
   it('findEslintConfig finds a flat config and returns null otherwise', () => {

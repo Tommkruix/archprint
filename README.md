@@ -25,17 +25,18 @@ question directly (a pre-registered, honest null result on the boundary it teste
 **What auto-enforces vs. what you review.** Archprint is honest about which of its inferences it will stand
 behind unattended. An adversarial correctness audit (three rounds over four real repositories) found that the
 _mechanical_ families, ones grounded in unambiguous signals (no cycles, production must not import tests, no
-`console` in library code, no undeclared dependencies, deep-relative import style, public-API barrels, no
-reaching into a dependency's internals, and the DB/UI-in-server-entry rule), had zero false positives every
-round. So those auto-generate as enforcement. The _structural-inference_ families (layer and role boundaries,
-UI/data separation, entry purity, server/client, feature-slice and app isolation) infer a "layer" or "role"
-from paths, which can be wrong, so Archprint holds them for human review by default rather than silently
-enforcing them. Nothing whose inferred layer or role could be wrong is written as enforcement without you
-opting in.
+`console` in library code, no undeclared dependencies, deep-relative import style, public-API barrels, and the
+DB/UI-in-server-entry rule), had zero false positives every round. So those auto-generate as enforcement. The
+families held for human review by default, emitted only with `--include-structural`, are the ones that infer a
+"layer" or "role" from paths, which can be wrong (layer and role boundaries, UI/data separation, entry purity,
+server/client, feature-slice and app isolation), plus dependency hygiene, whose enforcement can over-flag.
+Nothing that could be wrong is written as enforcement without you opting in.
 
-> Status: published on npm, pre-stable (0.x may break between minor versions). Production-ready today: the
-> insight commands (`scan`, `recommend`) and the auto-enforcement of the mechanical families above. The
-> structural families are review-only while they are hardened.
+> Status: published on npm and safe to try on your real repo. Every rule is review-gated by default,
+> reversible in one command (`archprint eject`), and deterministic, and a rule archprint marks
+> "enforce now" is checked to pass on your code before it says so. `scan` and `recommend` are stable;
+> the structural families stay review-only while they are hardened. Versioning is 0.x: the CLI surface
+> and rule-card format may still change before 1.0. The analysis is not experimental.
 
 ## What makes it different
 
@@ -80,9 +81,12 @@ archprint init apps/web
 # See the rules your repo already follows, with the evidence
 archprint scan apps/web
 
-# Write the auto-trusted (mechanical) rules to disk (rule files + tool configs).
+# Write the auto-trusted (mechanical) rules to disk, only for the linters your repo uses.
 # Structural-inference rules are held for review; add --include-structural to emit them too.
 archprint generate apps/web --out archprint-rules
+
+# Confirm the generated rules pass on your repo before wiring
+archprint generate apps/web --check
 
 # Inspect the gate evidence behind one rule
 archprint explain AP-002 apps/web
@@ -162,8 +166,8 @@ regardless of framework.
 | Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          | Auto     |
 | Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         | Auto     |
 | Test isolation                   | Production (non-test) code must not import test or spec files                                                        | Auto     |
-| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Auto     |
-| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Auto     |
+| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Review   |
+| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Review   |
 | Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    | Auto     |
 | Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     | Auto     |
 | Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          | Auto     |
@@ -202,11 +206,15 @@ zero rules.
 
 ## Output formats
 
-`archprint generate` writes into the formats your existing tools already read:
+`archprint generate` writes only for the linters your repo actually uses, it detects ESLint and
+dependency-cruiser and emits each rule for a tool you already run, so you are not left with config for a
+tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format. The formats it can
+produce:
 
-- **dependency-cruiser** `forbidden` rulesets: by default the mechanical boundaries (public-API deep-import,
-  test-isolation, dependency-internals); the structural ones (layer, role-layering, feature-slice,
-  app-isolation, entry-purity) are written only with `--include-structural`, after you review them
+- **dependency-cruiser** `forbidden` rulesets (when dependency-cruiser is present): by default the
+  mechanical boundaries (public-API deep-import, test-isolation); the review-held ones
+  (layer, role-layering, feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are
+  written only with `--include-structural`, after you review them
 - **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
   import-style boundaries
 - **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
@@ -218,6 +226,11 @@ zero rules.
   inside your existing Vitest or Jest suite
 - **Mermaid** and **Graphviz DOT** of the layer dependency graph, so the inferred architecture is visible and
   its violations are marked
+- **`ADOPTION.md`**, a plain-language summary of what is enforced now, what is held for review, and what is
+  worth adopting, with the tool that enforces each rule (written by `init`, or `generate --readme`)
+
+`generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
+can confirm before wiring.
 
 ## How it compares
 
@@ -241,15 +254,15 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 
 ## Commands
 
-| Command                         | What it does                                                                                                                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write an `archprint.json` with the adopt tiers. `--include-structural`, `--out <dir>`, `--fast`, `--force`.             |
-| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                     |
-| `archprint generate [path]`     | Write the auto-trusted mechanical rules + tool configs; structural rules held for review. `--rule <id>` emits one reviewed rule (including a SUGGEST rule). `--include-structural`, `--out <dir>`, `--fast`. |
-| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                   |
-| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too).                                                                                                                |
-| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                    |
-| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                     |
+| Command                         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write `archprint.json` plus a plain-language `ADOPTION.md`. `--include-structural`, `--out <dir>`, `--fast`, `--force`.                                                                                                                                                                                                                       |
+| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                                                                                                                                                                                                                                           |
+| `archprint generate [path]`     | Write the auto-trusted mechanical rules for the linters your repo uses; structural rules held for review. `--emit <eslint\|dependency-cruiser\|all>` forces the format, `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo, `--readme` writes `ADOPTION.md`, `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`. |
+| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                                                                                                                                                                                                                                         |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                |
+| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                          |
+| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                           |
 
 ## Documentation
 
@@ -272,7 +285,9 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-Pre-stable (`0.x`). The engine (twenty detectors, the confidence gate, and emitters for ESLint, a shareable
+Versioning is 0.x (pre-1.0): the CLI surface and rule-card format may still change between minor versions,
+but the analysis is not experimental and the tool is safe to adopt (every rule is review-gated and reversible
+via `archprint eject`). The engine (twenty detectors, the confidence gate, and emitters for ESLint, a shareable
 preset, dependency-cruiser, ts-arch, and the layer graph) is in place and tested, and an adversarial
 correctness audit (three rounds, four real repositories) drove the false-positive rate on auto-generated rules
 to zero for the mechanical families, which is why those auto-enforce while the structural-inference families

@@ -5,7 +5,12 @@ import {
   toDependencyCruiserPublicApi,
 } from '../../src/index.js';
 
-function group(dir: string, consumerCount: number, deepImporterCount: number): PublicApiGroup {
+function group(
+  dir: string,
+  consumerCount: number,
+  deepImporterCount: number,
+  files: string[] = [],
+): PublicApiGroup {
   return {
     dir,
     internalCount: 4,
@@ -16,20 +21,28 @@ function group(dir: string, consumerCount: number, deepImporterCount: number): P
       violatingFileCount: deepImporterCount,
       roleConfidence: 1,
     }),
-    violations: [],
+    violations: files.map((file) => ({ file, target: `${dir}/internal.ts` })),
   };
 }
 
 describe('toDependencyCruiserPublicApi', () => {
-  it('emits a deep-import forbidden rule scoped to the group, barrel excluded', () => {
+  it('emits a deep-import forbidden rule scoped to the group, excluding the barrel and tests', () => {
     const config = toDependencyCruiserPublicApi([group('features/auth', 40, 0)]);
     expect(config.forbidden).toHaveLength(1);
     const rule = config.forbidden[0]!;
     expect(rule.name).toBe('no-deep-import-features-auth');
     expect(rule.severity).toBe('error');
-    expect(rule.from.pathNot).toBe('^features/auth/');
+    expect(rule.from.pathNot).toContain('^features/auth/');
+    expect((rule.from.pathNot as string[]).some((p) => p.includes('__tests__'))).toBe(true);
     expect(rule.to.path).toBe('^features/auth/');
     expect(rule.to.pathNot).toBe('^features/auth/index\\.(ts|tsx)$');
+  });
+
+  it('exempts the tolerated deep importers the gate accepted', () => {
+    const config = toDependencyCruiserPublicApi([
+      group('features/auth', 200, 1, ['src/legacy.ts']),
+    ]);
+    expect(config.forbidden[0]!.from.pathNot).toContain('src/legacy\\.ts$');
   });
 
   it('emits only AUTO groups by default, and SUGGEST when asked', () => {

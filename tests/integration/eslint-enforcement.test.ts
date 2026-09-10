@@ -10,6 +10,12 @@ import { renderEslintPluginSource } from '../../src/generator/eslint-plugin-emit
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'console-isolation-auto');
+const eslintOnly = {
+  eslint: true,
+  eslintPluginImport: false,
+  dependencyCruiser: false,
+  biome: false,
+};
 
 describe('eslint enforcement (end to end)', () => {
   let tmp: string;
@@ -18,7 +24,7 @@ describe('eslint enforcement (end to end)', () => {
   beforeAll(() => {
     tmp = mkdtempSync(path.join(tmpdir(), 'archprint-e2e-'));
     const outDir = path.join(tmp, 'archprint-rules');
-    regenerateConfigs(scanRepo(fixture), outDir, { version: '0.0.0' });
+    regenerateConfigs(scanRepo(fixture), outDir, { version: '0.0.0', enforcers: eslintOnly });
     expect(existsSync(path.join(outDir, 'eslint.console-isolation.archprint.json'))).toBe(true);
     expect(existsSync(path.join(outDir, 'eslint.archprint.mjs'))).toBe(true);
     const configPath = path.join(tmp, 'eslint.config.mjs');
@@ -58,6 +64,7 @@ describe('generated eslint plugin (AP- rules, end to end)', () => {
     const outDir = path.join(tmp, 'archprint-rules');
     regenerateConfigs(scanRepo(path.join(here, '..', 'fixtures', 'cli-auto')), outDir, {
       version: '0.0.0',
+      enforcers: eslintOnly,
     });
     expect(existsSync(path.join(outDir, 'eslint-plugin.archprint.mjs'))).toBe(true);
     const configPath = path.join(tmp, 'eslint.config.mjs');

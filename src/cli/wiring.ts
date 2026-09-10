@@ -1,30 +1,54 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { Node, Project, SyntaxKind } from 'ts-morph';
 
 export const AGGREGATOR_FILE = 'eslint.archprint.mjs';
 export const MANAGED_START =
   '// archprint:start (managed by archprint; run `archprint eject` to remove)';
 export const MANAGED_END = '// archprint:end';
 const SPREAD_MARK = '// archprint:managed';
-const ESLINT_CONFIG_NAMES = ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs'];
-const CONFIG_DECL = /export\s+default\s+|module\.exports\s*=\s*/;
-const CONFIG_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
+const ESLINT_CONFIG_NAMES = [
+  'eslint.config.js',
+  'eslint.config.mjs',
+  'eslint.config.cjs',
+  'eslint.config.ts',
+];
+function arrayInsertionOffset(node: Node, allowCallArg: boolean): number | null {
+  if (Node.isArrayLiteralExpression(node)) return node.getStart() + 1;
+  if (Node.isCallExpression(node)) {
+    const callee = node.getExpression().getText().split('.').pop();
+    if (callee !== 'config' && callee !== 'defineConfig') return null;
+    const arrayArg = node
+      .getArguments()
+      .find((argument) => Node.isArrayLiteralExpression(argument));
+    if (arrayArg) return arrayArg.getStart() + 1;
+    if (!allowCallArg) return null;
+    const openParen = node.getFirstChildByKind(SyntaxKind.OpenParenToken);
+    return openParen ? openParen.getEnd() : null;
+  }
+  if (Node.isIdentifier(node)) {
+    const initializer = node
+      .getSourceFile()
+      .getVariableDeclaration(node.getText())
+      ?.getInitializer();
+    return initializer ? arrayInsertionOffset(initializer, false) : null;
+  }
+  return null;
+}
 
 function findInsertionPoint(content: string): number | null {
-  const decl = CONFIG_DECL.exec(content);
-  if (decl === null) return null;
-  let index = decl.index + decl[0].length;
-  const skipWhitespace = (): void => {
-    while (index < content.length && /\s/.test(content[index]!)) index += 1;
-  };
-  skipWhitespace();
-  if (content[index] === '[') return index + 1;
-  const call = CONFIG_CALL.exec(content.slice(index));
-  if (call === null) return null;
-  index += call[0].length;
-  const afterParen = index;
-  skipWhitespace();
-  return content[index] === '[' ? index + 1 : afterParen;
+  const sourceFile = new Project({
+    useInMemoryFileSystem: true,
+    skipAddingFilesFromTsConfig: true,
+  }).createSourceFile('eslint.config.mjs', content);
+  const exportAssignment = sourceFile.getFirstDescendantByKind(SyntaxKind.ExportAssignment);
+  if (exportAssignment && !exportAssignment.isExportEquals()) {
+    return arrayInsertionOffset(exportAssignment.getExpression(), true);
+  }
+  const moduleExports = sourceFile
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .find((expression) => expression.getLeft().getText() === 'module.exports');
+  return moduleExports ? arrayInsertionOffset(moduleExports.getRight(), true) : null;
 }
 
 const AGGREGATOR_SOURCE = `${MANAGED_START.replace('run `archprint eject` to remove', 'regenerate with `archprint generate`')}
@@ -46,7 +70,7 @@ try {
   pluginConfigs = [];
 }
 
-export default [...blocks, ...pluginConfigs];
+export default [{ ignores: ['**/*.archprint.mjs'] }, ...blocks, ...pluginConfigs];
 ${MANAGED_END}
 `;
 

@@ -1,14 +1,21 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
+import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
+import {
+  renderAdoptionMarkdown,
+  renderExplain,
+  renderInit,
+  renderReport,
+  renderRecommendations,
+} from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
-import { emitOne, regenerateConfigs } from './generate.js';
+import { emitOne, FAMILY_NAMES, regenerateConfigs } from './generate.js';
 import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
 import { WIRING_TOOLS } from './wiring.js';
@@ -41,6 +48,80 @@ function countStructuralAuto(scan: ScanResult): number {
     groups.reduce((n, g) => n + g.filter((x) => x.gate.status === 'AUTO').length, 0) +
     singles.filter((s) => s.gate.status === 'AUTO').length
   );
+}
+
+const EMIT_TARGETS = ['eslint', 'dependency-cruiser', 'all'];
+
+function applyEmitOverride(detected: InstalledEnforcers, emit?: string): InstalledEnforcers {
+  switch (emit) {
+    case 'eslint':
+      return { ...detected, eslint: true, dependencyCruiser: false };
+    case 'dependency-cruiser':
+      return { ...detected, eslint: false, dependencyCruiser: true };
+    case 'all':
+      return { ...detected, eslint: true, dependencyCruiser: true };
+    default:
+      return detected;
+  }
+}
+
+export async function runEslintCheck(appDir: string, outDir: string): Promise<void> {
+  const aggregator = path.join(outDir, 'eslint.archprint.mjs');
+  if (!existsSync(aggregator)) {
+    console.log('Check: no eslint rules were generated to check.');
+    return;
+  }
+  const [{ ESLint }, tseslint, generated] = await Promise.all([
+    import('eslint'),
+    import('typescript-eslint'),
+    import(pathToFileURL(aggregator).href) as Promise<{ default: unknown[] }>,
+  ]);
+  const archprintRuleIds = new Set<string>();
+  for (const block of generated.default) {
+    const rules = (block as { rules?: Record<string, unknown> }).rules;
+    if (rules) for (const id of Object.keys(rules)) archprintRuleIds.add(id);
+  }
+  const config = [
+    { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.default.parser } },
+    ...generated.default,
+  ];
+  const eslint = new ESLint({
+    cwd: appDir,
+    overrideConfigFile: true,
+    overrideConfig: config as never,
+  });
+  let results;
+  /* v8 ignore start -- defensive: eslint throws only on an unresolved rule (e.g. an unregistered plugin) */
+  try {
+    results = await eslint.lintFiles(['**/*.{ts,tsx}']);
+  } catch (error) {
+    console.log(`Check: could not run eslint (${(error as Error).message}).`);
+    process.exitCode = 1;
+    return;
+  }
+  /* v8 ignore stop */
+  const offends = (message: { ruleId: string | null; severity: number }): boolean =>
+    message.severity === 2 && message.ruleId !== null && archprintRuleIds.has(message.ruleId);
+  const offenders = results.filter((result) => result.messages.some(offends));
+  const count = offenders.reduce((total, r) => total + r.messages.filter(offends).length, 0);
+  const unparsed = results.filter((result) => result.messages.some((m) => m.fatal));
+  if (unparsed.length > 0) {
+    console.log(`Check: ${unparsed.length} file(s) could not be parsed, so they were not checked:`);
+    for (const result of unparsed.slice(0, 10))
+      console.log(`  ${path.relative(appDir, result.filePath)}`);
+    process.exitCode = 1;
+  }
+  if (count === 0) {
+    if (unparsed.length === 0)
+      console.log('Check: the generated eslint rules pass clean on this repo.');
+    return;
+  }
+  console.log(`Check: ${count} violation(s) of the generated rules:`);
+  for (const result of offenders.slice(0, 10)) {
+    const rules = [...new Set(result.messages.filter(offends).map((m) => m.ruleId))];
+    console.log(`  ${path.relative(appDir, result.filePath)}: ${rules.join(', ')}`);
+  }
+  process.exitCode = 1;
 }
 
 function resolveApp(input: string): string {
@@ -128,9 +209,15 @@ export function buildProgram(version = readVersion()): Command {
         /* v8 ignore stop */
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
-        const { configs } = regenerateConfigs(scan, outDir, { structural, version });
+        const enforcers = detectEnforcers(scan.appDir);
+        const recommendations = buildRecommendations(scan, detectStack(appDir), enforcers);
+        const { configs } = regenerateConfigs(scan, outDir, {
+          structural,
+          version,
+          enforcers,
+          adoptionReadme: renderAdoptionMarkdown(recommendations, version),
+        });
         const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
-        const recommendations = buildRecommendations(scan, detectStack(appDir));
         const cwd = process.cwd();
         const manifest = buildInitManifest(recommendations, version, {
           app: displayPath(appDir, cwd),
@@ -200,11 +287,57 @@ export function buildProgram(version = readVersion()): Command {
       '--rule <id>',
       'emit a single rule by id (e.g. AP-001) after reviewing its evidence with `explain`, including a SUGGEST rule',
     )
+    .option(
+      '--emit <target>',
+      'force the output format regardless of detected tooling: eslint, dependency-cruiser, or all',
+    )
+    .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz)')
+    .option(
+      '--readme',
+      'also write an ADOPTION.md summarizing what is enforced, reviewed, and to adopt',
+    )
+    .option('--only <family>', `emit only one rule family (${FAMILY_NAMES.join(', ')})`)
+    .option(
+      '--rules <ids>',
+      'emit only these forbidden-import rule ids (comma-separated, e.g. AP-001,AP-002)',
+    )
+    .option(
+      '--check',
+      'after generating, run the eslint rules against the repo and report pass/fail',
+    )
     .action(
-      (
+      async (
         input: string,
-        options: { out: string; fast?: boolean; includeStructural?: boolean; rule?: string },
+        options: {
+          out: string;
+          fast?: boolean;
+          includeStructural?: boolean;
+          rule?: string;
+          emit?: string;
+          graph?: boolean;
+          readme?: boolean;
+          only?: string;
+          rules?: string;
+          check?: boolean;
+        },
       ) => {
+        if (options.emit !== undefined && !EMIT_TARGETS.includes(options.emit)) {
+          console.error(
+            `Invalid --emit target '${options.emit}'. Use: ${EMIT_TARGETS.join(', ')}.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        if (
+          options.only !== undefined &&
+          !(FAMILY_NAMES as readonly string[]).includes(options.only)
+        ) {
+          console.error(
+            `Invalid --only family '${options.only}'. Use one of: ${FAMILY_NAMES.join(', ')}.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
         if (options.rule !== undefined) {
           const { appDir, pattern } = findPattern(input, options.rule, !options.fast);
           const dir = emitOne(pattern, appDir, path.resolve(options.out));
@@ -231,7 +364,27 @@ export function buildProgram(version = readVersion()): Command {
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
-        const { configs, removed } = regenerateConfigs(scan, outDir, { structural, version });
+        const adoptionReadme = options.readme
+          ? renderAdoptionMarkdown(
+              buildRecommendations(scan, detectStack(scan.appDir), detectEnforcers(scan.appDir)),
+              version,
+            )
+          : undefined;
+        const ruleIds = options.rules
+          ? options.rules
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : undefined;
+        const { configs, removed } = regenerateConfigs(scan, outDir, {
+          structural,
+          version,
+          enforcers: applyEmitOverride(detectEnforcers(scan.appDir), options.emit),
+          graph: options.graph,
+          adoptionReadme,
+          only: options.only,
+          ruleIds,
+        });
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
@@ -265,6 +418,7 @@ export function buildProgram(version = readVersion()): Command {
             'Warning: generated from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
           );
         }
+        if (options.check) await runEslintCheck(scan.appDir, outDir);
       },
     );
 
@@ -282,7 +436,11 @@ export function buildProgram(version = readVersion()): Command {
         );
       }
       const recommendFor = (appDir: string) =>
-        buildRecommendations(scanRepo(appDir, { deep: false }), detectStack(appDir));
+        buildRecommendations(
+          scanRepo(appDir, { deep: false }),
+          detectStack(appDir),
+          detectEnforcers(appDir),
+        );
       if (options.json) {
         const apps = appDirs.map((appDir) => ({
           app: displayPath(appDir, root),
