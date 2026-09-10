@@ -1,5 +1,66 @@
 # archprint
 
+## 0.5.0
+
+### Minor Changes
+
+- archprint now generates rules for the enforcers your repo actually uses. It detects whether you have
+  ESLint or dependency-cruiser and emits each rule for a tool you already run, instead of writing
+  dependency-cruiser configs you have no way to enforce. On an ESLint-only repo it expresses test
+  isolation as an ESLint `no-restricted-imports` rule; dependency-cruiser configs are only written when
+  dependency-cruiser is present. `archprint recommend` now names, per rule, the installed tool that will
+  enforce it (or what you would need to install).
+- `archprint generate --readme` writes an `ADOPTION.md` in the output directory summarizing what is
+  enforced now, held for review, and worth adopting, each with the tool that enforces it. It is tracked
+  in the manifest, so `archprint eject` removes it too.
+- `archprint generate` gains two output controls: `--emit <eslint|dependency-cruiser|all>` forces the
+  output format regardless of the tooling archprint detects, and `--no-graph` skips the layer dependency
+  graph (Mermaid and Graphviz).
+- `archprint generate` gains finer output control: `--only <family>` emits a single rule family,
+  `--rules <ids>` emits only the named forbidden-import rule ids, and `--check` runs the generated
+  ESLint rules against your repo and reports whether they pass, so you can confirm before wiring.
+
+### Patch Changes
+
+- Generated rules are now green-by-construction: a rule archprint says you "already follow" passes clean
+  when you wire it, instead of flagging code that was there all along. Emitted rules are scoped to exactly
+  the files the detector measured (test files and cli/config files are excluded, matching what the analysis
+  skips) and exempt the specific exceptions the confidence gate accepted. This covers the console,
+  environment-access, deep-relative-import, workspace-package, test-isolation, phantom-dependency, and
+  dependency-internals rules across both ESLint and dependency-cruiser. The ESLint import rules
+  (deep-relative, workspace, test) are also emitted as a single merged block so they no longer override one
+  another in flat config.
+- More fixes so an "enforce now" rule cannot flag code it was mined from:
+
+  - The dependency-cruiser test-isolation, phantom-deps, no-internals, and public-API deep-import rules now
+    exclude test files (`__tests__`, `e2e`, `cypress`, `.test`/`.spec`/`e2e` suffixes), matching what the
+    analysis excludes.
+  - The public-API deep-import rule also exempts the tolerated deep importers the confidence gate already
+    accepted, so an "enforce now" rule cannot flag code it was mined from.
+  - no-internals matches only the internals directories the analysis measures (`src`, `internal`,
+    `internals`), not a package's normal `dist`/`lib` entry.
+  - no-internals and phantom-deps are now held for review (emitted with `--include-structural`) rather than
+    auto-enforced, because their rules match resolved paths or dependency types and can flag a package whose
+    public entry resolves through `src/`, or a workspace package with no local `package.json` entry.
+  - Phantom (undeclared) dependency checking is emitted only for dependency-cruiser; the ESLint form is
+    dropped because it flags test files and first-party path aliases the analysis excludes.
+  - `wire` only splices into a recognized flat-config array or factory (`defineConfig`, `tseslint.config`);
+    an unrecognized call such as `export default loadConfig()` bails instead of reporting a false success.
+  - `generate --check` reports files it could not parse instead of calling them clean.
+
+- - `wire` parses your ESLint config with the TypeScript AST, so it reliably edits the common
+    `const config = [...]; export default config;` shape and is not fooled by `export default` appearing
+    inside a string or comment.
+  - archprint no longer writes rule files for a tool your repo does not use; pass `--emit all` to force
+    every format.
+  - The wired ESLint config and the shareable preset ignore archprint's own generated files, so linting
+    your repo never flags them.
+  - `archprint generate --check` reports only violations of the rules archprint generated.
+- `archprint wire` now edits the common config shape where the ESLint flat config is bound to a name
+  and exported by reference (`const config = [...]; export default config;`, the default for Next.js and
+  many TypeScript projects) instead of falling back to a manual edit. It resolves the exported name to
+  its declaration, including a `defineConfig([...])` wrapper, and `archprint eject` reverses it as before.
+
 ## 0.4.1
 
 ### Patch Changes
