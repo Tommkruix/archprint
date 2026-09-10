@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { type DeepRelativeAnalysis, evaluateGate, toEslintDeepRelative } from '../../src/index.js';
 
-function analysis(relativeImporterCount: number, offenderCount: number): DeepRelativeAnalysis {
+function analysis(
+  relativeImporterCount: number,
+  offenderCount: number,
+  files: string[] = [],
+): DeepRelativeAnalysis {
   return {
     appDir: 'x',
     relativeImporterCount,
@@ -11,7 +15,7 @@ function analysis(relativeImporterCount: number, offenderCount: number): DeepRel
       violatingFileCount: offenderCount,
       roleConfidence: 1,
     }),
-    violations: [],
+    violations: files.map((file) => ({ file, specifier: '../../../deep' })),
   };
 }
 
@@ -27,5 +31,14 @@ describe('toEslintDeepRelative', () => {
   it('emits null with no relative imports or below AUTO', () => {
     expect(toEslintDeepRelative(analysis(0, 0))).toBeNull();
     expect(toEslintDeepRelative(analysis(5, 3))).toBeNull();
+  });
+
+  it('exempts the tolerated deep-relative importers the gate accepted', () => {
+    const config = toEslintDeepRelative(analysis(200, 1, ['src/a/b/c/deep.ts']));
+    expect(config!.ignores).toEqual(['src/a/b/c/deep.ts']);
+  });
+
+  it('omits ignores when there are no tolerated importers', () => {
+    expect(toEslintDeepRelative(analysis(40, 0))!.ignores).toBeUndefined();
   });
 });

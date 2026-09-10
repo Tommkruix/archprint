@@ -34,13 +34,14 @@ Archprint is deliberately honest about which inferences it will stand behind una
 correctness audit (three rounds over four real repositories) split the rule families in two:
 
 - **Mechanical families** rest on unambiguous signals (no import cycles, production must not import tests, no
-  `console` in library code, no undeclared dependencies, import style, public-API barrels, no reaching into a
-  dependency's internals, and the DB/UI-in-server-entry rules). These had **zero false positives every round**,
-  so an AUTO result from them auto-generates as enforcement.
-- **Structural families** infer a "layer" or "role" from file paths (layer and role boundaries, UI/data
+  `console` in library code, no undeclared dependencies, import style, public-API barrels, and the
+  DB/UI-in-server-entry rules). These had **zero false positives every round**, so an AUTO result from them
+  auto-generates as enforcement.
+- **Held-for-review families** are emitted only with `--include-structural`, after you look at the evidence.
+  Most infer a "layer" or "role" from file paths, which a path can misread (layer and role boundaries, UI/data
   separation, entry purity, server/client, feature-slice and app isolation, env access, workspace-package,
-  stories). A path can be misread, so these are **held for human review by default**, even at AUTO. Emit them
-  only with `--include-structural`, after you have looked at the evidence.
+  stories); dependency hygiene is here too, because its enforcement can over-flag a package whose entry
+  resolves through `src/`.
 
 Nothing whose inferred layer or role could be wrong is written as enforcement without you opting in. See
 [rules.md](./rules.md) for the per-family breakdown.
@@ -58,15 +59,21 @@ deep pass before enforcing).
 
 ## The generated output and the lifecycle
 
-`generate` (and `init`) write into `archprint-rules/`:
+`generate` (and `init`) write into `archprint-rules/`, and only for the linters your repo actually uses,
+Archprint detects ESLint and dependency-cruiser and emits each rule for a tool you already run, so you are
+never left with config for a tool you do not have (`--emit all` forces every format):
 
 - ESLint rule blocks and a plugin for the forbidden-import rules,
 - a shareable, self-contained ESLint preset (`eslint-preset.archprint.mjs`) that inlines the rules and needs
   only eslint, so it can be committed, published, or shared and adopted in one line,
-- dependency-cruiser forbidden-rule configs,
+- dependency-cruiser forbidden-rule configs (when dependency-cruiser is present),
 - ts-arch tests for the first-party boundaries (layer, role, UI/data), runnable in your existing test suite,
 - a rule card, passing fixture, and failing fixture for each forbidden-import rule,
+- a plain-language `ADOPTION.md` explaining what is enforced, held for review, and worth adopting,
 - an outputs manifest (`.archprint-outputs.json`) that records exactly what Archprint owns.
+
+`generate --check` runs the generated ESLint rules against your repo and reports pass/fail, so you can
+confirm they are green before wiring.
 
 Re-running `generate` **cleans its previous outputs first**, so a rule the evidence no longer supports stops
 being enforced instead of lingering. `wire` inserts a single managed, reversible reference into the enforcement

@@ -1,5 +1,5 @@
 import type { WorkspacePackageAnalysis } from '../detector/workspace-package-detector.js';
-import type { EslintNoRestrictedImportsConfig } from './deep-relative-emitters.js';
+import { exemptImporters, type EslintNoRestrictedImportsConfig } from './deep-relative-emitters.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -10,6 +10,7 @@ export function toEslintWorkspacePackageApi(
   if (analysis.gate.status !== 'AUTO') return null;
   const group = analysis.packages.map(escapeRegExp).join('|');
   return {
+    ...exemptImporters(analysis.violations),
     rules: {
       'no-restricted-imports': [
         'error',

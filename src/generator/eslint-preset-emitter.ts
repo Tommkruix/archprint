@@ -19,6 +19,6 @@ const rules = Object.fromEntries(SPECS.map((spec) => [spec.name, makeRule(spec)]
 const plugin = { rules };
 const pluginConfigs = ${PLUGIN_CONFIGS};
 
-export default [...BLOCKS, ...pluginConfigs];
+export default [{ ignores: ['**/*.archprint.mjs'] }, ...BLOCKS, ...pluginConfigs];
 `;
 }

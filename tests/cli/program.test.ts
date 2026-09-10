@@ -150,6 +150,76 @@ describe('cli program', () => {
     expect(output()).toContain('test isolation');
   });
 
+  it('generate --emit eslint forces the eslint form of a dual-tool family', async () => {
+    await run(['generate', testIsolationAuto, '--emit', 'eslint', '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
+      false,
+    );
+  });
+
+  it('generate --no-graph skips the layer dependency graph', async () => {
+    await run([
+      'generate',
+      layerAuto,
+      '--include-structural',
+      '--no-graph',
+      '--fast',
+      '--out',
+      out,
+    ]);
+    expect(existsSync(path.join(out, 'layer-graph.archprint.mmd'))).toBe(false);
+  });
+
+  it('generate rejects an invalid --emit target', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(['generate', layerAuto, '--emit', 'biome', '--out', out]);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Invalid --emit target');
+    process.exitCode = 0;
+  });
+
+  it('generate --readme writes an ADOPTION.md tracked by the manifest', async () => {
+    await run(['generate', auto, '--readme', '--out', out]);
+    const readme = path.join(out, 'ADOPTION.md');
+    expect(existsSync(readme)).toBe(true);
+    expect(readFileSync(readme, 'utf8')).toContain('# Archprint adoption notes');
+    const manifest = JSON.parse(readFileSync(path.join(out, '.archprint-outputs.json'), 'utf8'));
+    expect((manifest.outputs as string[]).some((f) => f.endsWith('ADOPTION.md'))).toBe(true);
+  });
+
+  it('generate --rules emits only the named forbidden-import rule ids', async () => {
+    await run(['generate', auto, '--rules', 'AP-002', '--out', out]);
+    expect(existsSync(path.join(out, 'no-ui-layer-in-server-entry'))).toBe(true);
+    expect(existsSync(path.join(out, 'no-db-client-in-request-entry'))).toBe(false);
+  });
+
+  it('generate --only emits just that family and skips the bundles and graph', async () => {
+    await run([
+      'generate',
+      layerAuto,
+      '--only',
+      'layer',
+      '--include-structural',
+      '--fast',
+      '--out',
+      out,
+    ]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'layer-graph.archprint.mmd'))).toBe(false);
+  });
+
+  it('generate rejects an invalid --only family', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(['generate', layerAuto, '--only', 'nonsense', '--out', out]);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Invalid --only family');
+    process.exitCode = 0;
+  });
+
+  it('generate --check runs the generated eslint rules against the repo', async () => {
+    await run(['generate', auto, '--check', '--out', out]);
+    expect(output()).toContain('Check: the generated eslint rules pass clean');
+  });
+
   it('generate writes the app-isolation config for AUTO app isolation', async () => {
     await run(['generate', appIsolationAuto, '--include-structural', '--fast', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(
@@ -158,8 +228,12 @@ describe('cli program', () => {
     expect(output()).toContain('app boundaries');
   });
 
-  it('generate writes the dependency-internals config when packages are imported cleanly', async () => {
+  it('writes the dependency-internals config only with --include-structural (held for review)', async () => {
     await run(['generate', depInternalsAuto, '--fast', '--out', out]);
+    expect(
+      existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
+    ).toBe(false);
+    await run(['generate', depInternalsAuto, '--include-structural', '--fast', '--out', out]);
     expect(
       existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
     ).toBe(true);
@@ -181,15 +255,15 @@ describe('cli program', () => {
   });
 
   it('generate writes the phantom-dependency config when imports are all declared', async () => {
-    await run(['generate', phantomDepsAuto, '--fast', '--out', out]);
+    await run(['generate', phantomDepsAuto, '--fast', '--include-structural', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.phantom-deps.archprint.json'))).toBe(true);
     expect(output()).toContain('dependency declaration');
   });
 
   it('generate writes the deep-relative eslint config when relatives are shallow', async () => {
     await run(['generate', deepRelativeAuto, '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.deep-relative.archprint.json'))).toBe(true);
-    expect(output()).toContain('import style');
+    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(output()).toContain('no-restricted-imports');
   });
 
   it('generate writes the console-isolation eslint config when library avoids console', async () => {
@@ -206,8 +280,8 @@ describe('cli program', () => {
 
   it('generate writes the workspace-package eslint config when packages import by name', async () => {
     await run(['generate', wpkgAuto, '--include-structural', '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.workspace-package.archprint.json'))).toBe(true);
-    expect(output()).toContain('workspace package API');
+    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(output()).toContain('no-restricted-imports');
   });
 
   it('generate writes the stories-isolation config when stories are unimported', async () => {
@@ -294,6 +368,7 @@ describe('init', () => {
     await run(['init', auto]);
     expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
     expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
+    expect(existsSync(path.join(tmp, 'archprint-rules', 'ADOPTION.md'))).toBe(true);
     const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
     expect(manifest.archprintVersion).toBe('9.9.9');
     expect(manifest.enforced.length).toBeGreaterThan(0);
@@ -425,7 +500,7 @@ describe('init', () => {
     const config = path.join(tmp, '.dependency-cruiser.json');
     const original = '{\n  "forbidden": [],\n  "options": {}\n}\n';
     writeFileSync(config, original);
-    await run(['init', phantomDepsAuto, '--fast']);
+    await run(['init', phantomDepsAuto, '--fast', '--include-structural']);
     await run(['wire', '--out', 'archprint-rules']);
     const wired = JSON.parse(readFileSync(config, 'utf8')) as { extends?: string };
     expect(wired.extends).toContain('dependency-cruiser.all.archprint.json');

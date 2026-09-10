@@ -26,9 +26,7 @@ const STABLE_FAMILIES: ReadonlySet<FamilyKey> = new Set<FamilyKey>([
   'test-isolation',
   'console-isolation',
   'import-style',
-  'phantom-deps',
   'public-api',
-  'dependency-hygiene',
 ]);
 
 export const isStableFamily = (family: FamilyKey): boolean => STABLE_FAMILIES.has(family);
