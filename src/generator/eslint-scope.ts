@@ -1,8 +1,7 @@
 import type { EslintFlatConfigBlock } from './console-isolation-emitters.js';
 
-// Glob equivalents of the detector population predicates, so an emitted rule lints exactly the files
-// the detector scored. Keep in sync with the regexes in src/scanner/role-classifier.ts (TEST role),
-// console-isolation-detector.ts (CLI_PATH), and env-access-detector.ts (CONFIG_PATH).
+// Glob equivalents of the detector population predicates (TEST role, CLI_PATH, CONFIG_PATH); an
+// emitted rule must lint exactly the files the detector scored. Keep in sync with those regexes.
 
 const dirAndFile = (names: readonly string[]): string[] =>
   names.flatMap((name) => [`**/${name}/**`, `**/${name}.{ts,tsx}`]);
@@ -27,9 +26,8 @@ export const CONFIG_GLOBS: readonly string[] = [
 
 export type NoRestrictedImportsBlock = { ignores?: string[]; rules: Record<string, unknown> };
 
-// ESLint flat config replaces (does not merge) a rule set by multiple config objects, so the last
-// `no-restricted-imports` block wins and the others are silently dropped. Merge the family patterns
-// into a single block instead. Tests are excluded (every source family scores production files only).
+// Flat config replaces (not merges) a repeated rule, so merge every family's patterns into one block
+// (the last block would otherwise win). Tests are excluded; every source family scores production only.
 export function mergeNoRestrictedImports(
   blocks: readonly (NoRestrictedImportsBlock | null)[],
 ): EslintFlatConfigBlock | null {

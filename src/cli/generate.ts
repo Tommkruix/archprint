@@ -355,8 +355,7 @@ export function writeEnforcementConfigs(
   const add = (files: string[], label: string | null): void => {
     if (files.length > 0) configs.push({ files, label });
   };
-  // The write must be lazy: only files whose enforcer/family gate passes should be written to disk,
-  // otherwise a repo without dependency-cruiser still gets orphaned (and unmanifested) depcruise files.
+  // Lazy: write a file only when its enforcer/family gate passes, so an unused tool leaves no orphans.
   const addIf = (condition: boolean, write: () => string[], label: string | null): void => {
     if (condition) add(write(), label);
   };

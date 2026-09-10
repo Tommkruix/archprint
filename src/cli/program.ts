@@ -76,10 +76,8 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
     import('typescript-eslint'),
     import(pathToFileURL(aggregator).href) as Promise<{ default: unknown[] }>,
   ]);
-  // overrideConfigFile: true makes ESLint use only the generated rules, not the repo's own config.
-  // Report only violations of the rules archprint generated: a repo's inline
-  // `eslint-disable ... <other-rule>` comment surfaces as a "definition not found" message for a rule
-  // archprint never emitted, which is noise here, not a rule the repo fails.
+  // overrideConfigFile: true isolates to the generated rules; report only their violations. A repo's
+  // inline eslint-disable for another plugin surfaces as a harmless "definition not found" message.
   const archprintRuleIds = new Set<string>();
   for (const block of generated.default) {
     const rules = (block as { rules?: Record<string, unknown> }).rules;
@@ -207,17 +205,15 @@ export function buildProgram(version = readVersion()): Command {
         /* v8 ignore stop */
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
+        const enforcers = detectEnforcers(scan.appDir);
+        const recommendations = buildRecommendations(scan, detectStack(appDir), enforcers);
         const { configs } = regenerateConfigs(scan, outDir, {
           structural,
           version,
-          enforcers: detectEnforcers(scan.appDir),
+          enforcers,
+          adoptionReadme: renderAdoptionMarkdown(recommendations, version),
         });
         const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
-        const recommendations = buildRecommendations(
-          scan,
-          detectStack(appDir),
-          detectEnforcers(appDir),
-        );
         const cwd = process.cwd();
         const manifest = buildInitManifest(recommendations, version, {
           app: displayPath(appDir, cwd),

@@ -13,12 +13,10 @@ const ESLINT_CONFIG_NAMES = [
   'eslint.config.cjs',
   'eslint.config.ts',
 ];
-// Find the char offset to splice `...archprintRules` into: just inside the flat-config array. Parsed
-// with the TypeScript AST (not regex) so `export default` inside a string or comment is never matched
-// and `const config = [...]; export default config;` resolves to the real array.
-// allowCallArg: for a direct `export default someFactory(...)` with no array argument, insert as the
-// first call argument (e.g. tseslint.config(...)); an identifier that resolves to a non-array call
-// (const config = loadConfig()) is not safe to splice, so it bails.
+// Char offset to splice `...archprintRules` into the flat-config array, resolved via the TS AST (not
+// regex) so `export default` inside a string is ignored and `export default config` follows the const.
+// allowCallArg splices a bare factory call's first arg (tseslint.config(...)); an identifier that
+// resolves to a non-array call is left alone.
 function arrayInsertionOffset(node: Node, allowCallArg: boolean): number | null {
   if (Node.isArrayLiteralExpression(node)) return node.getStart() + 1;
   if (Node.isCallExpression(node)) {

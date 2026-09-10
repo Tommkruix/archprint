@@ -364,6 +364,7 @@ describe('init', () => {
     await run(['init', auto]);
     expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
     expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
+    expect(existsSync(path.join(tmp, 'archprint-rules', 'ADOPTION.md'))).toBe(true);
     const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
     expect(manifest.archprintVersion).toBe('9.9.9');
     expect(manifest.enforced.length).toBeGreaterThan(0);
