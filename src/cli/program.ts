@@ -76,6 +76,15 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
     import('typescript-eslint'),
     import(pathToFileURL(aggregator).href) as Promise<{ default: unknown[] }>,
   ]);
+  // overrideConfigFile: true makes ESLint use only the generated rules, not the repo's own config.
+  // Report only violations of the rules archprint generated: a repo's inline
+  // `eslint-disable ... <other-rule>` comment surfaces as a "definition not found" message for a rule
+  // archprint never emitted, which is noise here, not a rule the repo fails.
+  const archprintRuleIds = new Set<string>();
+  for (const block of generated.default) {
+    const rules = (block as { rules?: Record<string, unknown> }).rules;
+    if (rules) for (const id of Object.keys(rules)) archprintRuleIds.add(id);
+  }
   const config = [
     { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.default.parser } },
     ...generated.default,
@@ -97,16 +106,17 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
     return;
   }
   /* v8 ignore stop */
-  const errorCount = results.reduce((total, result) => total + result.errorCount, 0);
-  if (errorCount === 0) {
+  const offends = (message: { ruleId: string | null; severity: number }): boolean =>
+    message.severity === 2 && message.ruleId !== null && archprintRuleIds.has(message.ruleId);
+  const offenders = results.filter((result) => result.messages.some(offends));
+  const count = offenders.reduce((total, r) => total + r.messages.filter(offends).length, 0);
+  if (count === 0) {
     console.log('Check: the generated eslint rules pass clean on this repo.');
     return;
   }
-  console.log(`Check: ${errorCount} violation(s) of the generated rules:`);
-  for (const result of results.filter((r) => r.errorCount > 0).slice(0, 10)) {
-    const rules = [
-      ...new Set(result.messages.filter((m) => m.severity === 2).map((m) => m.ruleId)),
-    ];
+  console.log(`Check: ${count} violation(s) of the generated rules:`);
+  for (const result of offenders.slice(0, 10)) {
+    const rules = [...new Set(result.messages.filter(offends).map((m) => m.ruleId))];
     console.log(`  ${path.relative(appDir, result.filePath)}: ${rules.join(', ')}`);
   }
   process.exitCode = 1;

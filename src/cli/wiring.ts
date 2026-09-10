@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { Node, Project, SyntaxKind } from 'ts-morph';
 
 export const AGGREGATOR_FILE = 'eslint.archprint.mjs';
 export const MANAGED_START =
@@ -12,46 +13,46 @@ const ESLINT_CONFIG_NAMES = [
   'eslint.config.cjs',
   'eslint.config.ts',
 ];
-const CONFIG_DECL = /export\s+default\s+|module\.exports\s*=\s*/;
-const CONFIG_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
-const IDENTIFIER = /^[A-Za-z_$][\w$]*/;
-
-function skipWhitespaceFrom(content: string, from: number): number {
-  let index = from;
-  while (index < content.length && /\s/.test(content[index]!)) index += 1;
-  return index;
-}
-
-// requireArray: when resolving `export default <ident>`, only splice into a real array literal (its
-// own or one inside a `defineConfig([...])` wrapper). Splicing into the args of an arbitrary call
-// such as `const config = loadConfig()` would corrupt the config, so bail there.
-function insertionPointFrom(content: string, from: number, requireArray = false): number | null {
-  const index = skipWhitespaceFrom(content, from);
-  if (content[index] === '[') return index + 1;
-  const call = CONFIG_CALL.exec(content.slice(index));
-  if (call === null) return null;
-  const afterParen = index + call[0].length;
-  const arrayStart = skipWhitespaceFrom(content, afterParen);
-  if (content[arrayStart] === '[') return arrayStart + 1;
-  return requireArray ? null : afterParen;
-}
-
-function resolveIdentifierExport(content: string, from: number): number | null {
-  const start = skipWhitespaceFrom(content, from);
-  const match = IDENTIFIER.exec(content.slice(start));
-  if (match === null) return null;
-  const name = match[0];
-  const after = skipWhitespaceFrom(content, start + name.length);
-  if (content[after] !== undefined && content[after] !== ';') return null;
-  const decl = new RegExp(`(?:const|let)\\s+${name.replace(/\$/g, '\\$&')}\\s*=\\s*`).exec(content);
-  return decl === null ? null : insertionPointFrom(content, decl.index + decl[0].length, true);
+// Find the char offset to splice `...archprintRules` into: just inside the flat-config array. Parsed
+// with the TypeScript AST (not regex) so `export default` inside a string or comment is never matched
+// and `const config = [...]; export default config;` resolves to the real array.
+// allowCallArg: for a direct `export default someFactory(...)` with no array argument, insert as the
+// first call argument (e.g. tseslint.config(...)); an identifier that resolves to a non-array call
+// (const config = loadConfig()) is not safe to splice, so it bails.
+function arrayInsertionOffset(node: Node, allowCallArg: boolean): number | null {
+  if (Node.isArrayLiteralExpression(node)) return node.getStart() + 1;
+  if (Node.isCallExpression(node)) {
+    const arrayArg = node
+      .getArguments()
+      .find((argument) => Node.isArrayLiteralExpression(argument));
+    if (arrayArg) return arrayArg.getStart() + 1;
+    if (!allowCallArg) return null;
+    const openParen = node.getFirstChildByKind(SyntaxKind.OpenParenToken);
+    return openParen ? openParen.getEnd() : null;
+  }
+  if (Node.isIdentifier(node)) {
+    const initializer = node
+      .getSourceFile()
+      .getVariableDeclaration(node.getText())
+      ?.getInitializer();
+    return initializer ? arrayInsertionOffset(initializer, false) : null;
+  }
+  return null;
 }
 
 function findInsertionPoint(content: string): number | null {
-  const decl = CONFIG_DECL.exec(content);
-  if (decl === null) return null;
-  const start = decl.index + decl[0].length;
-  return insertionPointFrom(content, start) ?? resolveIdentifierExport(content, start);
+  const sourceFile = new Project({
+    useInMemoryFileSystem: true,
+    skipAddingFilesFromTsConfig: true,
+  }).createSourceFile('eslint.config.mjs', content);
+  const exportAssignment = sourceFile.getFirstDescendantByKind(SyntaxKind.ExportAssignment);
+  if (exportAssignment && !exportAssignment.isExportEquals()) {
+    return arrayInsertionOffset(exportAssignment.getExpression(), true);
+  }
+  const moduleExports = sourceFile
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .find((expression) => expression.getLeft().getText() === 'module.exports');
+  return moduleExports ? arrayInsertionOffset(moduleExports.getRight(), true) : null;
 }
 
 const AGGREGATOR_SOURCE = `${MANAGED_START.replace('run `archprint eject` to remove', 'regenerate with `archprint generate`')}
@@ -73,7 +74,7 @@ try {
   pluginConfigs = [];
 }
 
-export default [...blocks, ...pluginConfigs];
+export default [{ ignores: ['**/*.archprint.mjs'] }, ...blocks, ...pluginConfigs];
 ${MANAGED_END}
 `;
 

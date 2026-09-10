@@ -57,4 +57,13 @@ describe('writeEnforcementConfigs enforcer gating', () => {
     });
     expect(has('dependency-cruiser.phantom-deps.archprint.json')).toBe(true);
   });
+
+  it('writes no dependency-cruiser file to disk for an eslint-only repo (no orphaned outputs)', () => {
+    writeEnforcementConfigs(scanRepo(fixture('dependency-internals-auto')), out, {
+      structural: true,
+      enforcers: enforcers({ eslint: true }),
+    });
+    expect(has('dependency-cruiser.dependency-internals.archprint.json')).toBe(false);
+    expect(has('dependency-cruiser.public-api.archprint.json')).toBe(false);
+  });
 });

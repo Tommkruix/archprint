@@ -829,7 +829,9 @@ describe('cli generate', () => {
     expect(files).toHaveLength(1);
     expect(files[0]!.endsWith('eslint-preset.archprint.mjs')).toBe(true);
     const source = readFileSync(files[0]!, 'utf8');
-    expect(source).toContain('export default [...BLOCKS, ...pluginConfigs];');
+    expect(source).toContain(
+      "export default [{ ignores: ['**/*.archprint.mjs'] }, ...BLOCKS, ...pluginConfigs];",
+    );
     expect(source).not.toContain('readdirSync');
 
     const none = emptyScan({ fileCount: 10, aliasCount: 1 });

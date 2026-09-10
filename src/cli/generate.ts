@@ -355,23 +355,25 @@ export function writeEnforcementConfigs(
   const add = (files: string[], label: string | null): void => {
     if (files.length > 0) configs.push({ files, label });
   };
-  const addIf = (condition: boolean, files: string[], label: string | null): void => {
-    if (condition) add(files, label);
+  // The write must be lazy: only files whose enforcer/family gate passes should be written to disk,
+  // otherwise a repo without dependency-cruiser still gets orphaned (and unmanifested) depcruise files.
+  const addIf = (condition: boolean, write: () => string[], label: string | null): void => {
+    if (condition) add(write(), label);
   };
 
   addIf(
     emitEslint && pick('forbidden-imports'),
-    writeRules(scan, outDir, ['AUTO'], options.ruleIds),
+    () => writeRules(scan, outDir, ['AUTO'], options.ruleIds),
     null,
   );
   addIf(
     emitEslint && bundles,
-    writeEslintPlugin(scan, outDir),
+    () => writeEslintPlugin(scan, outDir),
     'forbidden-import rules as a loadable eslint plugin',
   );
   addIf(
     emitEslint && bundles,
-    writeEslintPreset(scan, outDir, { structural }),
+    () => writeEslintPreset(scan, outDir, { structural }),
     'shareable single-file eslint preset (portable; needs only eslint)',
   );
   if (structural && emitDepcruise && pick('layer'))
@@ -386,7 +388,7 @@ export function writeEnforcementConfigs(
     );
   addIf(
     emitDepcruise && pick('public-api'),
-    writePublicApiConfig(scan, outDir, ['AUTO']),
+    () => writePublicApiConfig(scan, outDir, ['AUTO']),
     `${countAuto(scan.publicApi.groups)} public API boundaries: dependency-cruiser deep-import rules`,
   );
   if (structural && emitDepcruise && pick('feature-slice'))
@@ -406,7 +408,7 @@ export function writeEnforcementConfigs(
     );
   addIf(
     emitDepcruise && pick('dependency-hygiene'),
-    writeDependencyInternalsConfig(scan, outDir),
+    () => writeDependencyInternalsConfig(scan, outDir),
     'dependency hygiene: dependency-cruiser no-internals rule',
   );
   if (structural && emitDepcruise && pick('entry-purity'))
@@ -439,7 +441,7 @@ export function writeEnforcementConfigs(
   );
   addIf(
     emitEslint && pick('console'),
-    writeConsoleIsolationConfig(scan, outDir),
+    () => writeConsoleIsolationConfig(scan, outDir),
     'console isolation: eslint no-console rule',
   );
   if (structural && emitEslint && pick('env-access'))

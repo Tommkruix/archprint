@@ -18,7 +18,9 @@ describe('eslint preset emitter', () => {
     expect(source).toContain('const BLOCKS =');
     expect(source).toContain('no-ui-layer-in-server-entry');
     expect(source).toContain('no-console');
-    expect(source).toContain('export default [...BLOCKS, ...pluginConfigs];');
+    expect(source).toContain(
+      "export default [{ ignores: ['**/*.archprint.mjs'] }, ...BLOCKS, ...pluginConfigs];",
+    );
   });
 
   it('needs no runtime file reads (portable): no import statement or readdir/readFile', () => {
