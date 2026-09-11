@@ -37,7 +37,7 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: changesets/action@v1
+      - uses: changesets/action@v2
         if: steps.state.outputs.skip != 'true'
         with:
           version: npx changeset version
