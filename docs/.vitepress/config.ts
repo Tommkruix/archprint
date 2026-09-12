@@ -13,6 +13,7 @@ export default defineConfig({
       { text: 'Concepts', link: '/concepts' },
       { text: 'Rules', link: '/rules' },
       { text: 'Changelog', link: '/changelog' },
+      { text: 'AgentRuleBench', link: 'https://github.com/Tommkruix/agentrulebench' },
     ],
     sidebar: [
       {
