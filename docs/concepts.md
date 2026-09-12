@@ -11,6 +11,11 @@ already demonstrates, instead of authoring them from scratch.
 
 It then emits into the existing tools' formats, so it complements your stack rather than replacing it.
 
+A companion benchmark, [AgentRuleBench](https://github.com/Tommkruix/agentrulebench), measures the
+guidance-vs-enforcement question directly: whether AI coding agents drift from architectural conventions
+written in prose, and whether an inferred lint rule holds the boundary where guidance does not. It is
+pre-registered, and it reports an honest null result on the boundary it tested.
+
 ## The confidence gate
 
 A candidate rule (for example "request-entry files must not import the DB client") is measured against the
