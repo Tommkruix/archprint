@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scanRepo } from '../../src/cli/scan.js';
-import { regenerateConfigs } from '../../src/cli/generate.js';
+import { emitLayout } from '../../src/cli/generate.js';
 import { runEslintCheck } from '../../src/cli/program.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -37,8 +37,7 @@ describe('runEslintCheck', () => {
 
   it('flags a repo that drifts from a generated rule after generation', async () => {
     const outDir = path.join(dir, 'out');
-    regenerateConfigs(scanRepo(fixture('console-isolation-auto')), outDir, {
-      version: '0',
+    emitLayout(scanRepo(fixture('console-isolation-auto')), outDir, {
       enforcers: eslintOnly,
     });
     const appDir = path.join(dir, 'app');
@@ -54,8 +53,7 @@ describe('runEslintCheck', () => {
 
   it('reports files that could not be parsed instead of passing them clean', async () => {
     const outDir = path.join(dir, 'out');
-    regenerateConfigs(scanRepo(fixture('console-isolation-auto')), outDir, {
-      version: '0',
+    emitLayout(scanRepo(fixture('console-isolation-auto')), outDir, {
       enforcers: eslintOnly,
     });
     const appDir = path.join(dir, 'app');
@@ -68,8 +66,7 @@ describe('runEslintCheck', () => {
 
   it('does not flag a test file that logs (excluded from the scored population)', async () => {
     const outDir = path.join(dir, 'out');
-    regenerateConfigs(scanRepo(fixture('console-isolation-auto')), outDir, {
-      version: '0',
+    emitLayout(scanRepo(fixture('console-isolation-auto')), outDir, {
       enforcers: eslintOnly,
     });
     const appDir = path.join(dir, 'app');

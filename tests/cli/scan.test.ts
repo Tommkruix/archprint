@@ -30,26 +30,12 @@ import type {
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
-  writeAppIsolationConfig,
-  writeConsoleIsolationConfig,
-  writeMergedNoRestrictedImports,
-  writeDependencyInternalsConfig,
-  writeEntryPurityConfig,
-  writeEnvAccessConfig,
-  writeFeatureSliceConfig,
-  writeGraph,
-  writeLayerConfig,
-  writePhantomDependencyConfig,
-  writePublicApiConfig,
-  writeRoleLayeringConfig,
-  writeRules,
-  writeServerClientConfig,
-  writeStoriesIsolationConfig,
-  writeEslintPreset,
-  writeTestIsolationConfig,
-  writeTsArchTests,
-  writeUiDataConfig,
+  collectEnforcement,
+  emitLayout,
+  type CollectedEnforcement,
+  type CollectOptions,
 } from '../../src/cli/generate.js';
+import type { InstalledEnforcers } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'ui-infer');
@@ -792,264 +778,207 @@ describe('cli generate', () => {
   const outDir = path.join(here, '__generated__');
   afterAll(() => rmSync(outDir, { recursive: true, force: true }));
 
-  it('writes the four artifacts for AUTO patterns only', () => {
+  const ESLINT: InstalledEnforcers = {
+    eslint: true,
+    eslintPluginImport: false,
+    dependencyCruiser: false,
+    biome: false,
+  };
+  const DEPCRUISE: InstalledEnforcers = {
+    eslint: false,
+    eslintPluginImport: false,
+    dependencyCruiser: true,
+    biome: false,
+  };
+  const collect = (scan: ScanResult, options: Partial<CollectOptions> = {}): CollectedEnforcement =>
+    collectEnforcement(scan, {
+      enforcers: options.enforcers ?? DEPCRUISE,
+      structural: options.structural ?? true,
+      only: options.only,
+      ruleIds: options.ruleIds,
+    });
+  const dc = (c: CollectedEnforcement, family: string): { name: string }[] | undefined =>
+    c.depcruise.find((entry) => entry.family === family)?.forbidden;
+  const es = (c: CollectedEnforcement, family: string): boolean =>
+    c.eslintBlocks.some((entry) => entry.family === family);
+
+  it('collects forbidden-import specs for AUTO patterns only, and expands per-rule dirs', () => {
     rmSync(outDir, { recursive: true, force: true });
     const scan = emptyScan({
       fileCount: 10,
       aliasCount: 1,
       patterns: [fakePattern('AP-002', 'AUTO'), fakePattern('AP-001', 'SUGGEST')],
     });
-    const written = writeRules(scan, outDir, ['AUTO']);
-    expect(written).toHaveLength(1);
-    expect(existsSync(path.join(written[0]!, 'rule-AP-002.ts'))).toBe(true);
-    expect(existsSync(path.join(written[0]!, 'fixtures', 'failing.ts'))).toBe(true);
+    const c = collect(scan, { enforcers: ESLINT, structural: false });
+    expect(c.eslintSpecs.map((s) => s.name)).toEqual(['rule-AP-002']);
+    emitLayout(scan, outDir, { enforcers: ESLINT, expand: true });
+    expect(existsSync(path.join(outDir, 'rule-AP-002', 'rule-AP-002.ts'))).toBe(true);
+    expect(existsSync(path.join(outDir, 'rule-AP-002', 'fixtures', 'failing.ts'))).toBe(true);
   });
 
-  it('writes a dependency-cruiser config from AUTO layer boundaries', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
-      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
-    });
-    const files = writeLayerConfig(scan, outDir, ['AUTO']);
-    expect(files.length).toBe(2);
-    const depCruiser = files.find((file) => file.endsWith('dependency-cruiser.archprint.json'))!;
-    const config = JSON.parse(readFileSync(depCruiser, 'utf8')) as {
-      forbidden: { name: string }[];
-    };
-    expect(config.forbidden[0]!.name).toBe('no-utils-to-api');
-    expect(files.some((file) => file.endsWith('eslint-boundaries.archprint.json'))).toBe(true);
+  it('collects dependency-cruiser layer rules and eslint-boundaries from AUTO boundaries', () => {
+    const scan = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)] });
+    const c = collect(scan);
+    expect(dc(c, 'layer')![0]!.name).toBe('no-utils-to-api');
+    expect(c.boundaries).not.toBeNull();
+    expect(dc(collect(emptyScan()), 'layer')).toBeUndefined();
   });
 
-  it('writes a portable, self-contained eslint preset from AUTO forbidden imports', () => {
+  it('writes a single self-contained eslint file from AUTO forbidden imports, none otherwise', () => {
     rmSync(outDir, { recursive: true, force: true });
     const scan = scanRepo(path.join(here, '..', 'fixtures', 'cli-auto'));
-    const files = writeEslintPreset(scan, outDir);
-    expect(files).toHaveLength(1);
-    expect(files[0]!.endsWith('eslint-preset.archprint.mjs')).toBe(true);
-    const source = readFileSync(files[0]!, 'utf8');
+    const emitted = emitLayout(scan, outDir, { enforcers: ESLINT });
+    expect(emitted.eslint).not.toBeNull();
+    expect(path.basename(emitted.eslint!)).toBe('eslint.mjs');
+    const source = readFileSync(emitted.eslint!, 'utf8');
     expect(source).toContain(
-      "export default [{ ignores: ['**/*.archprint.mjs'] }, ...BLOCKS, ...pluginConfigs];",
+      "export default [{ ignores: ['**/.archprint/**'] }, ...BLOCKS, ...pluginConfigs];",
     );
+    expect(source).toContain("import archprint from './.archprint/eslint.mjs';");
     expect(source).not.toContain('readdirSync');
-
-    const none = emptyScan({ fileCount: 10, aliasCount: 1 });
-    expect(writeEslintPreset(none, outDir)).toEqual([]);
+    expect(emitLayout(emptyScan(), outDir, { enforcers: ESLINT }).eslint).toBeNull();
   });
 
-  it('writes ts-arch boundary tests from AUTO layer boundaries, none otherwise', () => {
+  it('collects ts-arch boundary rules and expands the test file from AUTO boundaries', () => {
     rmSync(outDir, { recursive: true, force: true });
-    const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
-      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
-    });
-    const files = writeTsArchTests(scan, outDir, ['AUTO']);
-    expect(files).toHaveLength(1);
-    expect(files[0]!.endsWith('architecture.archprint.test.ts')).toBe(true);
-    const source = readFileSync(files[0]!, 'utf8');
+    const scan = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)] });
+    expect(collect(scan).tsArchRules.map((r) => r.name)).toContain('no-utils-to-api');
+    emitLayout(scan, outDir, { enforcers: DEPCRUISE, structural: true, expand: true });
+    const source = readFileSync(path.join(outDir, 'architecture.archprint.ts'), 'utf8');
     expect(source).toContain("import { filesOfProject } from 'tsarch';");
     expect(source).toContain('no-utils-to-api');
-
-    const none = emptyScan({ fileCount: 10, aliasCount: 1 });
-    expect(writeTsArchTests(none, outDir, ['AUTO'])).toEqual([]);
+    expect(collect(emptyScan()).tsArchRules).toEqual([]);
   });
 
-  it('writes a public-API deep-import config for AUTO groups, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
+  it('collects a public-API deep-import rule for AUTO groups, none otherwise', () => {
     const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
       publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
     });
-    const files = writePublicApiConfig(scan, outDir, ['AUTO']);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-deep-import-features-auth');
-
-    const none: ScanResult = { ...scan, publicApi: emptyPublicApi() };
-    expect(writePublicApiConfig(none, outDir, ['AUTO'])).toEqual([]);
+    expect(dc(collect(scan), 'public-api')![0]!.name).toBe('no-deep-import-features-auth');
+    expect(dc(collect(emptyScan()), 'public-api')).toBeUndefined();
   });
 
-  it('writes a feature-slice cross-slice config for AUTO groups, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
+  it('collects a feature-slice cross-slice rule for AUTO groups, none otherwise', () => {
     const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
       featureSlices: { appDir: 'x', groups: [fakeSliceGroup('src/features', 40, 0)] },
     });
-    const files = writeFeatureSliceConfig(scan, outDir, ['AUTO']);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-cross-slice-src-features');
-
-    const none: ScanResult = { ...scan, featureSlices: emptyFeatureSlices() };
-    expect(writeFeatureSliceConfig(none, outDir, ['AUTO'])).toEqual([]);
+    expect(dc(collect(scan), 'feature-slice')![0]!.name).toBe('no-cross-slice-src-features');
+    expect(dc(collect(emptyScan()), 'feature-slice')).toBeUndefined();
   });
 
-  it('writes a server-client config when client modules avoid server-only, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const files = writeServerClientConfig(
-      emptyScan({ serverClient: fakeServerClient(40, 0) }),
-      outDir,
-    );
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-server-only-in-client');
-    expect(writeServerClientConfig(emptyScan(), outDir)).toEqual([]);
-  });
-
-  it('writes a ui-data config when components avoid the data layer, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const files = writeUiDataConfig(emptyScan({ uiDataIsolation: fakeUiData(40, 0) }), outDir);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-ui-to-data');
-    expect(writeUiDataConfig(emptyScan(), outDir)).toEqual([]);
-  });
-
-  it('writes a stories-isolation config when stories are unimported, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const files = writeStoriesIsolationConfig(
-      emptyScan({ storiesIsolation: fakeStories(40, 0) }),
-      outDir,
-    );
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-import-stories');
-    expect(writeStoriesIsolationConfig(emptyScan(), outDir)).toEqual([]);
-  });
-
-  it('writes one consolidated no-restricted-imports config, none when there are no patterns', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const block = { rules: { 'no-restricted-imports': ['error', { patterns: [{ regex: 'X' }] }] } };
-    expect(writeMergedNoRestrictedImports([block], outDir)).toHaveLength(1);
-    expect(writeMergedNoRestrictedImports([null], outDir)).toEqual([]);
-  });
-
-  it('writes eslint configs for console isolation and env access when clean, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
+  it('collects a server-client rule when client modules avoid server-only, none otherwise', () => {
     expect(
-      writeConsoleIsolationConfig(emptyScan({ consoleIsolation: fakeConsole(40, 0) }), outDir),
-    ).toHaveLength(1);
-    expect(writeConsoleIsolationConfig(emptyScan(), outDir)).toEqual([]);
-    expect(writeEnvAccessConfig(emptyScan({ envAccess: fakeEnv(40, 0) }), outDir)).toHaveLength(1);
-    expect(writeEnvAccessConfig(emptyScan(), outDir)).toEqual([]);
+      dc(collect(emptyScan({ serverClient: fakeServerClient(40, 0) })), 'server-client')![0]!.name,
+    ).toBe('no-server-only-in-client');
+    expect(dc(collect(emptyScan()), 'server-client')).toBeUndefined();
   });
 
-  it('writes a phantom-dependency config when all imports are declared, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const files = writePhantomDependencyConfig(
-      emptyScan({ phantomDependencies: fakePhantom(40, 0) }),
-      outDir,
-    );
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-phantom-dependencies');
-    expect(writePhantomDependencyConfig(emptyScan(), outDir)).toEqual([]);
+  it('collects a ui-data rule when components avoid the data layer, none otherwise', () => {
+    expect(
+      dc(collect(emptyScan({ uiDataIsolation: fakeUiData(40, 0) })), 'ui-data')![0]!.name,
+    ).toBe('no-ui-to-data');
+    expect(dc(collect(emptyScan()), 'ui-data')).toBeUndefined();
   });
 
-  it('writes an entry-purity config when entries are pure, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const files = writeEntryPurityConfig(
-      emptyScan({ entryPurity: fakeEntryPurity(40, 0) }),
-      outDir,
-    );
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-import-framework-entry');
-    expect(writeEntryPurityConfig(emptyScan(), outDir)).toEqual([]);
+  it('collects a stories-isolation rule when stories are unimported, none otherwise', () => {
+    expect(
+      dc(collect(emptyScan({ storiesIsolation: fakeStories(40, 0) })), 'stories-isolation')![0]!
+        .name,
+    ).toBe('no-import-stories');
+    expect(dc(collect(emptyScan()), 'stories-isolation')).toBeUndefined();
   });
 
-  it('writes a role-layering config for AUTO boundaries, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
+  it('collects console, env, and no-restricted-imports eslint blocks when clean, none otherwise', () => {
+    expect(
+      es(
+        collect(emptyScan({ consoleIsolation: fakeConsole(40, 0) }), { enforcers: ESLINT }),
+        'console',
+      ),
+    ).toBe(true);
+    expect(es(collect(emptyScan(), { enforcers: ESLINT }), 'console')).toBe(false);
+    expect(
+      es(collect(emptyScan({ envAccess: fakeEnv(40, 0) }), { enforcers: ESLINT }), 'env-access'),
+    ).toBe(true);
+    expect(
+      es(
+        collect(emptyScan({ testIsolation: fakeTestIsolation(40, 0, 3) }), { enforcers: ESLINT }),
+        'no-restricted-imports',
+      ),
+    ).toBe(true);
+    expect(es(collect(emptyScan(), { enforcers: ESLINT }), 'no-restricted-imports')).toBe(false);
+  });
+
+  it('collects a phantom-dependency rule when all imports are declared, none otherwise', () => {
+    expect(
+      dc(collect(emptyScan({ phantomDependencies: fakePhantom(40, 0) })), 'phantom-deps')![0]!.name,
+    ).toBe('no-phantom-dependencies');
+    expect(dc(collect(emptyScan()), 'phantom-deps')).toBeUndefined();
+  });
+
+  it('collects an entry-purity rule when entries are pure, none otherwise', () => {
+    expect(
+      dc(collect(emptyScan({ entryPurity: fakeEntryPurity(40, 0) })), 'entry-purity')![0]!.name,
+    ).toBe('no-import-framework-entry');
+    expect(dc(collect(emptyScan()), 'entry-purity')).toBeUndefined();
+  });
+
+  it('collects a role-layering rule for AUTO boundaries, none otherwise', () => {
     const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
       roleLayering: { appDir: 'x', boundaries: [fakeRoleBoundary('REPOSITORY', 'SERVICE', 40, 0)] },
     });
-    const files = writeRoleLayeringConfig(scan, outDir, ['AUTO']);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-repository-to-service');
-
-    const none: ScanResult = { ...scan, roleLayering: emptyRoleLayering() };
-    expect(writeRoleLayeringConfig(none, outDir, ['AUTO'])).toEqual([]);
+    expect(dc(collect(scan), 'role-layering')![0]!.name).toBe('no-repository-to-service');
+    expect(dc(collect(emptyScan()), 'role-layering')).toBeUndefined();
   });
 
-  it('writes a dependency-internals config when packages are imported cleanly, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
-      dependencyInternals: fakeDependencyInternals(40, 0),
-    });
-    const files = writeDependencyInternalsConfig(scan, outDir);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-dependency-internals');
-
-    const none: ScanResult = { ...scan, dependencyInternals: emptyDependencyInternals() };
-    expect(writeDependencyInternalsConfig(none, outDir)).toEqual([]);
+  it('collects a dependency-internals rule when packages are imported cleanly, none otherwise', () => {
+    const scan = emptyScan({ dependencyInternals: fakeDependencyInternals(40, 0) });
+    expect(dc(collect(scan), 'dependency-internals')![0]!.name).toBe('no-dependency-internals');
+    expect(dc(collect(emptyScan()), 'dependency-internals')).toBeUndefined();
   });
 
-  it('writes an app-isolation cross-app config for AUTO groups, none otherwise', () => {
-    rmSync(outDir, { recursive: true, force: true });
+  it('collects an app-isolation cross-app rule for AUTO groups, none otherwise', () => {
     const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
       appIsolation: { appDir: 'x', groups: [fakeAppGroup('apps', 40, 0)] },
     });
-    const files = writeAppIsolationConfig(scan, outDir, ['AUTO']);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('no-cross-app-apps');
-
-    const none: ScanResult = { ...scan, appIsolation: emptyAppIsolation() };
-    expect(writeAppIsolationConfig(none, outDir, ['AUTO'])).toEqual([]);
+    expect(dc(collect(scan), 'app-isolation')![0]!.name).toBe('no-cross-app-apps');
+    expect(dc(collect(emptyScan()), 'app-isolation')).toBeUndefined();
   });
 
-  it('writes a test-isolation config when the repo cleanly isolates tests, none otherwise', () => {
+  it('collects the depcruise test-isolation rule for a depcruise-only repo, none otherwise', () => {
+    const scan = emptyScan({ testIsolation: fakeTestIsolation(40, 0, 3) });
+    expect(dc(collect(scan), 'test-isolation')![0]!.name).toBe('not-to-test');
+    expect(
+      dc(collect(emptyScan({ testIsolation: fakeTestIsolation(40, 0, 0) })), 'test-isolation'),
+    ).toBeUndefined();
+  });
+
+  it('writes a single depcruise file that concatenates AUTO family rules, none otherwise', () => {
     rmSync(outDir, { recursive: true, force: true });
     const scan = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
-      testIsolation: fakeTestIsolation(40, 0, 3),
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
     });
-    const files = writeTestIsolationConfig(scan, outDir);
-    expect(files).toHaveLength(1);
-    const config = JSON.parse(readFileSync(files[0]!, 'utf8')) as { forbidden: { name: string }[] };
-    expect(config.forbidden[0]!.name).toBe('not-to-test');
-
-    const none: ScanResult = { ...scan, testIsolation: fakeTestIsolation(40, 0, 0) };
-    expect(writeTestIsolationConfig(none, outDir)).toEqual([]);
-  });
-
-  it('writes no layer config when there are no AUTO boundaries', () => {
-    const scan = emptyScan({ fileCount: 10, aliasCount: 1 });
-    expect(writeLayerConfig(scan, outDir, ['AUTO'])).toEqual([]);
-  });
-
-  it('writes the mermaid and dot graph whenever there are boundaries, none when there are not', () => {
-    rmSync(outDir, { recursive: true, force: true });
-    const withBoundaries = emptyScan({
-      fileCount: 10,
-      aliasCount: 1,
-      layerBoundaries: [fakeLayerBoundary('utils', 'api', 10)],
-    });
-    const files = writeGraph(withBoundaries, outDir);
-    expect(files.map((file) => path.basename(file)).sort()).toEqual([
-      'layer-graph.archprint.dot',
-      'layer-graph.archprint.mmd',
+    const emitted = emitLayout(scan, outDir, { enforcers: DEPCRUISE, structural: true });
+    expect(path.basename(emitted.depcruise!)).toBe('dependency-cruiser.json');
+    const config = JSON.parse(readFileSync(emitted.depcruise!, 'utf8')) as {
+      forbidden: { name: string }[];
+    };
+    expect(config.forbidden.map((r) => r.name).sort()).toEqual([
+      'no-deep-import-features-auth',
+      'no-utils-to-api',
     ]);
-    const dot = readFileSync(
-      files.find((file) => file.endsWith('.dot'))!,
-      'utf8',
-    );
-    expect(dot).toContain('digraph archprint');
+    expect(
+      emitLayout(emptyScan(), outDir, { enforcers: DEPCRUISE, structural: true }).depcruise,
+    ).toBeNull();
+  });
 
-    const none: ScanResult = { ...withBoundaries, layerBoundaries: [] };
-    expect(writeGraph(none, outDir)).toEqual([]);
+  it('expands the mermaid and dot graph whenever there are boundaries, none when there are not', () => {
+    rmSync(outDir, { recursive: true, force: true });
+    const withBoundaries = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 10)] });
+    expect(collect(withBoundaries).hasGraph).toBe(true);
+    emitLayout(withBoundaries, outDir, { enforcers: DEPCRUISE, structural: true, expand: true });
+    const dot = readFileSync(path.join(outDir, 'layer-graph.archprint.dot'), 'utf8');
+    expect(dot).toContain('digraph archprint');
+    expect(collect(emptyScan()).hasGraph).toBe(false);
   });
 });

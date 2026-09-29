@@ -1,42 +1,29 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  AGGREGATOR_FILE,
-  DC_AGGREGATE_FILE,
   MANAGED_START,
   WIRING_TOOLS,
   dependencyCruiserJsonWired,
   dependencyCruiserSnippet,
-  eslintConfigHasBlock,
   findEslintConfig,
-  hasDependencyCruiserBlocks,
-  hasEslintBlocks,
-  hasEslintOutputs,
   importReference,
-  outDirHasDependencyCruiserBlocks,
-  outDirHasEslintBlocks,
-  outDirHasEslintOutputs,
   snippet,
   unwireDependencyCruiserJson,
   unwireEslintContent,
   wireDependencyCruiserJson,
   wireEslintContent,
-  writeDependencyCruiserAggregate,
-  writeEslintAggregator,
 } from '../../src/cli/wiring.js';
 
 describe('wiring transforms', () => {
   const base = "import js from '@eslint/js';\n\nexport default [\n  js.configs.recommended,\n];\n";
 
   it('inserts a managed import block and a spread into an array export', () => {
-    const result = wireEslintContent(base, './archprint-rules/eslint.archprint.mjs');
+    const result = wireEslintContent(base, './.archprint/eslint.mjs');
     expect(result.changed).toBe(true);
     expect(result.content).toContain(MANAGED_START);
-    expect(result.content).toContain(
-      "import archprintRules from './archprint-rules/eslint.archprint.mjs';",
-    );
+    expect(result.content).toContain("import archprintRules from './.archprint/eslint.mjs';");
     expect(result.content).toContain('...archprintRules,');
   });
 
@@ -137,26 +124,64 @@ describe('wiring transforms', () => {
     expect(unwireEslintContent(wired)).toBe(base);
   });
 
-  it('importReference always yields a relative specifier', () => {
-    expect(importReference('/a/b', '/a/b/archprint-rules/eslint.archprint.mjs')).toBe(
-      './archprint-rules/eslint.archprint.mjs',
+  it('importReference yields a relative specifier, including for a dot-directory', () => {
+    expect(importReference('/a/b', '/a/b/archprint-rules/eslint.mjs')).toBe(
+      './archprint-rules/eslint.mjs',
     );
-  });
-
-  it('hasEslintBlocks detects eslint json blocks among paths', () => {
-    expect(hasEslintBlocks(['/o/eslint.console-isolation.archprint.json'])).toBe(true);
-    expect(hasEslintBlocks(['/o/dependency-cruiser.archprint.json'])).toBe(false);
-  });
-
-  it('hasEslintOutputs also counts the generated plugin', () => {
-    expect(hasEslintOutputs(['/o/eslint-plugin.archprint.mjs'])).toBe(true);
-    expect(hasEslintOutputs(['/o/eslint.console-isolation.archprint.json'])).toBe(true);
-    expect(hasEslintOutputs(['/o/dependency-cruiser.archprint.json'])).toBe(false);
+    expect(importReference('/a/b', '/a/b/.archprint/eslint.mjs')).toBe('./.archprint/eslint.mjs');
   });
 
   it('snippet renders a paste-able managed block', () => {
     expect(snippet('./x.mjs')).toContain(MANAGED_START);
     expect(snippet('./x.mjs')).toContain('...archprintRules,');
+  });
+});
+
+describe('dependency-cruiser wiring', () => {
+  it('adds a managed extends and unwire restores it (round-trip)', () => {
+    const base = '{\n  "forbidden": [],\n  "options": {}\n}\n';
+    const wired = wireDependencyCruiserJson(base, './.archprint/dependency-cruiser.json');
+    expect(wired.changed).toBe(true);
+    expect(dependencyCruiserJsonWired(wired.content!)).toBe(true);
+    expect(JSON.parse(unwireDependencyCruiserJson(wired.content!))).toEqual({
+      forbidden: [],
+      options: {},
+    });
+  });
+
+  it('appends to an existing extends array and is idempotent', () => {
+    const withExtends = '{\n  "extends": "some-preset"\n}\n';
+    const ref = './.archprint/dependency-cruiser.json';
+    const once = wireDependencyCruiserJson(withExtends, ref);
+    expect(JSON.parse(once.content!).extends).toEqual(['some-preset', ref]);
+    const twice = wireDependencyCruiserJson(once.content!, ref);
+    expect(twice.reason).toBe('already-wired');
+  });
+
+  it('retargets a stale archprint extends instead of appending a duplicate', () => {
+    const stale = JSON.stringify({
+      extends: ['./archprint-rules/dependency-cruiser.all.archprint.json'],
+    });
+    const ref = './.archprint/dependency-cruiser.json';
+    const result = wireDependencyCruiserJson(stale, ref);
+    expect(result.changed).toBe(true);
+    expect(JSON.parse(result.content!).extends).toBe(ref);
+  });
+
+  it('unwire keeps a user extends and drops only the archprint one', () => {
+    const content = JSON.stringify({
+      extends: ['some-preset', './.archprint/dependency-cruiser.json'],
+    });
+    expect(JSON.parse(unwireDependencyCruiserJson(content))).toEqual({ extends: 'some-preset' });
+  });
+
+  it('reports unparseable config instead of throwing', () => {
+    expect(wireDependencyCruiserJson('not json', './x.json').reason).toBe('unparseable');
+    expect(dependencyCruiserJsonWired('not json')).toBe(false);
+  });
+
+  it('dependencyCruiserSnippet renders a paste-able extends block', () => {
+    expect(dependencyCruiserSnippet('./x.json')).toContain('"extends": "./x.json"');
   });
 });
 
@@ -169,13 +194,6 @@ describe('wiring filesystem helpers', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('writeEslintAggregator writes the aggregator file that ignores archprint outputs', () => {
-    const file = writeEslintAggregator(dir);
-    expect(existsSync(file)).toBe(true);
-    expect(path.basename(file)).toBe(AGGREGATOR_FILE);
-    expect(readFileSync(file, 'utf8')).toContain("ignores: ['**/*.archprint.mjs']");
-  });
-
   it('findEslintConfig finds a flat config and returns null otherwise', () => {
     expect(findEslintConfig(dir)).toBeNull();
     const config = path.join(dir, 'eslint.config.mjs');
@@ -183,105 +201,18 @@ describe('wiring filesystem helpers', () => {
     expect(findEslintConfig(dir)).toBe(config);
   });
 
-  it('outDirHasEslintBlocks and eslintConfigHasBlock reflect on-disk state', () => {
-    expect(outDirHasEslintBlocks(dir)).toBe(false);
-    writeFileSync(path.join(dir, 'eslint.console-isolation.archprint.json'), '{}');
-    expect(outDirHasEslintBlocks(dir)).toBe(true);
-
-    const config = path.join(dir, 'eslint.config.mjs');
-    writeFileSync(config, 'export default [];\n');
-    expect(eslintConfigHasBlock(config)).toBe(false);
-    writeFileSync(config, `${MANAGED_START}\nexport default [];\n`);
-    expect(eslintConfigHasBlock(config)).toBe(true);
+  it('the eslint tool reports outputs once the single rules file exists', () => {
+    const eslint = WIRING_TOOLS.find((tool) => tool.name === 'eslint')!;
+    expect(eslint.hasOutputs(dir)).toBe(false);
+    writeFileSync(path.join(dir, 'eslint.mjs'), 'export default [];\n');
+    expect(eslint.hasOutputs(dir)).toBe(true);
   });
 
-  it('outDirHasEslintOutputs is true when only the generated plugin is present', () => {
-    expect(outDirHasEslintOutputs(dir)).toBe(false);
-    writeFileSync(path.join(dir, 'eslint-plugin.archprint.mjs'), 'export default [];\n');
-    expect(outDirHasEslintOutputs(dir)).toBe(true);
-  });
-});
-
-describe('dependency-cruiser wiring', () => {
-  let dir: string;
-  beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), 'archprint-dc-'));
-  });
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
-
-  it('adds a managed extends and unwire restores it (round-trip)', () => {
-    const base = '{\n  "forbidden": [],\n  "options": {}\n}\n';
-    const wired = wireDependencyCruiserJson(
-      base,
-      './archprint-rules/dependency-cruiser.all.archprint.json',
-    );
-    expect(wired.changed).toBe(true);
-    expect(dependencyCruiserJsonWired(wired.content!)).toBe(true);
-    expect(JSON.parse(unwireDependencyCruiserJson(wired.content!))).toEqual({
-      forbidden: [],
-      options: {},
-    });
-  });
-
-  it('appends to an existing extends array and is idempotent', () => {
-    const withExtends = '{\n  "extends": "some-preset"\n}\n';
-    const once = wireDependencyCruiserJson(
-      withExtends,
-      './x/dependency-cruiser.all.archprint.json',
-    );
-    expect(JSON.parse(once.content!).extends).toEqual([
-      'some-preset',
-      './x/dependency-cruiser.all.archprint.json',
-    ]);
-    const twice = wireDependencyCruiserJson(
-      once.content!,
-      './x/dependency-cruiser.all.archprint.json',
-    );
-    expect(twice.reason).toBe('already-wired');
-  });
-
-  it('unwire keeps a user extends and drops only the archprint one', () => {
-    const content = JSON.stringify({
-      extends: ['some-preset', './archprint-rules/dependency-cruiser.all.archprint.json'],
-    });
-    expect(JSON.parse(unwireDependencyCruiserJson(content))).toEqual({ extends: 'some-preset' });
-  });
-
-  it('reports unparseable config instead of throwing', () => {
-    expect(wireDependencyCruiserJson('not json', './x.json').reason).toBe('unparseable');
-    expect(dependencyCruiserJsonWired('not json')).toBe(false);
-  });
-
-  it('aggregate merges the forbidden arrays and excludes itself', () => {
-    writeFileSync(
-      path.join(dir, 'dependency-cruiser.a.archprint.json'),
-      JSON.stringify({ forbidden: [{ name: 'a' }] }),
-    );
-    writeFileSync(
-      path.join(dir, 'dependency-cruiser.b.archprint.json'),
-      JSON.stringify({ forbidden: [{ name: 'b' }] }),
-    );
-    const file = writeDependencyCruiserAggregate(dir);
-    expect(path.basename(file)).toBe(DC_AGGREGATE_FILE);
-    const merged = JSON.parse(readFileSync(file, 'utf8')) as { forbidden: { name: string }[] };
-    expect(merged.forbidden.map((r) => r.name).sort()).toEqual(['a', 'b']);
-  });
-
-  it('hasDependencyCruiserBlocks and outDirHasDependencyCruiserBlocks detect blocks', () => {
-    expect(hasDependencyCruiserBlocks(['/o/dependency-cruiser.phantom-deps.archprint.json'])).toBe(
-      true,
-    );
-    expect(hasDependencyCruiserBlocks(['/o/dependency-cruiser.all.archprint.json'])).toBe(false);
-    expect(hasDependencyCruiserBlocks(['/o/eslint.console-isolation.archprint.json'])).toBe(false);
-    expect(outDirHasDependencyCruiserBlocks(dir)).toBe(false);
-    writeFileSync(path.join(dir, 'dependency-cruiser.phantom-deps.archprint.json'), '{}');
-    expect(outDirHasDependencyCruiserBlocks(dir)).toBe(true);
-  });
-
-  it('dependencyCruiserSnippet renders a paste-able extends block', () => {
-    expect(dependencyCruiserSnippet('./x.json')).toContain('"extends": "./x.json"');
+  it('the dependency-cruiser tool reports outputs once the single rules file exists', () => {
+    const dc = WIRING_TOOLS.find((tool) => tool.name === 'dependency-cruiser')!;
+    expect(dc.hasOutputs(dir)).toBe(false);
+    writeFileSync(path.join(dir, 'dependency-cruiser.json'), '{}');
+    expect(dc.hasOutputs(dir)).toBe(true);
   });
 });
 

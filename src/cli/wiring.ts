@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { Node, Project, SyntaxKind } from 'ts-morph';
+import { DEPCRUISE_FILE, ESLINT_FILE } from './generate.js';
 
-export const AGGREGATOR_FILE = 'eslint.archprint.mjs';
 export const MANAGED_START =
   '// archprint:start (managed by archprint; run `archprint eject` to remove)';
 export const MANAGED_END = '// archprint:end';
@@ -13,6 +13,7 @@ const ESLINT_CONFIG_NAMES = [
   'eslint.config.cjs',
   'eslint.config.ts',
 ];
+
 function arrayInsertionOffset(node: Node, allowCallArg: boolean): number | null {
   if (Node.isArrayLiteralExpression(node)) return node.getStart() + 1;
   if (Node.isCallExpression(node)) {
@@ -51,39 +52,6 @@ function findInsertionPoint(content: string): number | null {
   return moduleExports ? arrayInsertionOffset(moduleExports.getRight(), true) : null;
 }
 
-const AGGREGATOR_SOURCE = `${MANAGED_START.replace('run `archprint eject` to remove', 'regenerate with `archprint generate`')}
-import { readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
-const here = dirname(fileURLToPath(import.meta.url));
-
-const blocks = readdirSync(here)
-  .filter((name) => name.startsWith('eslint.') && name.endsWith('.archprint.json'))
-  .sort()
-  .map((name) => JSON.parse(readFileSync(join(here, name), 'utf8')));
-
-let pluginConfigs = [];
-try {
-  pluginConfigs = (await import('./eslint-plugin.archprint.mjs')).default ?? [];
-} catch {
-  pluginConfigs = [];
-}
-
-export default [{ ignores: ['**/*.archprint.mjs'] }, ...blocks, ...pluginConfigs];
-${MANAGED_END}
-`;
-
-export function hasEslintBlocks(paths: readonly string[]): boolean {
-  return paths.some((p) => /eslint\.[^/\\]*\.archprint\.json$/.test(p));
-}
-
-export function writeEslintAggregator(outDir: string): string {
-  const file = path.join(outDir, AGGREGATOR_FILE);
-  writeFileSync(file, AGGREGATOR_SOURCE);
-  return file;
-}
-
 export function findEslintConfig(dir: string): string | null {
   for (const name of ESLINT_CONFIG_NAMES) {
     const candidate = path.join(dir, name);
@@ -92,9 +60,11 @@ export function findEslintConfig(dir: string): string | null {
   return null;
 }
 
-export function importReference(configDir: string, aggregatorPath: string): string {
-  const relative = path.relative(configDir, aggregatorPath).split(path.sep).join('/');
-  return relative.startsWith('.') ? relative : `./${relative}`;
+export function importReference(configDir: string, targetPath: string): string {
+  const relative = path.relative(configDir, targetPath).split(path.sep).join('/');
+  return relative.startsWith('./') || relative.startsWith('../') || relative.startsWith('/')
+    ? relative
+    : `./${relative}`;
 }
 
 export interface WireResult {
@@ -146,67 +116,12 @@ export function snippet(reference: string): string {
   ].join('\n');
 }
 
-export function eslintConfigHasBlock(configPath: string): boolean {
-  try {
-    return readFileSync(configPath, 'utf8').includes(MANAGED_START);
-  } catch {
-    /* v8 ignore next -- unreadable config is treated as not wired */
-    return false;
-  }
-}
-
-export function outDirHasEslintBlocks(outDir: string): boolean {
-  if (!existsSync(outDir)) return false;
-  return readdirSync(outDir).some(
-    (name) => name.startsWith('eslint.') && name.endsWith('.archprint.json'),
-  );
-}
-
-export const ESLINT_PLUGIN_FILE = 'eslint-plugin.archprint.mjs';
-
-export function hasEslintOutputs(paths: readonly string[]): boolean {
-  return hasEslintBlocks(paths) || paths.some((p) => path.basename(p) === ESLINT_PLUGIN_FILE);
-}
-
-export function outDirHasEslintOutputs(outDir: string): boolean {
-  return outDirHasEslintBlocks(outDir) || existsSync(path.join(outDir, ESLINT_PLUGIN_FILE));
-}
-
-export const DC_AGGREGATE_FILE = 'dependency-cruiser.all.archprint.json';
 const DC_CONFIG_NAMES = [
   '.dependency-cruiser.json',
   '.dependency-cruiser.js',
   '.dependency-cruiser.cjs',
   '.dependency-cruiser.mjs',
 ];
-const DC_BLOCK = /^dependency-cruiser\.[^/\\]*\.archprint\.json$/;
-
-const isDcBlock = (name: string): boolean => DC_BLOCK.test(name) && name !== DC_AGGREGATE_FILE;
-
-export function hasDependencyCruiserBlocks(paths: readonly string[]): boolean {
-  return paths.some((p) => isDcBlock(path.basename(p)));
-}
-
-export function outDirHasDependencyCruiserBlocks(outDir: string): boolean {
-  return existsSync(outDir) && readdirSync(outDir).some(isDcBlock);
-}
-
-export function writeDependencyCruiserAggregate(outDir: string): string {
-  const forbidden: unknown[] = [];
-  for (const name of readdirSync(outDir).filter(isDcBlock).sort()) {
-    try {
-      const config = JSON.parse(readFileSync(path.join(outDir, name), 'utf8')) as {
-        forbidden?: unknown[];
-      };
-      if (Array.isArray(config.forbidden)) forbidden.push(...config.forbidden);
-    } catch {
-      /* v8 ignore next -- a malformed block contributes nothing to the aggregate */
-    }
-  }
-  const file = path.join(outDir, DC_AGGREGATE_FILE);
-  writeFileSync(file, `${JSON.stringify({ forbidden }, null, 2)}\n`);
-  return file;
-}
 
 const extendsList = (value: unknown): string[] =>
   Array.isArray(value)
@@ -222,8 +137,9 @@ export function wireDependencyCruiserJson(content: string, reference: string): W
   } catch {
     return { changed: false, reason: 'unparseable' };
   }
-  const list = extendsList(config.extends);
-  if (list.includes(reference)) return { changed: false, reason: 'already-wired' };
+  const list = extendsList(config.extends).filter((entry) => !entry.includes('archprint'));
+  if (extendsList(config.extends).includes(reference))
+    return { changed: false, reason: 'already-wired' };
   list.push(reference);
   config.extends = list.length === 1 ? list[0] : list;
   return { changed: true, content: `${JSON.stringify(config, null, 2)}\n` };
@@ -276,10 +192,10 @@ function findConfig(cwd: string, names: readonly string[]): string | null {
 export const WIRING_TOOLS: readonly WiringTool[] = [
   {
     name: 'eslint',
-    hasOutputs: outDirHasEslintOutputs,
+    hasOutputs: (outDir) => existsSync(path.join(outDir, ESLINT_FILE)),
     findConfig: findEslintConfig,
     canEdit: () => true,
-    aggregatePath: (outDir) => path.join(outDir, AGGREGATOR_FILE),
+    aggregatePath: (outDir) => path.join(outDir, ESLINT_FILE),
     reference: importReference,
     apply: wireEslintContent,
     remove: unwireEslintContent,
@@ -288,10 +204,10 @@ export const WIRING_TOOLS: readonly WiringTool[] = [
   },
   {
     name: 'dependency-cruiser',
-    hasOutputs: outDirHasDependencyCruiserBlocks,
+    hasOutputs: (outDir) => existsSync(path.join(outDir, DEPCRUISE_FILE)),
     findConfig: (cwd) => findConfig(cwd, DC_CONFIG_NAMES),
     canEdit: (configPath) => configPath.endsWith('.json'),
-    aggregatePath: (outDir) => path.join(outDir, DC_AGGREGATE_FILE),
+    aggregatePath: (outDir) => path.join(outDir, DEPCRUISE_FILE),
     reference: importReference,
     apply: wireDependencyCruiserJson,
     remove: unwireDependencyCruiserJson,

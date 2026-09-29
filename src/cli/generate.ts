@@ -1,6 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
-import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
 import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
@@ -27,280 +26,18 @@ import { emitRuleArtifacts } from '../generator/rule-generator.js';
 import {
   buildForbiddenImportSpecs,
   renderEslintPluginSource,
+  type ForbiddenImportSpec,
 } from '../generator/eslint-plugin-emitter.js';
 import { renderEslintPreset } from '../generator/eslint-preset-emitter.js';
 import {
   mergeNoRestrictedImports,
   type NoRestrictedImportsBlock,
 } from '../generator/eslint-scope.js';
-import { cleanPreviousOutputs, removeIfEmpty, writeOutputsManifest } from './outputs-manifest.js';
-import {
-  hasDependencyCruiserBlocks,
-  hasEslintOutputs,
-  writeDependencyCruiserAggregate,
-  writeEslintAggregator,
-} from './wiring.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
-export function writeRules(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-  ids?: readonly string[],
-): string[] {
-  const wanted = ids ? new Set(ids.map((id) => id.toLowerCase())) : null;
-  const written: string[] = [];
-  for (const pattern of scan.patterns) {
-    if (!statuses.includes(pattern.result.gate.status)) continue;
-    if (wanted && !wanted.has(pattern.config.id.toLowerCase())) continue;
-    written.push(emitOne(pattern, scan.appDir, outDir));
-  }
-  return written;
-}
-
-export function emitOne(pattern: ScannedPattern, appDir: string, outDir: string): string {
-  return emitRuleArtifacts(pattern.config, pattern.result, outDir, `archprint scan ${appDir}`);
-}
-
-export function writeLayerConfig(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-): string[] {
-  const dependencyCruiser = toDependencyCruiser(scan.layerBoundaries, statuses);
-  if (dependencyCruiser.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const write = (name: string, config: unknown): string => {
-    const file = path.join(outDir, name);
-    writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-    return file;
-  };
-  return [
-    write('dependency-cruiser.archprint.json', dependencyCruiser),
-    write('eslint-boundaries.archprint.json', toEslintBoundaries(scan.layerBoundaries, statuses)),
-  ];
-}
-
-export function writePublicApiConfig(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-): string[] {
-  const config = toDependencyCruiserPublicApi(scan.publicApi.groups, statuses);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.public-api.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeFeatureSliceConfig(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-): string[] {
-  const config = toDependencyCruiserFeatureSlice(scan.featureSlices.groups, statuses);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.feature-slice.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeAppIsolationConfig(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-): string[] {
-  const config = toDependencyCruiserAppIsolation(scan.appIsolation.groups, statuses);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.app-isolation.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeTestIsolationConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserTestIsolation(scan.testIsolation);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.test-isolation.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeRoleLayeringConfig(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-): string[] {
-  const config = toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, statuses);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.role-layering.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeConsoleIsolationConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toEslintConsoleIsolation(scan.consoleIsolation);
-  if (config === null) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.console-isolation.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeMergedNoRestrictedImports(
-  blocks: readonly (NoRestrictedImportsBlock | null)[],
-  outDir: string,
-): string[] {
-  const merged = mergeNoRestrictedImports(blocks);
-  if (merged === null) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.no-restricted-imports.archprint.json');
-  writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
-  return [file];
-}
-
-export function writeServerClientConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserServerClient(scan.serverClient);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.server-client.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeUiDataConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserUiData(scan.uiDataIsolation);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.ui-data.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeStoriesIsolationConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserStoriesIsolation(scan.storiesIsolation);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.stories-isolation.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeEnvAccessConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toEslintEnvAccess(scan.envAccess);
-  if (config === null) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint.env-access.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writePhantomDependencyConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserPhantomDependencies(scan.phantomDependencies);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.phantom-deps.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeEntryPurityConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserEntryPurity(scan.entryPurity);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.entry-purity.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-export function writeDependencyInternalsConfig(scan: ScanResult, outDir: string): string[] {
-  const config = toDependencyCruiserDependencyInternals(scan.dependencyInternals);
-  if (config.forbidden.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'dependency-cruiser.dependency-internals.archprint.json');
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-  return [file];
-}
-
-function presetBlocks(scan: ScanResult, structural: boolean): unknown[] {
-  const noRestrictedImports: (NoRestrictedImportsBlock | null)[] = [
-    toEslintDeepRelative(scan.deepRelative),
-    toEslintTestIsolation(scan.testIsolation),
-  ];
-  if (structural) noRestrictedImports.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
-  const blocks = [
-    mergeNoRestrictedImports(noRestrictedImports),
-    toEslintConsoleIsolation(scan.consoleIsolation),
-  ];
-  if (structural) blocks.push(toEslintEnvAccess(scan.envAccess));
-  return blocks.filter((block) => block !== null);
-}
-
-export function writeEslintPreset(
-  scan: ScanResult,
-  outDir: string,
-  options: { structural?: boolean } = {},
-): string[] {
-  const specs = buildForbiddenImportSpecs(scan.patterns);
-  const blocks = presetBlocks(scan, options.structural ?? false);
-  if (specs.length === 0 && blocks.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint-preset.archprint.mjs');
-  writeFileSync(file, renderEslintPreset(specs, blocks));
-  return [file];
-}
-
-export function writeEslintPlugin(scan: ScanResult, outDir: string): string[] {
-  const specs = buildForbiddenImportSpecs(scan.patterns);
-  if (specs.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'eslint-plugin.archprint.mjs');
-  writeFileSync(file, renderEslintPluginSource(specs));
-  return [file];
-}
-
-export function writeTsArchTests(
-  scan: ScanResult,
-  outDir: string,
-  statuses: readonly GenerationStatus[] = ['AUTO'],
-): string[] {
-  const rules: BoundaryRule[] = [
-    ...toDependencyCruiser(scan.layerBoundaries, statuses).forbidden,
-    ...toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, statuses).forbidden,
-    ...toDependencyCruiserUiData(scan.uiDataIsolation).forbidden,
-  ];
-  if (rules.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, 'architecture.archprint.test.ts');
-  writeFileSync(file, renderTsArchTests(rules));
-  return [file];
-}
-
-export function writeGraph(scan: ScanResult, outDir: string): string[] {
-  if (scan.layerBoundaries.length === 0) return [];
-  mkdirSync(outDir, { recursive: true });
-  const write = (name: string, content: string): string => {
-    const file = path.join(outDir, name);
-    writeFileSync(file, `${content}\n`);
-    return file;
-  };
-  return [
-    write('layer-graph.archprint.mmd', toMermaid(scan.layerBoundaries)),
-    write('layer-graph.archprint.dot', toGraphviz(scan.layerBoundaries)),
-  ];
-}
-
-export interface WrittenConfig {
-  files: string[];
-  label: string | null;
-}
-
-const countAuto = (items: readonly { gate: { status: GenerationStatus } }[]): number =>
-  items.filter((item) => item.gate.status === 'AUTO').length;
+export const ESLINT_FILE = 'eslint.mjs';
+export const DEPCRUISE_FILE = 'dependency-cruiser.json';
+export const ARCHPRINT_DIR = '.archprint';
 
 export const FAMILY_NAMES = [
   'forbidden-imports',
@@ -322,163 +59,284 @@ export const FAMILY_NAMES = [
   'server-client',
 ] as const;
 
-export function writeEnforcementConfigs(
+interface DependencyCruiserRule {
+  name: string;
+}
+
+interface EslintFamilyBlock {
+  family: string;
+  block: unknown;
+}
+
+interface DependencyCruiserFamily {
+  family: string;
+  forbidden: DependencyCruiserRule[];
+}
+
+export interface CollectedEnforcement {
+  eslintSpecs: ForbiddenImportSpec[];
+  eslintBlocks: EslintFamilyBlock[];
+  depcruise: DependencyCruiserFamily[];
+  boundaries: unknown | null;
+  tsArchRules: BoundaryRule[];
+  hasGraph: boolean;
+}
+
+export interface CollectOptions {
+  structural?: boolean;
+  enforcers: InstalledEnforcers;
+  only?: string;
+  ruleIds?: readonly string[];
+}
+
+const byName = (a: DependencyCruiserRule, b: DependencyCruiserRule): number =>
+  a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+
+export function collectEnforcement(
   scan: ScanResult,
-  outDir: string,
-  options: {
-    structural?: boolean;
-    enforcers: InstalledEnforcers;
-    graph?: boolean;
-    only?: string;
-    ruleIds?: readonly string[];
-  },
-): WrittenConfig[] {
+  options: CollectOptions,
+): CollectedEnforcement {
   const structural = options.structural ?? false;
   const emitDepcruise = options.enforcers.dependencyCruiser;
   const emitEslint = options.enforcers.eslint || !options.enforcers.dependencyCruiser;
   const pick = (family: string): boolean => !options.only || options.only === family;
-  const bundles = options.only === undefined;
-  const configs: WrittenConfig[] = [];
-  const add = (files: string[], label: string | null): void => {
-    if (files.length > 0) configs.push({ files, label });
-  };
-  const addIf = (condition: boolean, write: () => string[], label: string | null): void => {
-    if (condition) add(write(), label);
-  };
 
-  addIf(
-    emitEslint && pick('forbidden-imports'),
-    () => writeRules(scan, outDir, ['AUTO'], options.ruleIds),
-    null,
-  );
-  addIf(
-    emitEslint && bundles,
-    () => writeEslintPlugin(scan, outDir),
-    'forbidden-import rules as a loadable eslint plugin',
-  );
-  addIf(
-    emitEslint && bundles,
-    () => writeEslintPreset(scan, outDir, { structural }),
-    'shareable single-file eslint preset (portable; needs only eslint)',
-  );
+  const eslintSpecs =
+    emitEslint && pick('forbidden-imports')
+      ? filterSpecs(buildForbiddenImportSpecs(scan.patterns), scan, options.ruleIds)
+      : [];
+
+  const eslintBlocks: EslintFamilyBlock[] = [];
+  const pushBlock = (family: string, block: unknown | null): void => {
+    if (block !== null) eslintBlocks.push({ family, block });
+  };
+  if (emitEslint && pick('console'))
+    pushBlock('console', toEslintConsoleIsolation(scan.consoleIsolation));
+  if (structural && emitEslint && pick('env-access'))
+    pushBlock('env-access', toEslintEnvAccess(scan.envAccess));
+  const noRestricted: (NoRestrictedImportsBlock | null)[] = [];
+  if (emitEslint && pick('import-style'))
+    noRestricted.push(toEslintDeepRelative(scan.deepRelative));
+  if (emitEslint && pick('test-isolation'))
+    noRestricted.push(toEslintTestIsolation(scan.testIsolation));
+  if (structural && emitEslint && pick('workspace-package'))
+    noRestricted.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
+  pushBlock('no-restricted-imports', mergeNoRestrictedImports(noRestricted));
+
+  const depcruise: DependencyCruiserFamily[] = [];
+  const pushDc = (family: string, forbidden: DependencyCruiserRule[]): void => {
+    if (forbidden.length > 0) depcruise.push({ family, forbidden });
+  };
   if (structural && emitDepcruise && pick('layer'))
-    add(
-      writeLayerConfig(scan, outDir, ['AUTO']),
-      `${countAuto(scan.layerBoundaries)} layer boundaries: dependency-cruiser and eslint-plugin-boundaries`,
-    );
+    pushDc('layer', toDependencyCruiser(scan.layerBoundaries, ['AUTO']).forbidden);
   if (structural && emitDepcruise && pick('role-layering'))
-    add(
-      writeRoleLayeringConfig(scan, outDir, ['AUTO']),
-      `${countAuto(scan.roleLayering.boundaries)} role-layering boundaries: dependency-cruiser rules`,
+    pushDc(
+      'role-layering',
+      toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, ['AUTO']).forbidden,
     );
-  addIf(
-    emitDepcruise && pick('public-api'),
-    () => writePublicApiConfig(scan, outDir, ['AUTO']),
-    `${countAuto(scan.publicApi.groups)} public API boundaries: dependency-cruiser deep-import rules`,
-  );
+  if (emitDepcruise && pick('public-api'))
+    pushDc('public-api', toDependencyCruiserPublicApi(scan.publicApi.groups, ['AUTO']).forbidden);
   if (structural && emitDepcruise && pick('feature-slice'))
-    add(
-      writeFeatureSliceConfig(scan, outDir, ['AUTO']),
-      `${countAuto(scan.featureSlices.groups)} feature-slice boundaries: dependency-cruiser cross-slice rules`,
+    pushDc(
+      'feature-slice',
+      toDependencyCruiserFeatureSlice(scan.featureSlices.groups, ['AUTO']).forbidden,
     );
   if (structural && emitDepcruise && pick('app-isolation'))
-    add(
-      writeAppIsolationConfig(scan, outDir, ['AUTO']),
-      `${countAuto(scan.appIsolation.groups)} app boundaries: dependency-cruiser cross-app rules`,
+    pushDc(
+      'app-isolation',
+      toDependencyCruiserAppIsolation(scan.appIsolation.groups, ['AUTO']).forbidden,
     );
   if (pick('test-isolation') && !emitEslint && emitDepcruise)
-    add(
-      writeTestIsolationConfig(scan, outDir),
-      'test isolation: dependency-cruiser not-to-test rule',
+    pushDc('test-isolation', toDependencyCruiserTestIsolation(scan.testIsolation).forbidden);
+  if (structural && emitDepcruise && pick('dependency-hygiene'))
+    pushDc(
+      'dependency-internals',
+      toDependencyCruiserDependencyInternals(scan.dependencyInternals).forbidden,
     );
-  addIf(
-    structural && emitDepcruise && pick('dependency-hygiene'),
-    () => writeDependencyInternalsConfig(scan, outDir),
-    'dependency hygiene: dependency-cruiser no-internals rule',
-  );
   if (structural && emitDepcruise && pick('entry-purity'))
-    add(
-      writeEntryPurityConfig(scan, outDir),
-      'entry purity: dependency-cruiser no-import-entry rule',
-    );
+    pushDc('entry-purity', toDependencyCruiserEntryPurity(scan.entryPurity).forbidden);
   if (structural && emitDepcruise && pick('phantom-deps'))
-    add(
-      writePhantomDependencyConfig(scan, outDir),
-      'dependency declaration: dependency-cruiser no-phantom-deps rule',
+    pushDc(
+      'phantom-deps',
+      toDependencyCruiserPhantomDependencies(scan.phantomDependencies).forbidden,
     );
-  const noRestrictedImports: (NoRestrictedImportsBlock | null)[] = [];
-  if (emitEslint && pick('import-style'))
-    noRestrictedImports.push(toEslintDeepRelative(scan.deepRelative));
-  if (emitEslint && pick('test-isolation'))
-    noRestrictedImports.push(toEslintTestIsolation(scan.testIsolation));
-  if (structural && emitEslint && pick('workspace-package'))
-    noRestrictedImports.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
-  add(
-    writeMergedNoRestrictedImports(noRestrictedImports, outDir),
-    'import boundaries: eslint no-restricted-imports (deep-relative / test / workspace, merged)',
-  );
-  addIf(
-    emitEslint && pick('console'),
-    () => writeConsoleIsolationConfig(scan, outDir),
-    'console isolation: eslint no-console rule',
-  );
-  if (structural && emitEslint && pick('env-access'))
-    add(writeEnvAccessConfig(scan, outDir), 'env access: eslint no-restricted-properties rule');
   if (structural && emitDepcruise && pick('stories-isolation'))
-    add(
-      writeStoriesIsolationConfig(scan, outDir),
-      'stories isolation: dependency-cruiser no-import-stories rule',
+    pushDc(
+      'stories-isolation',
+      toDependencyCruiserStoriesIsolation(scan.storiesIsolation).forbidden,
     );
   if (structural && emitDepcruise && pick('ui-data'))
-    add(
-      writeUiDataConfig(scan, outDir),
-      'UI / data separation: dependency-cruiser no-ui-to-data rule',
-    );
+    pushDc('ui-data', toDependencyCruiserUiData(scan.uiDataIsolation).forbidden);
   if (structural && emitDepcruise && pick('server-client'))
-    add(
-      writeServerClientConfig(scan, outDir),
-      'server / client boundary: dependency-cruiser no-server-only-in-client rule',
-    );
-  if (structural && bundles)
-    add(
-      writeTsArchTests(scan, outDir, ['AUTO']),
-      'architecture boundaries: ts-arch dependency tests',
-    );
-  if (options.graph !== false && bundles)
-    add(writeGraph(scan, outDir), 'layer dependency graph: Mermaid and Graphviz DOT');
-  return configs;
+    pushDc('server-client', toDependencyCruiserServerClient(scan.serverClient).forbidden);
+
+  const bundles = options.only === undefined;
+  const boundaries =
+    structural && emitDepcruise && pick('layer')
+      ? nonEmptyBoundaries(toEslintBoundaries(scan.layerBoundaries, ['AUTO']))
+      : null;
+  const tsArchRules: BoundaryRule[] = structural && bundles ? collectTsArchRules(scan) : [];
+
+  return {
+    eslintSpecs,
+    eslintBlocks,
+    depcruise,
+    boundaries,
+    tsArchRules,
+    hasGraph: bundles && scan.layerBoundaries.length > 0,
+  };
 }
 
-export function regenerateConfigs(
+function filterSpecs(
+  specs: ForbiddenImportSpec[],
+  scan: ScanResult,
+  ruleIds: readonly string[] | undefined,
+): ForbiddenImportSpec[] {
+  if (!ruleIds) return specs;
+  const wantedIds = new Set(ruleIds.map((id) => id.toLowerCase()));
+  const wantedNames = new Set(
+    scan.patterns
+      .filter((pattern) => wantedIds.has(pattern.config.id.toLowerCase()))
+      .map((pattern) => pattern.config.name.toLowerCase()),
+  );
+  return specs.filter((spec) => wantedNames.has(spec.name.toLowerCase()));
+}
+
+function nonEmptyBoundaries(boundaries: unknown): unknown | null {
+  const tuple = (
+    boundaries as {
+      rules?: { 'boundaries/element-types'?: [unknown, { rules?: unknown[] }] };
+    }
+  )?.rules?.['boundaries/element-types'];
+  const inner = Array.isArray(tuple) ? tuple[1]?.rules : undefined;
+  return Array.isArray(inner) && inner.length > 0 ? boundaries : null;
+}
+
+function collectTsArchRules(scan: ScanResult): BoundaryRule[] {
+  return [
+    ...toDependencyCruiser(scan.layerBoundaries, ['AUTO']).forbidden,
+    ...toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, ['AUTO']).forbidden,
+    ...toDependencyCruiserUiData(scan.uiDataIsolation).forbidden,
+  ];
+}
+
+const writeJson = (file: string, config: unknown): string => {
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  return file;
+};
+
+export function writeArchprintEslint(
+  collected: CollectedEnforcement,
+  outDir: string,
+): string | null {
+  if (collected.eslintSpecs.length === 0 && collected.eslintBlocks.length === 0) return null;
+  mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, ESLINT_FILE);
+  const blocks = collected.eslintBlocks.map((entry) => entry.block);
+  writeFileSync(file, renderEslintPreset(collected.eslintSpecs, blocks));
+  return file;
+}
+
+export function writeArchprintDepcruise(
+  collected: CollectedEnforcement,
+  outDir: string,
+): string | null {
+  const forbidden = collected.depcruise.flatMap((entry) => entry.forbidden).sort(byName);
+  if (forbidden.length === 0) return null;
+  mkdirSync(outDir, { recursive: true });
+  return writeJson(path.join(outDir, DEPCRUISE_FILE), { forbidden });
+}
+
+function writeExpanded(
+  collected: CollectedEnforcement,
   scan: ScanResult,
   outDir: string,
-  options: {
-    structural?: boolean;
-    version: string;
-    enforcers: InstalledEnforcers;
-    graph?: boolean;
-    adoptionReadme?: string;
-    only?: string;
-    ruleIds?: readonly string[];
-  },
-): { configs: WrittenConfig[]; removed: string[] } {
-  const removed = cleanPreviousOutputs(outDir);
-  const configs = writeEnforcementConfigs(scan, outDir, {
-    structural: options.structural,
-    enforcers: options.enforcers,
-    graph: options.graph,
-    only: options.only,
-    ruleIds: options.ruleIds,
-  });
-  const allPaths = configs.flatMap((config) => config.files);
-  if (hasEslintOutputs(allPaths)) allPaths.push(writeEslintAggregator(outDir));
-  if (hasDependencyCruiserBlocks(allPaths)) allPaths.push(writeDependencyCruiserAggregate(outDir));
-  if (options.adoptionReadme !== undefined && allPaths.length > 0) {
-    const readmePath = path.join(outDir, 'ADOPTION.md');
-    writeFileSync(readmePath, options.adoptionReadme);
-    allPaths.push(readmePath);
+  graph: boolean,
+): string[] {
+  mkdirSync(outDir, { recursive: true });
+  const written: string[] = [];
+  if (collected.eslintSpecs.length > 0) {
+    for (const spec of scan.patterns) {
+      if (spec.result.gate.status !== 'AUTO') continue;
+      if (!collected.eslintSpecs.some((s) => s.name === spec.config.name)) continue;
+      written.push(
+        emitRuleArtifacts(spec.config, spec.result, outDir, `archprint scan ${scan.appDir}`),
+      );
+    }
+    written.push(
+      writeFile(
+        path.join(outDir, 'eslint-plugin.archprint.mjs'),
+        renderEslintPluginSource(collected.eslintSpecs),
+      ),
+    );
   }
-  if (allPaths.length > 0) writeOutputsManifest(outDir, allPaths, options.version);
-  else removeIfEmpty(outDir);
-  return { configs, removed };
+  for (const entry of collected.eslintBlocks) {
+    written.push(
+      writeJson(path.join(outDir, `eslint.${entry.family}.archprint.json`), entry.block),
+    );
+  }
+  for (const entry of collected.depcruise) {
+    written.push(
+      writeJson(path.join(outDir, `dependency-cruiser.${entry.family}.archprint.json`), {
+        forbidden: entry.forbidden,
+      }),
+    );
+  }
+  if (collected.boundaries !== null) {
+    written.push(
+      writeJson(path.join(outDir, 'eslint-boundaries.archprint.json'), collected.boundaries),
+    );
+  }
+  if (collected.tsArchRules.length > 0) {
+    written.push(
+      writeFile(
+        path.join(outDir, 'architecture.archprint.ts'),
+        renderTsArchTests(collected.tsArchRules),
+      ),
+    );
+  }
+  if (graph && collected.hasGraph) {
+    written.push(
+      writeFile(
+        path.join(outDir, 'layer-graph.archprint.mmd'),
+        `${toMermaid(scan.layerBoundaries)}\n`,
+      ),
+    );
+    written.push(
+      writeFile(
+        path.join(outDir, 'layer-graph.archprint.dot'),
+        `${toGraphviz(scan.layerBoundaries)}\n`,
+      ),
+    );
+  }
+  return written;
+}
+
+const writeFile = (file: string, content: string): string => {
+  writeFileSync(file, content);
+  return file;
+};
+
+export interface EmitResult {
+  eslint: string | null;
+  depcruise: string | null;
+  expanded: string[];
+}
+
+export function emitLayout(
+  scan: ScanResult,
+  outDir: string,
+  options: CollectOptions & { expand?: boolean; graph?: boolean },
+): EmitResult {
+  const collected = collectEnforcement(scan, options);
+  const eslint = writeArchprintEslint(collected, outDir);
+  const depcruise = writeArchprintDepcruise(collected, outDir);
+  const expanded = options.expand
+    ? writeExpanded(collected, scan, outDir, options.graph !== false)
+    : [];
+  return { eslint, depcruise, expanded };
+}
+
+export function emitOne(pattern: ScannedPattern, appDir: string, outDir: string): string {
+  return emitRuleArtifacts(pattern.config, pattern.result, outDir, `archprint scan ${appDir}`);
 }

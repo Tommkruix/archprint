@@ -7,7 +7,7 @@ import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
 import {
-  renderAdoptionMarkdown,
+  renderAdoptionBody,
   renderExplain,
   renderInit,
   renderReport,
@@ -15,10 +15,15 @@ import {
 } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
-import { emitOne, FAMILY_NAMES, regenerateConfigs } from './generate.js';
-import { buildInitManifest, INIT_MANIFEST_FILE, writeInitManifest } from './init.js';
+import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
+import { writeLayout } from './layout.js';
+import { CONFIG_FILE, readConfig } from './archprint-config.js';
+import { stripAdoptionSection } from './adoption-readme.js';
+import { removeIgnoreEntry } from './ignore-file.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
 import { WIRING_TOOLS } from './wiring.js';
+
+const LEGACY_ROOT_CONFIG = 'archprint.json';
 
 export function readVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -66,15 +71,15 @@ function applyEmitOverride(detected: InstalledEnforcers, emit?: string): Install
 }
 
 export async function runEslintCheck(appDir: string, outDir: string): Promise<void> {
-  const aggregator = path.join(outDir, 'eslint.archprint.mjs');
-  if (!existsSync(aggregator)) {
+  const rulesFile = path.join(outDir, ESLINT_FILE);
+  if (!existsSync(rulesFile)) {
     console.log('Check: no eslint rules were generated to check.');
     return;
   }
   const [{ ESLint }, tseslint, generated] = await Promise.all([
     import('eslint'),
     import('typescript-eslint'),
-    import(pathToFileURL(aggregator).href) as Promise<{ default: unknown[] }>,
+    import(pathToFileURL(rulesFile).href) as Promise<{ default: unknown[] }>,
   ]);
   const archprintRuleIds = new Set<string>();
   for (const block of generated.default) {
@@ -174,23 +179,31 @@ export function buildProgram(version = readVersion()): Command {
       'Set up archprint for this repo: detect the stack, enforce the rules your code already follows, and record what to adopt next',
     )
     .argument('[path]', 'app directory', '.')
-    .option('-o, --out <dir>', 'output directory for rule configs', 'archprint-rules')
+    .option('-o, --out <dir>', 'output directory for the generated rules', ARCHPRINT_DIR)
     .option('--fast', 'skip barrel/alias resolution (faster, less accurate)')
     .option(
       '--include-structural',
       'also enforce the structural-inference families (held for review by default)',
     )
-    .option('--force', `overwrite an existing ${INIT_MANIFEST_FILE} and rule configs`)
+    .option('--expand', 'also write the per-family files, rule cards, and fixtures')
+    .option('--force', `overwrite an existing ${ARCHPRINT_DIR}/${CONFIG_FILE} and rules`)
     .action(
       (
         input: string,
-        options: { out: string; fast?: boolean; includeStructural?: boolean; force?: boolean },
+        options: {
+          out: string;
+          fast?: boolean;
+          includeStructural?: boolean;
+          expand?: boolean;
+          force?: boolean;
+        },
       ) => {
         const appDir = resolveApp(input);
-        const manifestPath = path.resolve(INIT_MANIFEST_FILE);
-        if (existsSync(manifestPath) && !options.force) {
+        const cwd = process.cwd();
+        const outDir = path.resolve(options.out);
+        if (readConfig(outDir) !== null && !options.force) {
           console.error(
-            `${INIT_MANIFEST_FILE} already exists. Re-run with --force to overwrite, or use 'archprint scan' / 'archprint generate' directly.`,
+            `${path.join(options.out, CONFIG_FILE)} already exists. Re-run with --force to overwrite, or use 'archprint generate' directly.`,
           );
           process.exitCode = 1;
           return;
@@ -207,24 +220,23 @@ export function buildProgram(version = readVersion()): Command {
           return;
         }
         /* v8 ignore stop */
-        const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const enforcers = detectEnforcers(scan.appDir);
         const recommendations = buildRecommendations(scan, detectStack(appDir), enforcers);
-        const { configs } = regenerateConfigs(scan, outDir, {
+        const { files } = writeLayout(scan, outDir, {
           structural,
-          version,
           enforcers,
-          adoptionReadme: renderAdoptionMarkdown(recommendations, version),
-        });
-        const writtenCount = configs.reduce((n, config) => n + config.files.length, 0);
-        const cwd = process.cwd();
-        const manifest = buildInitManifest(recommendations, version, {
+          expand: options.expand,
+          version,
+          recommendations,
           app: displayPath(appDir, cwd),
-          rulesDir: displayPath(outDir, cwd),
+          cwd,
+          readmeBody: renderAdoptionBody(recommendations),
         });
-        writeInitManifest(manifest, manifestPath);
-        console.log(renderInit(manifest, writtenCount, structural, version));
+        const config = readConfig(outDir);
+        /* v8 ignore next -- writeLayout always writes a readable config */
+        if (config === null) return;
+        console.log(renderInit(config, files.length, structural, version));
         if (options.fast) {
           console.log(
             '\nWarning: rules came from a fast specifier-level scan; re-run without --fast before enforcing.',
@@ -270,11 +282,9 @@ export function buildProgram(version = readVersion()): Command {
 
   program
     .command('generate')
-    .description(
-      'Write the four rule artifacts for every AUTO pattern (resolves the graph by default)',
-    )
+    .description('Write the archprint rules for every AUTO pattern (resolves the graph by default)')
     .argument('[path]', 'app directory', '.')
-    .option('-o, --out <dir>', 'output directory', 'archprint-rules')
+    .option('-o, --out <dir>', 'output directory', ARCHPRINT_DIR)
     .option(
       '--fast',
       'skip barrel/alias resolution (faster, may mint a rule the full graph rejects)',
@@ -291,11 +301,9 @@ export function buildProgram(version = readVersion()): Command {
       '--emit <target>',
       'force the output format regardless of detected tooling: eslint, dependency-cruiser, or all',
     )
-    .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz)')
-    .option(
-      '--readme',
-      'also write an ADOPTION.md summarizing what is enforced, reviewed, and to adopt',
-    )
+    .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz, with --expand)')
+    .option('--expand', 'also write the per-family files, rule cards, fixtures, and graph')
+    .option('--readme', 'also add an archprint section to README.md summarizing what is enforced')
     .option('--only <family>', `emit only one rule family (${FAMILY_NAMES.join(', ')})`)
     .option(
       '--rules <ids>',
@@ -315,6 +323,7 @@ export function buildProgram(version = readVersion()): Command {
           rule?: string;
           emit?: string;
           graph?: boolean;
+          expand?: boolean;
           readme?: boolean;
           only?: string;
           rules?: string;
@@ -361,36 +370,37 @@ export function buildProgram(version = readVersion()): Command {
           return;
         }
         /* v8 ignore stop */
+        const cwd = process.cwd();
         const outDir = path.resolve(options.out);
         const structural = options.includeStructural ?? false;
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
-        const adoptionReadme = options.readme
-          ? renderAdoptionMarkdown(
-              buildRecommendations(scan, detectStack(scan.appDir), detectEnforcers(scan.appDir)),
-              version,
-            )
-          : undefined;
+        const enforcers = applyEmitOverride(detectEnforcers(scan.appDir), options.emit);
+        const recommendations = buildRecommendations(scan, detectStack(scan.appDir), enforcers);
         const ruleIds = options.rules
           ? options.rules
               .split(',')
               .map((id) => id.trim())
               .filter(Boolean)
           : undefined;
-        const { configs, removed } = regenerateConfigs(scan, outDir, {
+        const { files, removed } = writeLayout(scan, outDir, {
           structural,
-          version,
-          enforcers: applyEmitOverride(detectEnforcers(scan.appDir), options.emit),
+          enforcers,
           graph: options.graph,
-          adoptionReadme,
+          expand: options.expand,
           only: options.only,
           ruleIds,
+          version,
+          recommendations,
+          app: displayPath(scan.appDir, cwd),
+          cwd,
+          readmeBody: options.readme ? renderAdoptionBody(recommendations) : undefined,
         });
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
           );
         }
-        if (configs.length === 0) {
+        if (files.length === 0) {
           if (heldStructuralAuto > 0) {
             console.log(
               `No mechanical AUTO rules to generate. ${heldStructuralAuto} structural rule(s) are held for review; pass --include-structural to emit them (review before enforcing).`,
@@ -400,13 +410,9 @@ export function buildProgram(version = readVersion()): Command {
           }
           return;
         }
-        const report = (target: string, suffix = ''): void => {
-          const relative = path.relative(process.cwd(), target);
-          console.log(`generated ${relative.startsWith('..') ? target : relative}${suffix}`);
-        };
-        for (const config of configs) {
-          for (const file of config.files) report(file, config.label === null ? '/' : '');
-          if (config.label !== null) console.log(`  (${config.label})`);
+        for (const file of files) {
+          const relative = path.relative(cwd, file);
+          console.log(`generated ${relative.startsWith('..') ? file : relative}`);
         }
         if (heldStructuralAuto > 0) {
           console.log(
@@ -472,11 +478,7 @@ export function buildProgram(version = readVersion()): Command {
     .description(
       "Reference archprint's generated rules from the enforcement tools your repo uses (managed, reversible)",
     )
-    .option(
-      '-o, --out <dir>',
-      'output directory that holds the generated rule configs',
-      'archprint-rules',
-    )
+    .option('-o, --out <dir>', 'output directory that holds the generated rules', ARCHPRINT_DIR)
     .option('--dry-run', 'show what would change without writing')
     .action((options: { out: string; dryRun?: boolean }) => {
       const cwd = process.cwd();
@@ -529,32 +531,29 @@ export function buildProgram(version = readVersion()): Command {
 
   program
     .command('eject')
-    .description(
-      "Remove archprint's generated files, its config manifest, and any wired references",
-    )
-    .option(
-      '-o, --out <dir>',
-      'output directory that holds the generated rule configs',
-      'archprint-rules',
-    )
+    .description("Remove archprint's generated files, its config, and any wired references")
+    .option('-o, --out <dir>', 'output directory that holds the generated rules', ARCHPRINT_DIR)
     .option('--dry-run', 'list what would be removed without deleting anything')
     .action((options: { out: string; dryRun?: boolean }) => {
       const cwd = process.cwd();
       const outDir = path.resolve(options.out);
+      const config = readConfig(outDir);
       const targets: string[] = [];
-      for (const relative of readOutputs(outDir)) {
-        const target = path.join(outDir, relative);
-        if (existsSync(target)) targets.push(target);
-      }
-      const outputsManifest = path.join(outDir, OUTPUTS_MANIFEST_FILE);
-      if (existsSync(outputsManifest)) targets.push(outputsManifest);
-      const initManifest = path.resolve(INIT_MANIFEST_FILE);
-      if (existsSync(initManifest)) targets.push(initManifest);
+      const add = (file: string): void => {
+        if (existsSync(file) && !targets.includes(file)) targets.push(file);
+      };
+      if (config) for (const relative of config.managed.files) add(path.resolve(cwd, relative));
+      for (const relative of readOutputs(outDir)) add(path.join(outDir, relative));
+      add(path.join(outDir, OUTPUTS_MANIFEST_FILE));
+      add(path.join(outDir, CONFIG_FILE));
+      add(path.resolve(cwd, LEGACY_ROOT_CONFIG));
       const wired = WIRING_TOOLS.map((tool) => ({ tool, configPath: tool.findConfig(cwd) })).filter(
         (entry) =>
           entry.configPath !== null && entry.tool.isWired(readFileSync(entry.configPath, 'utf8')),
       );
-      if (targets.length === 0 && wired.length === 0) {
+      const readmePath = path.join(cwd, 'README.md');
+      const stripReadme = config?.managed.readme === true;
+      if (targets.length === 0 && wired.length === 0 && !stripReadme) {
         console.log('Nothing to eject: no archprint outputs found here.');
         return;
       }
@@ -562,12 +561,16 @@ export function buildProgram(version = readVersion()): Command {
         console.log('Would remove:');
         for (const target of targets) console.log(`  ${displayPath(target)}`);
         for (const { configPath } of wired) console.log(`  unwire ${displayPath(configPath!)}`);
+        if (stripReadme) console.log(`  strip archprint section from ${displayPath(readmePath)}`);
         return;
       }
       for (const target of targets) rmSync(target, { recursive: true, force: true });
       removeIfEmpty(outDir);
       for (const { tool, configPath } of wired)
         writeFileSync(configPath!, tool.remove(readFileSync(configPath!, 'utf8')));
+      if (stripReadme) stripAdoptionSection(readmePath, config!.managed.readmeCreated);
+      if (config?.managed.prettierignore) removeIgnoreEntry(path.join(cwd, '.prettierignore'));
+      if (config?.managed.npmignore) removeIgnoreEntry(path.join(cwd, '.npmignore'));
       console.log(`Ejected ${targets.length + wired.length} archprint artifact(s):`);
       for (const target of targets) console.log(`  removed ${displayPath(target)}`);
       for (const { configPath } of wired) console.log(`  unwired ${displayPath(configPath!)}`);
