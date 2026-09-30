@@ -607,6 +607,18 @@ export function buildProgram(version = readVersion()): Command {
     });
 
   program
+    .command('mcp')
+    .description(
+      'Run archprint as an MCP server over stdio (read-only tools: scan, recommend, explain) for Claude, Cursor, and other agents',
+    )
+    /* v8 ignore start -- thin glue: dynamic import + start a blocking stdio server */
+    .action(async () => {
+      const { startMcpServer } = await import('../mcp/server.js');
+      await startMcpServer(version);
+    });
+  /* v8 ignore stop */
+
+  program
     .command('migrate')
     .alias('upgrade')
     .description(
