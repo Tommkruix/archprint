@@ -17,6 +17,11 @@ Your `CLAUDE.md` is guidance. Your lint rules are enforcement. Archprint closes 
 enforcement from patterns your codebase already demonstrates, so you adopt rules you can trust instead of
 authoring them by hand.
 
+When an AI agent is doing the writing, it can read those inferred rules and their evidence on demand through
+Archprint's read-only MCP server (`archprint mcp`), so the context it works from is your codebase's real,
+evidence-backed boundaries rather than a hand-written summary. It reports; enforcement still runs in your
+linter. See [Use with AI agents](#use-with-ai-agents-mcp).
+
 Validated at scale: `scan` and `recommend` ran across all 92,861 real public TypeScript repositories with zero
 crashes, and the full `init`/`wire`/`eject` round-trip ran clean on a 2,000-repo stratified sample. A companion
 benchmark, [AgentRuleBench](https://github.com/Tommkruix/agentrulebench), measures the guidance-vs-enforcement
