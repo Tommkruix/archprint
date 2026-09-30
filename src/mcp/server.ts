@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { explainTool, recommendTool, scanTool } from './tools.js';
+import { errorResponse, okResponse, type ToolResponse } from './tool-response.js';
 
 export const TOOLS = [
   {
@@ -62,16 +63,13 @@ export function runTool(name: string, args: Record<string, unknown>): unknown {
   }
 }
 
-export interface ToolResponse {
-  content: { type: 'text'; text: string }[];
-  isError?: boolean;
-}
+export type { ToolResponse };
 
 export function callTool(name: string, args: Record<string, unknown>): ToolResponse {
   try {
-    return { content: [{ type: 'text', text: JSON.stringify(runTool(name, args), null, 2) }] };
+    return okResponse(runTool(name, args));
   } catch (error) {
-    return { content: [{ type: 'text', text: (error as Error).message }], isError: true };
+    return errorResponse(error);
   }
 }
 

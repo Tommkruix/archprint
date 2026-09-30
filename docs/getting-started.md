@@ -20,7 +20,8 @@ node dist/cli.js scan <path-to-your-app>
 ```
 
 Requires Node >= 20. Point Archprint at a directory that has a `tsconfig.json` (for a monorepo, a package such
-as `apps/web`; a monorepo root works too, Archprint discovers the app directories and respects `.gitignore`).
+as `apps/web`; a monorepo root works too, Archprint discovers the app directories and skips whatever git ignores,
+including nested `.gitignore` files and `.git/info/exclude`).
 
 ## The 60-second path
 
@@ -116,6 +117,13 @@ rules your repo already follows before they write code. It exposes read-only `ar
   }
 }
 ```
+
+That is a local stdio server over the repo you point the client at. To scan a public repository by URL instead,
+run a remote server over HTTP with `archprint mcp --http`: it clones the repo shallow to a temp dir (public
+`github.com`, `gitlab.com`, or `bitbucket.org` only), runs the same read-only analysis, returns the result, and
+deletes the clone. The tools then take a `repo` URL and an optional `ref`. It binds `0.0.0.0:8848/mcp` by default;
+pass `--host 127.0.0.1` to keep it on your own machine, or `--port` (or `$PORT`) to change the port. Expose it
+publicly only behind an authenticating, rate-limited proxy.
 
 ## Next
 
