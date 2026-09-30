@@ -17,7 +17,7 @@ import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
 import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
 import { writeLayout } from './layout.js';
-import { CONFIG_FILE, readConfig } from './archprint-config.js';
+import { CONFIG_FILE, readConfig, recordManagedFiles } from './archprint-config.js';
 import { stripAdoptionSection } from './adoption-readme.js';
 import { removeIgnoreEntry } from './ignore-file.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
@@ -363,9 +363,12 @@ export function buildProgram(version = readVersion()): Command {
           return;
         }
         if (options.rule !== undefined) {
+          const cwd = process.cwd();
+          const outDir = path.resolve(options.out);
           const { appDir, pattern } = findPattern(input, options.rule, !options.fast);
-          const dir = emitOne(pattern, appDir, path.resolve(options.out));
-          console.log(`generated ${path.relative(process.cwd(), dir)}/`);
+          const dir = emitOne(pattern, appDir, outDir);
+          recordManagedFiles(outDir, cwd, version, [dir]);
+          console.log(`generated ${path.relative(cwd, dir)}/`);
           if (options.fast) {
             console.log(
               'Warning: generated from a fast specifier-level scan; re-run without --fast to confirm no barrel/alias-hidden violations before enforcing.',
@@ -590,8 +593,14 @@ export function buildProgram(version = readVersion()): Command {
       for (const target of targets) rmSync(target, { recursive: true, force: true });
       removeIfEmpty(outDir);
       if (stripReadme) stripAdoptionSection(readmePath, config!.managed.readmeCreated);
-      if (config?.managed.prettierignore) removeIgnoreEntry(path.join(cwd, '.prettierignore'));
-      if (config?.managed.npmignore) removeIgnoreEntry(path.join(cwd, '.npmignore'));
+      if (config?.managed.prettierignore)
+        removeIgnoreEntry(path.join(cwd, '.prettierignore'), {
+          deleteIfEmpty: config.managed.prettierignoreCreated,
+        });
+      if (config?.managed.npmignore)
+        removeIgnoreEntry(path.join(cwd, '.npmignore'), {
+          deleteIfEmpty: config.managed.npmignoreCreated,
+        });
       console.log(`Ejected ${targets.length + wired.length} archprint artifact(s):`);
       for (const target of targets) console.log(`  removed ${displayPath(target)}`);
       for (const { configPath } of wired) console.log(`  unwired ${displayPath(configPath!)}`);

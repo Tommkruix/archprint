@@ -240,9 +240,46 @@ describe('cli program', () => {
     expect(body).toContain('### Enforcing now');
   });
 
-  it('generate manages a .prettierignore entry for the .archprint dir', async () => {
-    await run(['generate', auto, '--out', out]);
+  it('generate manages a .prettierignore entry for the output dir', async () => {
+    await run(['generate', auto]);
     expect(readFileSync(path.join(tmp, '.prettierignore'), 'utf8')).toContain('.archprint/');
+  });
+
+  it('never creates a .npmignore when the repo has none (npm pack keeps honoring .gitignore)', async () => {
+    await run(['generate', auto]);
+    expect(existsSync(path.join(tmp, '.npmignore'))).toBe(false);
+  });
+
+  it('appends to an existing .npmignore and removes only the managed block on eject', async () => {
+    writeFileSync(path.join(tmp, '.npmignore'), 'dist\n');
+    await run(['generate', auto]);
+    expect(readFileSync(path.join(tmp, '.npmignore'), 'utf8')).toContain('.archprint/');
+    await run(['eject']);
+    const after = readFileSync(path.join(tmp, '.npmignore'), 'utf8');
+    expect(after).toContain('dist');
+    expect(after).not.toContain('archprint');
+  });
+
+  it('eject removes a --rule directory it recorded, and the config', async () => {
+    await run(['generate', auto, '--rule', 'AP-001']);
+    const ruleDir = path.join(tmp, '.archprint', 'no-db-client-in-request-entry');
+    expect(existsSync(ruleDir)).toBe(true);
+    expect(
+      JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8')).managed.files,
+    ).toContain('.archprint/no-db-client-in-request-entry');
+    await run(['eject']);
+    expect(existsSync(ruleDir)).toBe(false);
+    expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(false);
+  });
+
+  it('generate --rule after init preserves the enforced record in config.json', async () => {
+    await run(['init', auto]);
+    const before = JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8'));
+    expect(before.enforced.length).toBeGreaterThan(0);
+    await run(['generate', auto, '--rule', 'AP-001']);
+    const after = JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8'));
+    expect(after.enforced).toEqual(before.enforced);
+    expect(after.managed.files).toContain('.archprint/no-db-client-in-request-entry');
   });
 
   it('generate --rules --expand emits only the named forbidden-import rule ids', async () => {

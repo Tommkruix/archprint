@@ -70,23 +70,30 @@ export function writeLayout(
     if (result.status === 'created') readmeCreated = true;
   }
 
-  const prettierignore =
-    files.length > 0
-      ? ensureIgnoreEntry(path.join(options.cwd, '.prettierignore'), `${ARCHPRINT_DIR}/`) ||
-        (prior?.managed.prettierignore ?? false)
-      : (prior?.managed.prettierignore ?? false);
-  const npmignore =
-    files.length > 0
-      ? ensureIgnoreEntry(path.join(options.cwd, '.npmignore'), `${ARCHPRINT_DIR}/`) ||
-        (prior?.managed.npmignore ?? false)
-      : (prior?.managed.npmignore ?? false);
+  const outRel = path.relative(options.cwd, outDir) || ARCHPRINT_DIR;
+  const ignoreEntry = `${outRel.split(path.sep).join('/')}/`;
+  let prettierignore = prior?.managed.prettierignore ?? false;
+  let prettierignoreCreated = prior?.managed.prettierignoreCreated ?? false;
+  let npmignore = prior?.managed.npmignore ?? false;
+  const npmignoreCreated = prior?.managed.npmignoreCreated ?? false;
+  if (files.length > 0) {
+    const prettier = ensureIgnoreEntry(path.join(options.cwd, '.prettierignore'), ignoreEntry);
+    if (prettier !== 'skipped') prettierignore = true;
+    if (prettier === 'created') prettierignoreCreated = true;
+    const npm = ensureIgnoreEntry(path.join(options.cwd, '.npmignore'), ignoreEntry, {
+      create: false,
+    });
+    if (npm !== 'skipped') npmignore = true;
+  }
 
   const managed: ManagedOutputs = {
     files: files.map((file) => path.relative(options.cwd, file)),
     readme: readme !== 'off' && readme !== 'skipped' ? true : (prior?.managed.readme ?? false),
     readmeCreated,
     prettierignore,
+    prettierignoreCreated,
     npmignore,
+    npmignoreCreated,
   };
   const configPath = writeConfig(
     outDir,

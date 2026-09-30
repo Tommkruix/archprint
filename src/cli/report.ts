@@ -483,9 +483,9 @@ export function renderReport(
 
 function enforceHint(id: string, status: GenerationStatus): string {
   if (status === 'AUTO')
-    return `archprint generate  (writes the rule + fixtures to archprint-rules/, then wire it into your eslint config)`;
+    return `archprint generate  (writes the rules to .archprint/, then 'archprint wire' references them from your eslint config)`;
   if (status === 'SUGGEST')
-    return `review the evidence above, then: archprint generate --rule ${id}  (writes the rule to archprint-rules/)`;
+    return `review the evidence above, then: archprint generate --rule ${id}  (writes the rule to .archprint/)`;
   return 'this pattern does not meet the confidence gate, so there is nothing to enforce yet.';
 }
 
@@ -531,7 +531,7 @@ const enforcerTag = (r: { enforcer?: string }): string =>
 
 const adoptionItem = (r: { title: string; enforcer?: string; rate: number | null }): string => {
   const tool = r.enforcer ? ` (${r.enforcer})` : '';
-  const rate = r.rate === null ? '' : ` — ${r.rate}% of comparable repos`;
+  const rate = r.rate === null ? '' : ` (${r.rate}% of comparable repos)`;
   return `- ${r.title}${tool}${rate}`;
 };
 

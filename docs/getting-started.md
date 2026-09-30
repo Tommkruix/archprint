@@ -81,7 +81,8 @@ archprint generate apps/web --expand
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
 `import archprint from './.archprint/eslint.mjs'`) and, when dependency-cruiser is present, one
 `.archprint/dependency-cruiser.json`; `--expand` adds the per-family configs, per-rule cards and fixtures, and
-`ts-arch` tests for the first-party boundaries that run in your existing Vitest or Jest suite.
+`ts-arch` tests for the first-party boundaries (`architecture.archprint.ts`, opt-in: import it from a test, or
+point your test glob at it, so it is not collected until you choose).
 
 Upgrading an existing project from an older `archprint-rules/` layout? Run `archprint migrate` once (after
 updating the package); it moves everything to `.archprint/` and rewires your linter config in place.

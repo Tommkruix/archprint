@@ -292,8 +292,8 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 Versioning is 0.x (pre-1.0): the CLI surface and rule-card format may still change between minor versions,
 but the analysis is not experimental and the tool is safe to adopt (every rule is review-gated and reversible
-via `archprint eject`). The engine (twenty detectors, the confidence gate, and emitters for ESLint, a shareable
-preset, dependency-cruiser, ts-arch, and the layer graph) is in place and tested, and an adversarial
+via `archprint eject`). The engine (twenty detectors, the confidence gate, and emitters for a self-contained
+ESLint file, dependency-cruiser, ts-arch, and the layer graph) is in place and tested, and an adversarial
 correctness audit (three rounds, four real repositories) drove the false-positive rate on auto-generated rules
 to zero for the mechanical families, which is why those auto-enforce while the structural-inference families
 are held for review.

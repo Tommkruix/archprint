@@ -15,7 +15,9 @@ const managed: ManagedOutputs = {
   readme: true,
   readmeCreated: false,
   prettierignore: true,
+  prettierignoreCreated: true,
   npmignore: false,
+  npmignoreCreated: false,
 };
 
 describe('buildConfig', () => {

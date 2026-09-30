@@ -9,7 +9,9 @@ export interface ManagedOutputs {
   readme: boolean;
   readmeCreated: boolean;
   prettierignore: boolean;
+  prettierignoreCreated: boolean;
   npmignore: boolean;
+  npmignoreCreated: boolean;
 }
 
 export interface ArchprintConfig {
@@ -29,7 +31,9 @@ const EMPTY_MANAGED: ManagedOutputs = {
   readme: false,
   readmeCreated: false,
   prettierignore: false,
+  prettierignoreCreated: false,
   npmignore: false,
+  npmignoreCreated: false,
 };
 
 function configPath(outDir: string): string {
@@ -60,6 +64,32 @@ export function writeConfig(outDir: string, config: ArchprintConfig): string {
   const file = configPath(outDir);
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return file;
+}
+
+export function recordManagedFiles(
+  outDir: string,
+  cwd: string,
+  version: string,
+  absoluteFiles: readonly string[],
+): void {
+  const relative = absoluteFiles.map((file) => path.relative(cwd, file));
+  const existing = readConfig(outDir);
+  if (existing) {
+    const files = [...new Set([...existing.managed.files, ...relative])];
+    writeConfig(outDir, { ...existing, managed: { ...existing.managed, files } });
+    return;
+  }
+  writeConfig(outDir, {
+    archprintVersion: version,
+    app: '.',
+    stack: [],
+    rulesDir: path.relative(cwd, outDir) || outDir,
+    enforced: [],
+    review: [],
+    adopt: [],
+    evidence: { apps: 0, asOf: '' },
+    managed: { ...EMPTY_MANAGED, files: relative },
+  });
 }
 
 export function readConfig(outDir: string): ArchprintConfig | null {
