@@ -99,7 +99,7 @@ the config never points at a file that has been deleted.
 `archprint mcp` runs Archprint as a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio,
 so an assistant like Claude or Cursor can read a repo's architecture on demand. It exposes the read-only half of
 the CLI as three tools, `archprint_scan`, `archprint_recommend`, and `archprint_explain`, which return the same
-evidence-gated findings as the commands of the same name and never write to your project. Generating and wiring
+evidence-gated findings as the read commands of the same name (as JSON) and never write to your project. Generating and wiring
 rules stays a deliberate command you run yourself. See [Use with AI agents](/getting-started#use-with-ai-agents-mcp)
 for the client configuration.
 

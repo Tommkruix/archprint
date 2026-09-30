@@ -7,7 +7,7 @@ export const TOOLS = [
   {
     name: 'archprint_scan',
     description:
-      'List the architecture rules this TypeScript repo already follows, with the evidence: which families are AUTO/SUGGEST/REJECT, how many files conform vs. break each, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
+      'List the architecture rules this TypeScript repo already follows, with the evidence: which families are AUTO (clears the confidence gate) or SUGGEST (short of it, worth review), how many files conform vs. break each, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
     inputSchema: {
       type: 'object',
       properties: {

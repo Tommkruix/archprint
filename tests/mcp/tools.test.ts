@@ -138,7 +138,7 @@ describe('mcp server over an in-memory transport', () => {
     await client.close();
   });
 
-  it('reports an unknown tool as an error result rather than throwing', async () => {
+  it('surfaces a scan failure as an error result rather than throwing', async () => {
     const client = await connect();
     const result = (await client.callTool({
       name: 'archprint_scan',
@@ -149,6 +149,17 @@ describe('mcp server over an in-memory transport', () => {
     };
     expect(result.isError).toBe(true);
     expect(result.content[0]!.text).toContain('No tsconfig');
+    await client.close();
+  });
+
+  it('reports an unknown tool name as an error result rather than throwing', async () => {
+    const client = await connect();
+    const result = (await client.callTool({ name: 'nope', arguments: {} })) as {
+      content: { text: string }[];
+      isError?: boolean;
+    };
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain('Unknown tool');
     await client.close();
   });
 });
