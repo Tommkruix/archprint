@@ -237,6 +237,24 @@ eslint-plugin-boundaries element-types config, ts-arch tests, and the Mermaid an
 can confirm before wiring. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
 
+## Use with AI agents (MCP)
+
+`archprint mcp` runs archprint as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent can
+ask what architecture rules your repo already follows, with the evidence, before it writes code. It exposes three
+read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Point Claude Desktop, Claude
+Code, Cursor, or any MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "archprint": { "command": "npx", "args": ["-y", "archprint", "mcp"] }
+  }
+}
+```
+
+The tools are read-only (they never write to your repo); use the CLI's `generate`/`wire` to actually emit and
+enforce rules.
+
 ## How it compares
 
 Verified against each tool's documentation (TypeScript ecosystem). The two columns that matter are the ones no
@@ -269,6 +287,7 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 | `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                                                                                                      |
 | `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                |
 | `archprint eject`               | Remove archprint's generated files, its config, the managed README section, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `archprint mcp`                 | Run archprint as an MCP server over stdio so Claude, Cursor, and other agents can call read-only `scan`, `recommend`, and `explain` tools for the repo's inferred architecture rules and evidence.                                                                                                                                                                                                                                                                                                                       |
 
 ## Documentation
 

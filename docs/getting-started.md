@@ -103,6 +103,20 @@ defaults.
 `scan --json` and `recommend --json` emit stable, version-keyed JSON for scripting. Exit codes are the
 contract: `0` on success, `1` on error.
 
+## Use with AI agents (MCP)
+
+`archprint mcp` runs archprint as an MCP server over stdio so Claude, Cursor, and other agents can inspect the
+rules your repo already follows before they write code. It exposes read-only `archprint_scan`,
+`archprint_recommend`, and `archprint_explain` tools. Point any MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "archprint": { "command": "npx", "args": ["-y", "archprint", "mcp"] }
+  }
+}
+```
+
 ## Next
 
 - [Concepts](./concepts.md) — the confidence gate, mechanical vs. structural, fast vs. deep, the lifecycle.
