@@ -19,8 +19,17 @@ describe('eslint preset emitter', () => {
     expect(source).toContain('no-ui-layer-in-server-entry');
     expect(source).toContain('no-console');
     expect(source).toContain(
-      "export default [{ ignores: ['**/*.archprint.mjs'] }, ...BLOCKS, ...pluginConfigs];",
+      "export default [{ ignores: ['**/.archprint/**'] }, ...BLOCKS, ...pluginConfigs];",
     );
+  });
+
+  it('accepts a custom ignore glob and adopt path', () => {
+    const source = renderEslintPreset(specs, [block], {
+      ignore: '**/custom/**',
+      adoptPath: './custom/eslint.mjs',
+    });
+    expect(source).toContain("ignores: ['**/custom/**']");
+    expect(source).toContain("import archprint from './custom/eslint.mjs';");
   });
 
   it('needs no runtime file reads (portable): no import statement or readdir/readFile', () => {
