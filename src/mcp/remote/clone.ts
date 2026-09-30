@@ -12,12 +12,6 @@ export interface CloneOptions {
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_BYTES = 200 * 1024 * 1024;
 
-/**
- * Clones a public repo to a throwaway dir, runs `use`, and always deletes the dir.
- * Disk is bounded by the clone timeout and, authoritatively, by the container's
- * ephemeral-storage/tmpfs quota at deploy (RM2); the size check gates scanning an
- * oversized tree, it is not the primary disk cap.
- */
 export async function withClonedRepo<T>(
   spec: RepoSpec,
   ref: string | undefined,

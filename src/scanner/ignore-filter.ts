@@ -17,12 +17,6 @@ function addFile(matcher: Matcher, file: string): void {
   }
 }
 
-/**
- * Matches git's own view of what is ignored, using the repo-scoped ignore sources:
- * the default noise dirs, the root `.gitignore`, every nested `.gitignore`, and
- * `.git/info/exclude`. The machine-global excludesFile is deliberately not read, so the
- * same repo scans identically across machines (benchmark reproducibility).
- */
 export function createIgnoreFilter(root: string): IgnoreFilter {
   const base = ignore().add(DEFAULT_IGNORES);
   addFile(base, path.join(root, '.gitignore'));

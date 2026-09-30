@@ -49,7 +49,6 @@ describe('createIgnoreFilter', () => {
     const isIgnored = createIgnoreFilter(dir);
     expect(isIgnored('packages/foo/generated', true)).toBe(true);
     expect(isIgnored('packages/foo/generated/out.ts', false)).toBe(true);
-    // the same name outside that subtree is not ignored by the nested rule
     expect(isIgnored('packages/bar/generated', true)).toBe(false);
     expect(isIgnored('packages/foo/src/app.ts', false)).toBe(false);
   });
