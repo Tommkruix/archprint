@@ -64,18 +64,22 @@ deep pass before enforcing).
 
 ## The generated output and the lifecycle
 
-`generate` (and `init`) write into `archprint-rules/`, and only for the linters your repo actually uses,
-Archprint detects ESLint and dependency-cruiser and emits each rule for a tool you already run, so you are
-never left with config for a tool you do not have (`--emit all` forces every format):
+`generate` (and `init`) write a minimal `.archprint/` directory, and only for the linters your repo actually
+uses, Archprint detects ESLint and dependency-cruiser and emits each rule for a tool you already run, so you
+are never left with config for a tool you do not have (`--emit all` forces every format):
 
-- ESLint rule blocks and a plugin for the forbidden-import rules,
-- a shareable, self-contained ESLint preset (`eslint-preset.archprint.mjs`) that inlines the rules and needs
-  only eslint, so it can be committed, published, or shared and adopted in one line,
-- dependency-cruiser forbidden-rule configs (when dependency-cruiser is present),
-- ts-arch tests for the first-party boundaries (layer, role, UI/data), runnable in your existing test suite,
-- a rule card, passing fixture, and failing fixture for each forbidden-import rule,
-- a plain-language `ADOPTION.md` explaining what is enforced, held for review, and worth adopting,
-- an outputs manifest (`.archprint-outputs.json`) that records exactly what Archprint owns.
+- `.archprint/eslint.mjs`: one self-contained ESLint flat-config file that inlines every inferred ESLint rule
+  (forbidden imports, import-style, console isolation) and needs only eslint, so it can be committed, published,
+  or shared and adopted in one line,
+- `.archprint/dependency-cruiser.json`: one `forbidden` ruleset (when dependency-cruiser is present),
+- `.archprint/config.json`: the system file recording what is enforced, held for review, worth adopting, and
+  the managed outputs `eject` removes,
+- a managed section in your `README.md` explaining what is enforced, held for review, and worth adopting, plus a
+  managed `.prettierignore` entry so the generated files stay out of your formatter.
+
+`--expand` additionally writes the granular artifacts inside `.archprint/`: per-family ESLint and
+dependency-cruiser JSON, a plugin, per-rule cards with passing and failing fixtures, ts-arch tests, and the
+layer graph.
 
 `generate --check` runs the generated ESLint rules against your repo and reports pass/fail, so you can
 confirm they are green before wiring.
@@ -85,6 +89,10 @@ being enforced instead of lingering. `wire` inserts a single managed, reversible
 tools your repo already uses (a flat ESLint config, a `.dependency-cruiser.json`); `eject` removes the files and
 every wired reference, restoring each config exactly. A generated rule also grandfathers the few known exception
 files it was inferred from, so adopting it is green on your current code while new violations are still caught.
+
+Upgrading from an older `archprint-rules/` layout? `archprint migrate` (alias `upgrade`) moves it to `.archprint/`
+and rewrites the reference in your linter config in place, writing the new files before removing the old ones so
+the config never points at a file that has been deleted.
 
 ## Determinism
 

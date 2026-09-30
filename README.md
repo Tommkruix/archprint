@@ -75,15 +75,15 @@ package such as `apps/web`; a monorepo root is fine too, Archprint discovers the
 
 ```bash
 # One-shot setup: detect the stack, enforce the rules your code already follows,
-# and record what to adopt next in archprint.json
+# and record what to adopt next in .archprint/config.json
 archprint init apps/web
 
 # See the rules your repo already follows, with the evidence
 archprint scan apps/web
 
-# Write the auto-trusted (mechanical) rules to disk, only for the linters your repo uses.
+# Write the auto-trusted (mechanical) rules to .archprint/, only for the linters your repo uses.
 # Structural-inference rules are held for review; add --include-structural to emit them too.
-archprint generate apps/web --out archprint-rules
+archprint generate apps/web
 
 # Confirm the generated rules pass on your repo before wiring
 archprint generate apps/web --check
@@ -102,9 +102,12 @@ archprint wire
 
 # Remove archprint's files and any wired references (clean uninstall)
 archprint eject
+
+# Upgrading from 0.5.x? move an older archprint-rules/ setup to the .archprint layout
+archprint migrate
 ```
 
-Re-running `generate` (or `init`) refreshes the files in `archprint-rules/` and removes any rule the
+Re-running `generate` (or `init`) refreshes the files in `.archprint/` and removes any rule the
 evidence no longer supports, so the output never drifts from the current codebase. `wire` detects the
 enforcement tools your repo already uses (a flat eslint config, a `.dependency-cruiser.json`) and inserts a
 single managed reference into each, one that survives those regenerations; `eject` removes archprint's files
@@ -206,31 +209,32 @@ zero rules.
 
 ## Output formats
 
-`archprint generate` writes only for the linters your repo actually uses, it detects ESLint and
-dependency-cruiser and emits each rule for a tool you already run, so you are not left with config for a
-tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format. The formats it can
-produce:
+`archprint generate` writes a minimal `.archprint/` directory: one self-contained rules file per linter your
+repo actually uses, plus a `config.json` that records what is enforced and what Archprint manages. It detects
+ESLint and dependency-cruiser and emits each rule for a tool you already run, so you are not left with config
+for a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format. The default output:
 
-- **dependency-cruiser** `forbidden` rulesets (when dependency-cruiser is present): by default the
-  mechanical boundaries (public-API deep-import, test-isolation); the review-held ones
-  (layer, role-layering, feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are
-  written only with `--include-structural`, after you review them
-- **eslint-plugin-boundaries** element-types config, and **ESLint core** rules (`no-restricted-imports`) for
-  import-style boundaries
-- **ESLint rule files** for marker based patterns: a rule card (`.md`), the rule (`.ts`), and a passing and a
-  failing fixture
-- **A shareable ESLint preset**: one self-contained `eslint-preset.archprint.mjs` that inlines the inferred
-  rules and needs only eslint, so you can commit it, publish it, or hand it to another repo and adopt the rules
-  in one line
-- **ts-arch tests** for the first-party boundaries (layer, role, UI/data), so the inferred architecture can run
-  inside your existing Vitest or Jest suite
-- **Mermaid** and **Graphviz DOT** of the layer dependency graph, so the inferred architecture is visible and
-  its violations are marked
-- **`ADOPTION.md`**, a plain-language summary of what is enforced now, what is held for review, and what is
-  worth adopting, with the tool that enforces each rule (written by `init`, or `generate --readme`)
+- **`.archprint/eslint.mjs`**: one self-contained ESLint flat-config file that inlines every inferred ESLint
+  rule (marker-based forbidden imports, `no-restricted-imports` import-style boundaries, console isolation) and
+  needs only eslint, so you can commit it, publish it, or hand it to another repo and adopt it in one line
+  (`import archprint from './.archprint/eslint.mjs'`). It self-ignores `**/.archprint/**`.
+- **`.archprint/dependency-cruiser.json`** (when dependency-cruiser is present): one `forbidden` ruleset with
+  the mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
+  feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are added only with
+  `--include-structural`, after you review them.
+- **`.archprint/config.json`**: the system file, what is enforced / held / worth adopting, and the managed
+  outputs list `eject` uses.
+- **A managed README section** summarizing what is enforced now, held for review, and worth adopting (written
+  by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so the generated files stay out of
+  your formatter.
+
+`--expand` additionally writes the granular artifacts inside `.archprint/`: the per-family ESLint and
+dependency-cruiser JSON, per-rule cards (`.md`) with passing and failing fixtures, the
+eslint-plugin-boundaries element-types config, ts-arch tests, and the Mermaid and Graphviz DOT layer graph.
 
 `generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
-can confirm before wiring.
+can confirm before wiring. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
+this layout and rewires your configs in place.
 
 ## How it compares
 
@@ -254,15 +258,16 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 
 ## Commands
 
-| Command                         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write `archprint.json` plus a plain-language `ADOPTION.md`. `--include-structural`, `--out <dir>`, `--fast`, `--force`.                                                                                                                                                                                                                       |
-| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                                                                                                                                                                                                                                           |
-| `archprint generate [path]`     | Write the auto-trusted mechanical rules for the linters your repo uses; structural rules held for review. `--emit <eslint\|dependency-cruiser\|all>` forces the format, `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo, `--readme` writes `ADOPTION.md`, `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`. |
-| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                                                                                                                                                                                                                                         |
-| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                |
-| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                          |
-| `archprint eject`               | Remove archprint's generated files, its manifests, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                           |
+| Command                         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `archprint init [path]`         | Zero-config setup: detect the stack, enforce the rules the code already follows, and write `.archprint/` plus a managed README section. `--expand`, `--include-structural`, `--out <dir>`, `--fast`, `--force`.                                                                                                                                                                                                                                                                                                          |
+| `archprint scan [path]`         | Report the rules the repo already follows, with evidence. `--deep` resolves through barrels and aliases.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `archprint generate [path]`     | Write the auto-trusted mechanical rules to `.archprint/` for the linters your repo uses; structural rules held for review. `--emit <eslint\|dependency-cruiser\|all>` forces the format, `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo, `--readme` adds the README section, `--expand` also writes the per-family files/cards/fixtures/graph, `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`. |
+| `archprint migrate` (`upgrade`) | Move an older `archprint-rules/` setup to the `.archprint/` layout and rewire your configs in place. `--dry-run`.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `archprint explain <id> [path]` | Show the gate breakdown for one rule, with a codeframe per exception plus how-to-fix, when-not-to-use, and how-to-enforce.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                                                                                                      |
+| `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                |
+| `archprint eject`               | Remove archprint's generated files, its config, the managed README section, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## Documentation
 
