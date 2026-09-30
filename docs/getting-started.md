@@ -26,13 +26,13 @@ as `apps/web`; a monorepo root works too, Archprint discovers the app directorie
 
 ```bash
 # One command: detect the stack, enforce the rules your code already follows,
-# and record what to adopt next in archprint.json
+# and record what to adopt next in .archprint/config.json
 archprint init apps/web
 ```
 
-`init` scans the repo, writes the auto-trusted (mechanical) rules into `archprint-rules/` (only for the linters
-your repo uses, it detects ESLint and dependency-cruiser), adds a plain-language
-`ADOPTION.md` explaining what it did, and prints three tiers: what is enforced now, what to review before
+`init` scans the repo, writes the auto-trusted (mechanical) rules into `.archprint/` (only for the linters
+your repo uses, it detects ESLint and dependency-cruiser), adds a managed section to your `README.md`
+explaining what it did, and prints three tiers: what is enforced now, what to review before
 enforcing, and what comparable repos commonly adopt that you do not yet. Then reference the generated rules from
 your linter:
 
@@ -72,12 +72,20 @@ archprint generate apps/web --emit all
 
 # Also emit the structural-inference families (review these first)
 archprint generate apps/web --include-structural
+
+# Also write the granular per-family files, rule cards, fixtures, and graph
+archprint generate apps/web --expand
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
-Alongside the ESLint and dependency-cruiser configs it also writes a self-contained `eslint-preset.archprint.mjs`
-you can share or publish (adopt it in one line with `import archprint from './eslint-preset.archprint.mjs'`) and
-`ts-arch` tests for the first-party boundaries that run in your existing Vitest or Jest suite.
+The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
+`import archprint from './.archprint/eslint.mjs'`) and, when dependency-cruiser is present, one
+`.archprint/dependency-cruiser.json`; `--expand` adds the per-family configs, per-rule cards and fixtures, and
+`ts-arch` tests for the first-party boundaries (`architecture.archprint.ts`, opt-in: import it from a test, or
+point your test glob at it, so it is not collected until you choose).
+
+Upgrading an existing project from an older `archprint-rules/` layout? Run `archprint migrate` once (after
+updating the package); it moves everything to `.archprint/` and rewires your linter config in place.
 
 ## For a fresh or thin repo
 

@@ -1,4 +1,12 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,22 +34,30 @@ const wpkgAuto = fixture('workspace-package-auto');
 const storiesAuto = fixture('stories-isolation-auto');
 const uiDataAuto = fixture('ui-data-auto');
 const serverClientAuto = fixture('server-client-auto');
-const out = path.join(here, '__prog__');
 
 let logSpy: ReturnType<typeof vi.spyOn>;
 const output = (): string => logSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
 const run = (args: string[]): Promise<unknown> =>
   buildProgram('9.9.9').parseAsync(args, { from: 'user' });
 
-beforeEach(() => {
-  logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-});
-afterEach(() => {
-  vi.restoreAllMocks();
-  rmSync(out, { recursive: true, force: true });
-});
-
 describe('cli program', () => {
+  let cwd: string;
+  let tmp: string;
+  let out: string;
+  beforeEach(() => {
+    cwd = process.cwd();
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-prog-'));
+    process.chdir(tmp);
+    out = path.join(tmp, 'out');
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    process.chdir(cwd);
+    vi.restoreAllMocks();
+    rmSync(tmp, { recursive: true, force: true });
+    process.exitCode = 0;
+  });
+
   it('readVersion returns the package version', () => {
     expect(readVersion()).toMatch(/^\d+\.\d+\.\d+/);
   });
@@ -78,7 +94,6 @@ describe('cli program', () => {
       apps: { app: string; enforceNow: unknown[]; review: unknown[]; adopt: unknown[] }[];
     };
     expect(parsed.archprintVersion).toBe('9.9.9');
-    expect(Array.isArray(parsed.apps)).toBe(true);
     expect(parsed.apps.length).toBeGreaterThan(0);
     expect(Array.isArray(parsed.apps[0]!.enforceNow)).toBe(true);
     expect(Array.isArray(parsed.apps[0]!.adopt)).toBe(true);
@@ -94,14 +109,20 @@ describe('cli program', () => {
     await expect(run(['generate', multiApp])).rejects.toThrow(/found 2 app directories/);
   });
 
-  it('generate writes all four artifacts (deep by default, no warning)', async () => {
+  it('generate writes the two-file layout and config (deep by default, no warning)', async () => {
     await run(['generate', auto, '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.mjs'))).toBe(true);
+    expect(existsSync(path.join(out, 'config.json'))).toBe(true);
+    expect(output()).not.toContain('Warning');
+  });
+
+  it('generate --expand also writes the per-rule artifacts', async () => {
+    await run(['generate', auto, '--expand', '--out', out]);
     const dir = path.join(out, 'no-ui-layer-in-server-entry');
     expect(existsSync(path.join(dir, 'no-ui-layer-in-server-entry.ts'))).toBe(true);
     expect(existsSync(path.join(dir, 'no-ui-layer-in-server-entry.md'))).toBe(true);
     expect(existsSync(path.join(dir, 'fixtures', 'passing.ts'))).toBe(true);
     expect(existsSync(path.join(dir, 'fixtures', 'failing.ts'))).toBe(true);
-    expect(output()).not.toContain('Warning');
   });
 
   it('generate --fast warns to confirm with a deep pass before enforcing', async () => {
@@ -115,54 +136,86 @@ describe('cli program', () => {
     expect(output()).toContain('No AUTO rules to generate');
   });
 
-  it('generate writes the layer-boundary configs for an AUTO boundary', async () => {
-    await run(['generate', layerAuto, '--include-structural', '--out', out]);
-    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
+  it('generate --expand writes the layer-boundary configs for an AUTO boundary', async () => {
+    await run(['generate', layerAuto, '--include-structural', '--expand', '--out', out]);
+    expect(existsSync(path.join(out, 'dependency-cruiser.layer.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'eslint-boundaries.archprint.json'))).toBe(true);
-    expect(output()).toContain('layer boundaries');
+    expect(existsSync(path.join(out, 'dependency-cruiser.json'))).toBe(true);
   });
 
   it('generate holds structural families for review by default (no --include-structural)', async () => {
     await run(['generate', layerAuto, '--out', out]);
-    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(false);
-    expect(output()).toContain('structural rule(s) for review');
+    expect(existsSync(path.join(out, 'dependency-cruiser.json'))).toBe(false);
+    expect(output()).toContain('for review');
   });
 
-  it('generate writes the public-API deep-import config for an AUTO barrel', async () => {
+  it('generate writes the public-API deep-import rule into the single depcruise file', async () => {
     await run(['generate', publicApiAuto, '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'dependency-cruiser.public-api.archprint.json'))).toBe(true);
-    expect(output()).toContain('public API boundaries');
+    const config = JSON.parse(readFileSync(path.join(out, 'dependency-cruiser.json'), 'utf8')) as {
+      forbidden: { name: string }[];
+    };
+    expect(config.forbidden.some((r) => r.name.startsWith('no-deep-import-'))).toBe(true);
   });
 
-  it('generate writes the feature-slice config for AUTO slice isolation', async () => {
-    await run(['generate', featureSliceAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the feature-slice config for AUTO slice isolation', async () => {
+    await run([
+      'generate',
+      featureSliceAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.feature-slice.archprint.json'))).toBe(
       true,
     );
-    expect(output()).toContain('feature-slice boundaries');
   });
 
-  it('generate writes the test-isolation config when tests are cleanly isolated', async () => {
-    await run(['generate', testIsolationAuto, '--fast', '--out', out]);
+  it('generate --expand writes the depcruise test-isolation config when tests are isolated', async () => {
+    await run([
+      'generate',
+      testIsolationAuto,
+      '--fast',
+      '--expand',
+      '--emit',
+      'dependency-cruiser',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
       true,
     );
-    expect(output()).toContain('test isolation');
   });
 
   it('generate --emit eslint forces the eslint form of a dual-tool family', async () => {
-    await run(['generate', testIsolationAuto, '--emit', 'eslint', '--fast', '--out', out]);
+    await run([
+      'generate',
+      testIsolationAuto,
+      '--emit',
+      'eslint',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
       false,
     );
   });
 
-  it('generate --no-graph skips the layer dependency graph', async () => {
+  it('generate --emit dependency-cruiser writes no eslint file', async () => {
+    await run(['generate', consoleAuto, '--emit', 'dependency-cruiser', '--fast', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.mjs'))).toBe(false);
+  });
+
+  it('generate --expand --no-graph skips the layer dependency graph', async () => {
     await run([
       'generate',
       layerAuto,
       '--include-structural',
+      '--expand',
       '--no-graph',
       '--fast',
       '--out',
@@ -178,33 +231,76 @@ describe('cli program', () => {
     process.exitCode = 0;
   });
 
-  it('generate --readme writes an ADOPTION.md tracked by the manifest', async () => {
+  it('generate --readme adds a managed archprint section to README.md', async () => {
     await run(['generate', auto, '--readme', '--out', out]);
-    const readme = path.join(out, 'ADOPTION.md');
+    const readme = path.join(tmp, 'README.md');
     expect(existsSync(readme)).toBe(true);
-    expect(readFileSync(readme, 'utf8')).toContain('# Archprint adoption notes');
-    const manifest = JSON.parse(readFileSync(path.join(out, '.archprint-outputs.json'), 'utf8'));
-    expect((manifest.outputs as string[]).some((f) => f.endsWith('ADOPTION.md'))).toBe(true);
+    const body = readFileSync(readme, 'utf8');
+    expect(body).toContain('<!-- archprint:start -->');
+    expect(body).toContain('### Enforcing now');
   });
 
-  it('generate --rules emits only the named forbidden-import rule ids', async () => {
-    await run(['generate', auto, '--rules', 'AP-002', '--out', out]);
+  it('generate manages a .prettierignore entry for the output dir', async () => {
+    await run(['generate', auto]);
+    expect(readFileSync(path.join(tmp, '.prettierignore'), 'utf8')).toContain('.archprint/');
+  });
+
+  it('never creates a .npmignore when the repo has none (npm pack keeps honoring .gitignore)', async () => {
+    await run(['generate', auto]);
+    expect(existsSync(path.join(tmp, '.npmignore'))).toBe(false);
+  });
+
+  it('appends to an existing .npmignore and removes only the managed block on eject', async () => {
+    writeFileSync(path.join(tmp, '.npmignore'), 'dist\n');
+    await run(['generate', auto]);
+    expect(readFileSync(path.join(tmp, '.npmignore'), 'utf8')).toContain('.archprint/');
+    await run(['eject']);
+    const after = readFileSync(path.join(tmp, '.npmignore'), 'utf8');
+    expect(after).toContain('dist');
+    expect(after).not.toContain('archprint');
+  });
+
+  it('eject removes a --rule directory it recorded, and the config', async () => {
+    await run(['generate', auto, '--rule', 'AP-001']);
+    const ruleDir = path.join(tmp, '.archprint', 'no-db-client-in-request-entry');
+    expect(existsSync(ruleDir)).toBe(true);
+    expect(
+      JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8')).managed.files,
+    ).toContain('.archprint/no-db-client-in-request-entry');
+    await run(['eject']);
+    expect(existsSync(ruleDir)).toBe(false);
+    expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(false);
+  });
+
+  it('generate --rule after init preserves the enforced record in config.json', async () => {
+    await run(['init', auto]);
+    const before = JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8'));
+    expect(before.enforced.length).toBeGreaterThan(0);
+    await run(['generate', auto, '--rule', 'AP-001']);
+    const after = JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8'));
+    expect(after.enforced).toEqual(before.enforced);
+    expect(after.managed.files).toContain('.archprint/no-db-client-in-request-entry');
+  });
+
+  it('generate --rules --expand emits only the named forbidden-import rule ids', async () => {
+    await run(['generate', auto, '--rules', 'AP-002', '--expand', '--out', out]);
     expect(existsSync(path.join(out, 'no-ui-layer-in-server-entry'))).toBe(true);
     expect(existsSync(path.join(out, 'no-db-client-in-request-entry'))).toBe(false);
   });
 
-  it('generate --only emits just that family and skips the bundles and graph', async () => {
+  it('generate --only --expand emits just that family and skips graph', async () => {
     await run([
       'generate',
       layerAuto,
       '--only',
       'layer',
       '--include-structural',
+      '--expand',
       '--fast',
       '--out',
       out,
     ]);
-    expect(existsSync(path.join(out, 'dependency-cruiser.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'dependency-cruiser.layer.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'layer-graph.archprint.mmd'))).toBe(false);
   });
 
@@ -220,89 +316,134 @@ describe('cli program', () => {
     expect(output()).toContain('Check: the generated eslint rules pass clean');
   });
 
-  it('generate writes the app-isolation config for AUTO app isolation', async () => {
-    await run(['generate', appIsolationAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the app-isolation config for AUTO app isolation', async () => {
+    await run([
+      'generate',
+      appIsolationAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.app-isolation.archprint.json'))).toBe(
       true,
     );
-    expect(output()).toContain('app boundaries');
   });
 
   it('writes the dependency-internals config only with --include-structural (held for review)', async () => {
-    await run(['generate', depInternalsAuto, '--fast', '--out', out]);
+    await run(['generate', depInternalsAuto, '--fast', '--expand', '--out', out]);
     expect(
       existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
     ).toBe(false);
-    await run(['generate', depInternalsAuto, '--include-structural', '--fast', '--out', out]);
+    await run([
+      'generate',
+      depInternalsAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(
       existsSync(path.join(out, 'dependency-cruiser.dependency-internals.archprint.json')),
     ).toBe(true);
-    expect(output()).toContain('dependency hygiene');
   });
 
-  it('generate writes the role-layering config for AUTO role boundaries', async () => {
-    await run(['generate', roleLayeringAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the role-layering config for AUTO role boundaries', async () => {
+    await run([
+      'generate',
+      roleLayeringAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.role-layering.archprint.json'))).toBe(
       true,
     );
-    expect(output()).toContain('role-layering boundaries');
   });
 
-  it('generate writes the entry-purity config when framework entries are pure', async () => {
-    await run(['generate', entryPurityAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the entry-purity config when framework entries are pure', async () => {
+    await run([
+      'generate',
+      entryPurityAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.entry-purity.archprint.json'))).toBe(true);
-    expect(output()).toContain('entry purity');
   });
 
-  it('generate writes the phantom-dependency config when imports are all declared', async () => {
-    await run(['generate', phantomDepsAuto, '--fast', '--include-structural', '--out', out]);
+  it('generate --expand writes the phantom-dependency config when imports are all declared', async () => {
+    await run([
+      'generate',
+      phantomDepsAuto,
+      '--fast',
+      '--include-structural',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.phantom-deps.archprint.json'))).toBe(true);
-    expect(output()).toContain('dependency declaration');
   });
 
-  it('generate writes the deep-relative eslint config when relatives are shallow', async () => {
+  it('generate writes the deep-relative rules into the single eslint file', async () => {
     await run(['generate', deepRelativeAuto, '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
-    expect(output()).toContain('no-restricted-imports');
+    expect(existsSync(path.join(out, 'eslint.mjs'))).toBe(true);
   });
 
-  it('generate writes the console-isolation eslint config when library avoids console', async () => {
-    await run(['generate', consoleAuto, '--fast', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.console-isolation.archprint.json'))).toBe(true);
-    expect(output()).toContain('console isolation');
+  it('generate --expand writes the console-isolation eslint config', async () => {
+    await run(['generate', consoleAuto, '--fast', '--expand', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.console.archprint.json'))).toBe(true);
   });
 
-  it('generate writes the env-access eslint config when env reads are centralized', async () => {
-    await run(['generate', envAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the env-access eslint config when env reads are centralized', async () => {
+    await run(['generate', envAuto, '--include-structural', '--fast', '--expand', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.env-access.archprint.json'))).toBe(true);
-    expect(output()).toContain('env access');
   });
 
-  it('generate writes the workspace-package eslint config when packages import by name', async () => {
-    await run(['generate', wpkgAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the workspace-package rules into no-restricted-imports', async () => {
+    await run(['generate', wpkgAuto, '--include-structural', '--fast', '--expand', '--out', out]);
     expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
-    expect(output()).toContain('no-restricted-imports');
   });
 
-  it('generate writes the stories-isolation config when stories are unimported', async () => {
-    await run(['generate', storiesAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the stories-isolation config when stories are unimported', async () => {
+    await run([
+      'generate',
+      storiesAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.stories-isolation.archprint.json'))).toBe(
       true,
     );
-    expect(output()).toContain('stories isolation');
   });
 
   it('generate never enforces ui-data: its COMPONENT role is too low-confidence to AUTO', async () => {
-    await run(['generate', uiDataAuto, '--include-structural', '--fast', '--out', out]);
+    await run(['generate', uiDataAuto, '--include-structural', '--fast', '--expand', '--out', out]);
     expect(existsSync(path.join(out, 'dependency-cruiser.ui-data.archprint.json'))).toBe(false);
   });
 
-  it('generate writes the server-client config when client code avoids server-only', async () => {
-    await run(['generate', serverClientAuto, '--include-structural', '--fast', '--out', out]);
+  it('generate --expand writes the server-client config when client code avoids server-only', async () => {
+    await run([
+      'generate',
+      serverClientAuto,
+      '--include-structural',
+      '--fast',
+      '--expand',
+      '--out',
+      out,
+    ]);
     expect(existsSync(path.join(out, 'dependency-cruiser.server-client.archprint.json'))).toBe(
       true,
     );
-    expect(output()).toContain('server / client boundary');
   });
 
   it('scan of a multi-app root reports every app and a summary footer', async () => {
@@ -357,21 +498,25 @@ describe('init', () => {
     cwd = process.cwd();
     tmp = mkdtempSync(path.join(tmpdir(), 'archprint-init-'));
     process.chdir(tmp);
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   });
   afterEach(() => {
     process.chdir(cwd);
+    vi.restoreAllMocks();
     rmSync(tmp, { recursive: true, force: true });
     process.exitCode = 0;
   });
 
-  it('writes a manifest and enforcement configs and reports the tiers', async () => {
+  const config = (): Record<string, unknown> =>
+    JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8'));
+
+  it('writes the .archprint layout, a README section, and reports the tiers', async () => {
     await run(['init', auto]);
-    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
-    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
-    expect(existsSync(path.join(tmp, 'archprint-rules', 'ADOPTION.md'))).toBe(true);
-    const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
-    expect(manifest.archprintVersion).toBe('9.9.9');
-    expect(manifest.enforced.length).toBeGreaterThan(0);
+    expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(true);
+    expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
+    expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).toContain('<!-- archprint:start -->');
+    expect(config().archprintVersion).toBe('9.9.9');
+    expect((config().enforced as unknown[]).length).toBeGreaterThan(0);
     expect(output()).toContain('initialized');
     expect(output()).toContain('Enforcing now');
   });
@@ -379,12 +524,11 @@ describe('init', () => {
   it('records "." for the app path when run from the app directory', async () => {
     cpSync(auto, tmp, { recursive: true });
     await run(['init', '.']);
-    const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
-    expect(manifest.app).toBe('.');
-    expect(manifest.rulesDir).toBe('archprint-rules');
+    expect(config().app).toBe('.');
+    expect(config().rulesDir).toBe('.archprint');
   });
 
-  it('refuses to overwrite an existing manifest without --force', async () => {
+  it('refuses to overwrite an existing config without --force', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await run(['init', auto]);
     await run(['init', auto]);
@@ -392,25 +536,22 @@ describe('init', () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it('overwrites an existing manifest with --force', async () => {
+  it('overwrites an existing config with --force', async () => {
     await run(['init', auto]);
     await run(['init', auto, '--force']);
-    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
+    expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(true);
     expect(process.exitCode).not.toBe(1);
   });
 
   it('reports when no rule is enforceable but still records recommendations', async () => {
     await run(['init', reject]);
-    const manifest = JSON.parse(readFileSync(path.join(tmp, 'archprint.json'), 'utf8'));
-    expect(manifest).toHaveProperty('adopt');
+    expect(config()).toHaveProperty('adopt');
     expect(output()).toContain('initialized');
   });
 
   it('includes structural families with --include-structural and notes the caveat', async () => {
     await run(['init', layerAuto, '--include-structural']);
-    expect(existsSync(path.join(tmp, 'archprint-rules', 'dependency-cruiser.archprint.json'))).toBe(
-      true,
-    );
+    expect(existsSync(path.join(tmp, '.archprint', 'dependency-cruiser.json'))).toBe(true);
     expect(output()).toContain('review before you trust them');
   });
 
@@ -421,90 +562,205 @@ describe('init', () => {
 
   it('regenerating removes stale outputs before writing fresh ones', async () => {
     await run(['init', auto]);
-    await run(['generate', auto, '--out', 'archprint-rules']);
+    await run(['generate', auto]);
     expect(output()).toContain('Refreshed: removed');
   });
 
-  it('eject removes the generated files and the manifests', async () => {
+  it('eject removes the generated files, the config, and the README section', async () => {
+    writeFileSync(path.join(tmp, 'README.md'), '# App\n\nHello.\n');
     await run(['init', auto]);
-    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
-    await run(['eject', '--out', 'archprint-rules']);
-    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(false);
-    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(false);
+    expect(existsSync(path.join(tmp, '.archprint'))).toBe(true);
+    await run(['eject']);
+    expect(existsSync(path.join(tmp, '.archprint'))).toBe(false);
+    expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).not.toContain('archprint:start');
     expect(output()).toContain('Ejected');
   });
 
   it('eject --dry-run lists targets without deleting', async () => {
     await run(['init', auto]);
-    await run(['eject', '--out', 'archprint-rules', '--dry-run']);
+    await run(['eject', '--dry-run']);
     expect(output()).toContain('Would remove');
-    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(true);
+    expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(true);
   });
 
   it('eject reports when there is nothing to remove', async () => {
-    await run(['eject', '--out', 'archprint-rules']);
+    await run(['eject']);
     expect(output()).toContain('Nothing to eject');
   });
 
   it('wire inserts a managed block into a flat eslint config, and eject removes it', async () => {
-    const config = path.join(tmp, 'eslint.config.mjs');
+    const configFile = path.join(tmp, 'eslint.config.mjs');
     const original = 'export default [\n  { rules: {} },\n];\n';
-    writeFileSync(config, original);
+    writeFileSync(configFile, original);
     await run(['init', auto]);
-    await run(['wire', '--out', 'archprint-rules']);
-    expect(readFileSync(config, 'utf8')).toContain('archprint:start');
-    expect(readFileSync(config, 'utf8')).toContain('...archprintRules');
-    await run(['eject', '--out', 'archprint-rules']);
-    expect(readFileSync(config, 'utf8')).toBe(original);
+    await run(['wire']);
+    expect(readFileSync(configFile, 'utf8')).toContain('archprint:start');
+    expect(readFileSync(configFile, 'utf8')).toContain('...archprintRules');
+    await run(['eject']);
+    expect(readFileSync(configFile, 'utf8')).toBe(original);
   });
 
   it('wire is idempotent on a second run', async () => {
     writeFileSync(path.join(tmp, 'eslint.config.mjs'), 'export default [];\n');
     await run(['init', auto]);
-    await run(['wire', '--out', 'archprint-rules']);
-    await run(['wire', '--out', 'archprint-rules']);
+    await run(['wire']);
+    await run(['wire']);
     expect(output()).toContain('already wired');
   });
 
   it('wire prints a snippet when there is no eslint config to edit', async () => {
     await run(['init', auto]);
-    await run(['wire', '--out', 'archprint-rules']);
+    await run(['wire']);
     expect(output()).toContain('Add this manually');
   });
 
   it('wire --dry-run does not modify the config', async () => {
-    const config = path.join(tmp, 'eslint.config.mjs');
+    const configFile = path.join(tmp, 'eslint.config.mjs');
     const original = 'export default [];\n';
-    writeFileSync(config, original);
+    writeFileSync(configFile, original);
     await run(['init', auto]);
-    await run(['wire', '--out', 'archprint-rules', '--dry-run']);
-    expect(readFileSync(config, 'utf8')).toBe(original);
+    await run(['wire', '--dry-run']);
+    expect(readFileSync(configFile, 'utf8')).toBe(original);
     expect(output()).toContain('would wire');
   });
 
   it('wire prints a manual snippet when the config has no array-form export', async () => {
     writeFileSync(path.join(tmp, 'eslint.config.mjs'), 'export default someConfig;\n');
     await run(['init', auto]);
-    await run(['wire', '--out', 'archprint-rules']);
+    await run(['wire']);
     expect(output()).toContain('Add this manually');
   });
 
   it('wire errors when no rules have been generated', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await run(['wire', '--out', 'archprint-rules']);
+    await run(['wire']);
     expect(errSpy.mock.calls.flat().join(' ')).toContain('Run');
     expect(process.exitCode).toBe(1);
   });
 
   it('wire adds a managed extends to a dependency-cruiser json config, and eject removes it', async () => {
-    const config = path.join(tmp, '.dependency-cruiser.json');
+    const configFile = path.join(tmp, '.dependency-cruiser.json');
     const original = '{\n  "forbidden": [],\n  "options": {}\n}\n';
-    writeFileSync(config, original);
+    writeFileSync(configFile, original);
     await run(['init', phantomDepsAuto, '--fast', '--include-structural']);
-    await run(['wire', '--out', 'archprint-rules']);
-    const wired = JSON.parse(readFileSync(config, 'utf8')) as { extends?: string };
-    expect(wired.extends).toContain('dependency-cruiser.all.archprint.json');
-    await run(['eject', '--out', 'archprint-rules']);
-    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({ forbidden: [], options: {} });
+    await run(['wire']);
+    const wired = JSON.parse(readFileSync(configFile, 'utf8')) as { extends?: string };
+    expect(wired.extends).toContain('dependency-cruiser.json');
+    await run(['eject']);
+    expect(JSON.parse(readFileSync(configFile, 'utf8'))).toEqual({ forbidden: [], options: {} });
+  });
+});
+
+describe('migrate command', () => {
+  let cwd: string;
+  let tmp: string;
+  const wired = [
+    '// archprint:start (managed by archprint; run `archprint eject` to remove)',
+    "import archprintRules from './archprint-rules/eslint.archprint.mjs';",
+    '// archprint:end',
+    'export default [',
+    '  ...archprintRules, // archprint:managed',
+    '];',
+    '',
+  ].join('\n');
+  const setupLegacy = (): void => {
+    cpSync(auto, tmp, { recursive: true });
+    mkdirSync(path.join(tmp, 'archprint-rules'), { recursive: true });
+    writeFileSync(
+      path.join(tmp, 'archprint-rules', 'eslint.archprint.mjs'),
+      'export default [];\n',
+    );
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: 'archprint-rules' }),
+    );
+    writeFileSync(path.join(tmp, 'eslint.config.mjs'), wired);
+  };
+  beforeEach(() => {
+    cwd = process.cwd();
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-migcmd-'));
+    process.chdir(tmp);
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    process.chdir(cwd);
+    vi.restoreAllMocks();
+    rmSync(tmp, { recursive: true, force: true });
+    process.exitCode = 0;
+  });
+
+  it('migrates a 0.5.0 tree to the .archprint layout', async () => {
+    setupLegacy();
+    await run(['migrate']);
+    expect(output()).toContain('Migrated to the .archprint layout');
+    expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(false);
+    expect(readFileSync(path.join(tmp, 'eslint.config.mjs'), 'utf8')).toContain(
+      './.archprint/eslint.mjs',
+    );
+  });
+
+  it('eject cleans a 0.5.0 tree: unwires and removes archprint-rules and archprint.json', async () => {
+    setupLegacy();
+    await run(['eject']);
+    expect(readFileSync(path.join(tmp, 'eslint.config.mjs'), 'utf8')).not.toContain(
+      'archprint:start',
+    );
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(false);
+    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(false);
+  });
+
+  it('generate refuses on a stale 0.5.0 tree and points to migrate', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    setupLegacy();
+    await run(['generate', '.']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('migrate');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('init refuses on a stale 0.5.0 tree and points to migrate', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    setupLegacy();
+    await run(['init', '.']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('migrate');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('upgrade is an alias for migrate', async () => {
+    setupLegacy();
+    await run(['upgrade']);
+    expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
+  });
+
+  it('--dry-run changes nothing', async () => {
+    setupLegacy();
+    await run(['migrate', '--dry-run']);
+    expect(output()).toContain('Would migrate');
+    expect(existsSync(path.join(tmp, '.archprint'))).toBe(false);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
+  });
+
+  it('reports nothing to migrate when there is no legacy layout', async () => {
+    cpSync(auto, tmp, { recursive: true });
+    await run(['migrate']);
+    expect(output()).toContain('Nothing to migrate');
+  });
+
+  it('aborts with exit 1 on an unmarked plugin import', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    cpSync(auto, tmp, { recursive: true });
+    mkdirSync(path.join(tmp, 'archprint-rules'), { recursive: true });
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.' }),
+    );
+    writeFileSync(
+      path.join(tmp, 'eslint.config.mjs'),
+      "import plugin from './archprint-rules/eslint-plugin.archprint.mjs';\nexport default plugin;\n",
+    );
+    await run(['migrate']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Migration stopped');
+    expect(process.exitCode).toBe(1);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
   });
 });

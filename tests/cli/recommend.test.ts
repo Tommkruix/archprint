@@ -83,7 +83,7 @@ describe('renderAdoptionMarkdown', () => {
     );
     expect(md).toContain('# Archprint adoption notes');
     expect(md).toContain('## Enforcing now');
-    expect(md).toContain('- Console isolation (eslint) — 50% of comparable repos');
+    expect(md).toContain('- Console isolation (eslint) (50% of comparable repos)');
     expect(md).toContain('- Layer boundaries (dependency-cruiser)');
     expect(md).not.toContain('## Worth adopting');
   });
