@@ -32,11 +32,12 @@ families held for human review by default, emitted only with `--include-structur
 server/client, feature-slice and app isolation), plus dependency hygiene, whose enforcement can over-flag.
 Nothing that could be wrong is written as enforcement without you opting in.
 
-> Status: published on npm and safe to try on your real repo. Every rule is review-gated by default,
+> Status: published on npm and safe to run on your real repo. Every rule is review-gated by default,
 > reversible in one command (`archprint eject`), and deterministic, and a rule archprint marks
 > "enforce now" is checked to pass on your code before it says so. `scan` and `recommend` are stable;
-> the structural families stay review-only while they are hardened. Versioning is 0.x: the CLI surface
-> and rule-card format may still change before 1.0. The analysis is not experimental.
+> the structural families stay review-only while they are hardened. Versioning is still 0.x, so the CLI
+> surface and rule format can refine between minor versions (the 0.6.0 release moved output to the
+> `.archprint/` layout; run `archprint migrate` to upgrade), but the analysis is not experimental.
 
 ## What makes it different
 
@@ -290,13 +291,15 @@ Same repo plus same version produces the same output. Analysis is pure and sorte
 
 ## Status and roadmap
 
-Versioning is 0.x (pre-1.0): the CLI surface and rule-card format may still change between minor versions,
-but the analysis is not experimental and the tool is safe to adopt (every rule is review-gated and reversible
-via `archprint eject`). The engine (twenty detectors, the confidence gate, and emitters for a self-contained
-ESLint file, dependency-cruiser, ts-arch, and the layer graph) is in place and tested, and an adversarial
-correctness audit (three rounds, four real repositories) drove the false-positive rate on auto-generated rules
-to zero for the mechanical families, which is why those auto-enforce while the structural-inference families
-are held for review.
+Archprint is safe to adopt today: every rule is review-gated and reversible via `archprint eject`, the analysis
+is deterministic, and `scan`/`recommend` are battle-tested at census scale. The engine (twenty detectors, the
+confidence gate, and emitters for a self-contained ESLint file, dependency-cruiser, ts-arch, and the layer
+graph) is in place and tested, and an adversarial correctness audit (three rounds, four real repositories) drove
+the false-positive rate on auto-generated rules to zero for the mechanical families, which is why those
+auto-enforce while the structural-inference families are held for review. Versioning is still 0.x, so the CLI
+surface and rule format can refine between minor versions, that is a maturing surface, not experimental
+analysis; the 0.6.0 release moved the output to the compact `.archprint/` layout, and `archprint migrate`
+upgrades an older setup in place.
 
 Production-ready today: `scan` and `recommend` (insight), and auto-enforcement of the mechanical families,
 with a self-consistency check at generate time, an `init` scaffolder for fresh repos, and framework coverage
