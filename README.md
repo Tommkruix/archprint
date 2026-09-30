@@ -257,7 +257,16 @@ Code, Cursor, or any MCP client at it:
 }
 ```
 
-The tools are read-only (they never write to your repo); use the CLI's `generate`/`wire` to actually emit and
+That default is a local stdio server: it runs on your machine and reads the repo you point your client at.
+
+To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`. It clones
+the repo shallow to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only
+public `github.com`, `gitlab.com`, and `bitbucket.org` URLs; nothing is written or kept). The tools then take a
+`repo` URL (and an optional `ref`). It listens on `0.0.0.0:8848/mcp` by default (set `--host 127.0.0.1` to keep it
+to your own machine, or `--port`/`$PORT` to change the port); put an authenticating rate-limited proxy in front
+before exposing it publicly.
+
+The tools are read-only (they never write to the repo); use the CLI's `generate`/`wire` to actually emit and
 enforce rules.
 
 ## How it compares
@@ -292,7 +301,7 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 | `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                                                                                                      |
 | `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                |
 | `archprint eject`               | Remove archprint's generated files, its config, the managed README section, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                                                                        |
-| `archprint mcp`                 | Run archprint as an MCP server over stdio so Claude, Cursor, and other agents can call read-only `scan`, `recommend`, and `explain` tools for the repo's inferred architecture rules and evidence.                                                                                                                                                                                                                                                                                                                       |
+| `archprint mcp`                 | Run archprint as an MCP server so Claude, Cursor, and other agents can call read-only `scan`, `recommend`, and `explain` tools for a repo's inferred architecture rules and evidence. Serves over stdio by default; `--http` runs a remote server that scans a public repo by URL.                                                                                                                                                                                                                                       |
 
 ## Documentation
 
