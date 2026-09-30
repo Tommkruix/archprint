@@ -9,6 +9,7 @@ import {
   dependencyCruiserSnippet,
   findEslintConfig,
   importReference,
+  rewriteEslintReference,
   snippet,
   unwireDependencyCruiserJson,
   unwireEslintContent,
@@ -135,6 +136,15 @@ describe('wiring transforms', () => {
     expect(snippet('./x.mjs')).toContain(MANAGED_START);
     expect(snippet('./x.mjs')).toContain('...archprintRules,');
   });
+
+  it('rewriteEslintReference retargets the managed import for any quote style', () => {
+    for (const q of ["'", '"', '`']) {
+      const src = `import archprintRules from ${q}./archprint-rules/eslint.archprint.mjs${q};`;
+      expect(rewriteEslintReference(src, './.archprint/eslint.mjs')).toBe(
+        `import archprintRules from ${q}./.archprint/eslint.mjs${q};`,
+      );
+    }
+  });
 });
 
 describe('dependency-cruiser wiring', () => {
@@ -164,6 +174,16 @@ describe('dependency-cruiser wiring', () => {
     });
     const ref = './.archprint/dependency-cruiser.json';
     const result = wireDependencyCruiserJson(stale, ref);
+    expect(result.changed).toBe(true);
+    expect(JSON.parse(result.content!).extends).toBe(ref);
+  });
+
+  it('collapses a config holding both a stale and the new archprint extends to one', () => {
+    const ref = './.archprint/dependency-cruiser.json';
+    const content = JSON.stringify({
+      extends: ['./archprint-rules/dependency-cruiser.all.archprint.json', ref],
+    });
+    const result = wireDependencyCruiserJson(content, ref);
     expect(result.changed).toBe(true);
     expect(JSON.parse(result.content!).extends).toBe(ref);
   });

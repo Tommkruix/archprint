@@ -103,6 +103,10 @@ export function unwireEslintContent(content: string): string {
   return kept.join('\n');
 }
 
+export function rewriteEslintReference(content: string, newRef: string): string {
+  return content.replace(/(import archprintRules from )(['"`])[^'"`]*\2/, `$1$2${newRef}$2`);
+}
+
 export function snippet(reference: string): string {
   return [
     `${MANAGED_START}`,
@@ -137,11 +141,11 @@ export function wireDependencyCruiserJson(content: string, reference: string): W
   } catch {
     return { changed: false, reason: 'unparseable' };
   }
-  const list = extendsList(config.extends).filter((entry) => !entry.includes('archprint'));
-  if (extendsList(config.extends).includes(reference))
+  const current = extendsList(config.extends);
+  const next = [...current.filter((entry) => !entry.includes('archprint')), reference];
+  if (current.length === next.length && current.every((entry, i) => entry === next[i]))
     return { changed: false, reason: 'already-wired' };
-  list.push(reference);
-  config.extends = list.length === 1 ? list[0] : list;
+  config.extends = next.length === 1 ? next[0] : next;
   return { changed: true, content: `${JSON.stringify(config, null, 2)}\n` };
 }
 

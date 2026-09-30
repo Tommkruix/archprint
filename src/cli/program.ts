@@ -21,6 +21,7 @@ import { CONFIG_FILE, readConfig } from './archprint-config.js';
 import { stripAdoptionSection } from './adoption-readme.js';
 import { removeIgnoreEntry } from './ignore-file.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
+import { LEGACY_DIR, hasLegacyLayout, runMigration } from './migrate.js';
 import { WIRING_TOOLS } from './wiring.js';
 
 const LEGACY_ROOT_CONFIG = 'archprint.json';
@@ -200,6 +201,13 @@ export function buildProgram(version = readVersion()): Command {
       ) => {
         const appDir = resolveApp(input);
         const cwd = process.cwd();
+        if (hasLegacyLayout(cwd)) {
+          console.error(
+            `Found an older archprint layout (${LEGACY_DIR}/). Run 'archprint migrate' to upgrade it first.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
         const outDir = path.resolve(options.out);
         if (readConfig(outDir) !== null && !options.force) {
           console.error(
@@ -343,6 +351,13 @@ export function buildProgram(version = readVersion()): Command {
         ) {
           console.error(
             `Invalid --only family '${options.only}'. Use one of: ${FAMILY_NAMES.join(', ')}.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        if (hasLegacyLayout(process.cwd())) {
+          console.error(
+            `Found an older archprint layout (${LEGACY_DIR}/). Run 'archprint migrate' to upgrade it first.`,
           );
           process.exitCode = 1;
           return;
@@ -547,6 +562,12 @@ export function buildProgram(version = readVersion()): Command {
       add(path.join(outDir, OUTPUTS_MANIFEST_FILE));
       add(path.join(outDir, CONFIG_FILE));
       add(path.resolve(cwd, LEGACY_ROOT_CONFIG));
+      const legacyDir = path.resolve(cwd, LEGACY_DIR);
+      if (legacyDir !== outDir) {
+        for (const relative of readOutputs(legacyDir)) add(path.join(legacyDir, relative));
+        add(path.join(legacyDir, OUTPUTS_MANIFEST_FILE));
+        add(legacyDir);
+      }
       const wired = WIRING_TOOLS.map((tool) => ({ tool, configPath: tool.findConfig(cwd) })).filter(
         (entry) =>
           entry.configPath !== null && entry.tool.isWired(readFileSync(entry.configPath, 'utf8')),
@@ -564,16 +585,48 @@ export function buildProgram(version = readVersion()): Command {
         if (stripReadme) console.log(`  strip archprint section from ${displayPath(readmePath)}`);
         return;
       }
-      for (const target of targets) rmSync(target, { recursive: true, force: true });
-      removeIfEmpty(outDir);
       for (const { tool, configPath } of wired)
         writeFileSync(configPath!, tool.remove(readFileSync(configPath!, 'utf8')));
+      for (const target of targets) rmSync(target, { recursive: true, force: true });
+      removeIfEmpty(outDir);
       if (stripReadme) stripAdoptionSection(readmePath, config!.managed.readmeCreated);
       if (config?.managed.prettierignore) removeIgnoreEntry(path.join(cwd, '.prettierignore'));
       if (config?.managed.npmignore) removeIgnoreEntry(path.join(cwd, '.npmignore'));
       console.log(`Ejected ${targets.length + wired.length} archprint artifact(s):`);
       for (const target of targets) console.log(`  removed ${displayPath(target)}`);
       for (const { configPath } of wired) console.log(`  unwired ${displayPath(configPath!)}`);
+    });
+
+  program
+    .command('migrate')
+    .alias('upgrade')
+    .description(
+      'Migrate an older archprint setup (archprint-rules/) to the current .archprint layout. Run after updating the package.',
+    )
+    .option('--dry-run', 'show what would change without writing')
+    .action((options: { dryRun?: boolean }) => {
+      const result = runMigration(process.cwd(), version, { dryRun: options.dryRun });
+      if (result.status === 'nothing') {
+        console.log('Nothing to migrate: no older archprint layout found here.');
+        return;
+      }
+      if (result.status === 'aborted') {
+        console.error(`Migration stopped, nothing changed. ${result.reason}`);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        options.dryRun
+          ? 'Would migrate to the .archprint layout:'
+          : 'Migrated to the .archprint layout:',
+      );
+      for (const file of result.written)
+        console.log(`  ${options.dryRun ? 'write' : 'wrote'} ${file}`);
+      for (const edit of result.edited)
+        console.log(`  ${options.dryRun ? 'rewire' : 'rewired'} ${edit}`);
+      for (const target of result.removed)
+        console.log(`  ${options.dryRun ? 'remove' : 'removed'} ${target}`);
+      if (!options.dryRun) console.log("Run 'archprint eject' to undo.");
     });
 
   return program;

@@ -1,4 +1,12 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -603,5 +611,119 @@ describe('init', () => {
     expect(wired.extends).toContain('dependency-cruiser.json');
     await run(['eject']);
     expect(JSON.parse(readFileSync(configFile, 'utf8'))).toEqual({ forbidden: [], options: {} });
+  });
+});
+
+describe('migrate command', () => {
+  let cwd: string;
+  let tmp: string;
+  const wired = [
+    '// archprint:start (managed by archprint; run `archprint eject` to remove)',
+    "import archprintRules from './archprint-rules/eslint.archprint.mjs';",
+    '// archprint:end',
+    'export default [',
+    '  ...archprintRules, // archprint:managed',
+    '];',
+    '',
+  ].join('\n');
+  const setupLegacy = (): void => {
+    cpSync(auto, tmp, { recursive: true });
+    mkdirSync(path.join(tmp, 'archprint-rules'), { recursive: true });
+    writeFileSync(
+      path.join(tmp, 'archprint-rules', 'eslint.archprint.mjs'),
+      'export default [];\n',
+    );
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: 'archprint-rules' }),
+    );
+    writeFileSync(path.join(tmp, 'eslint.config.mjs'), wired);
+  };
+  beforeEach(() => {
+    cwd = process.cwd();
+    tmp = mkdtempSync(path.join(tmpdir(), 'archprint-migcmd-'));
+    process.chdir(tmp);
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    process.chdir(cwd);
+    vi.restoreAllMocks();
+    rmSync(tmp, { recursive: true, force: true });
+    process.exitCode = 0;
+  });
+
+  it('migrates a 0.5.0 tree to the .archprint layout', async () => {
+    setupLegacy();
+    await run(['migrate']);
+    expect(output()).toContain('Migrated to the .archprint layout');
+    expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(false);
+    expect(readFileSync(path.join(tmp, 'eslint.config.mjs'), 'utf8')).toContain(
+      './.archprint/eslint.mjs',
+    );
+  });
+
+  it('eject cleans a 0.5.0 tree: unwires and removes archprint-rules and archprint.json', async () => {
+    setupLegacy();
+    await run(['eject']);
+    expect(readFileSync(path.join(tmp, 'eslint.config.mjs'), 'utf8')).not.toContain(
+      'archprint:start',
+    );
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(false);
+    expect(existsSync(path.join(tmp, 'archprint.json'))).toBe(false);
+  });
+
+  it('generate refuses on a stale 0.5.0 tree and points to migrate', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    setupLegacy();
+    await run(['generate', '.']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('migrate');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('init refuses on a stale 0.5.0 tree and points to migrate', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    setupLegacy();
+    await run(['init', '.']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('migrate');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('upgrade is an alias for migrate', async () => {
+    setupLegacy();
+    await run(['upgrade']);
+    expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
+  });
+
+  it('--dry-run changes nothing', async () => {
+    setupLegacy();
+    await run(['migrate', '--dry-run']);
+    expect(output()).toContain('Would migrate');
+    expect(existsSync(path.join(tmp, '.archprint'))).toBe(false);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
+  });
+
+  it('reports nothing to migrate when there is no legacy layout', async () => {
+    cpSync(auto, tmp, { recursive: true });
+    await run(['migrate']);
+    expect(output()).toContain('Nothing to migrate');
+  });
+
+  it('aborts with exit 1 on an unmarked plugin import', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    cpSync(auto, tmp, { recursive: true });
+    mkdirSync(path.join(tmp, 'archprint-rules'), { recursive: true });
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.' }),
+    );
+    writeFileSync(
+      path.join(tmp, 'eslint.config.mjs'),
+      "import plugin from './archprint-rules/eslint-plugin.archprint.mjs';\nexport default plugin;\n",
+    );
+    await run(['migrate']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('Migration stopped');
+    expect(process.exitCode).toBe(1);
+    expect(existsSync(path.join(tmp, 'archprint-rules'))).toBe(true);
   });
 });
