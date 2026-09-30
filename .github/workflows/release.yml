@@ -40,7 +40,7 @@ jobs:
       - uses: changesets/action@v2
         if: steps.state.outputs.skip != 'true'
         with:
-          version: npx changeset version
-          publish: npm run release
+          version-script: npx changeset version
+          publish-script: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
