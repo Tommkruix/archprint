@@ -26,7 +26,7 @@ esac
 
 gc_unpinned config set project "$PROJECT" >/dev/null 2>&1
 
-for api in run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com billingbudgets.googleapis.com; do
+for api in run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com billingbudgets.googleapis.com iam.googleapis.com; do
   echo "deploy: enabling $api"
   gc services enable "$api" >/dev/null
 done
@@ -50,3 +50,20 @@ EOF
 gc artifacts repositories set-cleanup-policies "$IMAGE_REPOSITORY" \
   --location="$REGION" --policy="$policy" --no-dry-run >/dev/null
 echo "deploy: image repository keeps only the two most recent images."
+
+for account in "$BUILD_SERVICE_ACCOUNT" "$RUNTIME_SERVICE_ACCOUNT"; do
+  if ! gc iam service-accounts describe "$account" >/dev/null 2>&1; then
+    echo "deploy: creating service account ${account%%@*}."
+    gc iam service-accounts create "${account%%@*}" >/dev/null
+  fi
+done
+
+attempt=1
+while ! gc_unpinned projects add-iam-policy-binding "$PROJECT" \
+  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
+  --role=roles/run.builder --condition=None >/dev/null 2>&1; do
+  [ "$attempt" -lt 6 ] || stop "could not grant the build account Cloud Run Builder after $attempt attempts."
+  attempt=$((attempt + 1))
+  sleep 10
+done
+echo "deploy: the build account holds Cloud Run Builder; the runtime account holds no project role."

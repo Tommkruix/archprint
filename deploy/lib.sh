@@ -19,6 +19,9 @@ stop() {
 [ -n "${REGION:-}" ] || stop "REGION is empty in $CONF."
 [ -n "${ACCOUNT:-}" ] || stop "ACCOUNT is empty in $CONF."
 
+BUILD_SERVICE_ACCOUNT="archprint-build@$PROJECT.iam.gserviceaccount.com"
+RUNTIME_SERVICE_ACCOUNT="archprint-runtime@$PROJECT.iam.gserviceaccount.com"
+
 guard() {
   if ! signed_in=$("$GCLOUD" auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null); then
     stop "could not read the active account. Run: $GCLOUD auth login"

@@ -9,6 +9,8 @@ guard
 
 gc run deploy "$SERVICE" \
   --source "$DEPLOY_DIR" \
+  --build-service-account="projects/$PROJECT/serviceAccounts/$BUILD_SERVICE_ACCOUNT" \
+  --service-account="$RUNTIME_SERVICE_ACCOUNT" \
   --region "$REGION" \
   --no-allow-unauthenticated \
   --memory 2Gi \
