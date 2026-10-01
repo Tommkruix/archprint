@@ -100,8 +100,10 @@ the config never points at a file that has been deleted.
 so an assistant like Claude or Cursor can read a repo's architecture on demand. It exposes the read-only half of
 the CLI as three tools, `archprint_scan`, `archprint_recommend`, and `archprint_explain`, which return the same
 evidence-gated findings as the read commands of the same name (as JSON) and never write to your project. Generating and wiring
-rules stays a deliberate command you run yourself. `archprint mcp --http` instead runs a remote server that scans a
-public repository by URL: it clones the repo ephemerally, runs the same read-only analysis, and deletes the clone.
+rules stays a deliberate command you run yourself. The stdio server runs on your machine against your local
+checkout, so it suits private code: nothing leaves your machine. `archprint mcp --http` instead runs a remote server
+that scans a public repository by URL: it clones the repo ephemerally, runs the same read-only analysis, and deletes
+the clone.
 See [Use with AI agents](/getting-started#use-with-ai-agents-mcp) for the client configuration.
 
 ## Determinism

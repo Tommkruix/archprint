@@ -118,12 +118,16 @@ rules your repo already follows before they write code. It exposes read-only `ar
 }
 ```
 
-That is a local stdio server over the repo you point the client at. To scan a public repository by URL instead,
-run a remote server over HTTP with `archprint mcp --http`: it clones the repo shallow to a temp dir (public
-`github.com`, `gitlab.com`, or `bitbucket.org` only), runs the same read-only analysis, returns the result, and
-deletes the clone. The tools then take a `repo` URL and an optional `ref`. It binds `0.0.0.0:8848/mcp` by default;
-pass `--host 127.0.0.1` to keep it on your own machine, or `--port` (or `$PORT`) to change the port. Expose it
-publicly only behind an authenticating, rate-limited proxy.
+That is a local stdio server over the repo you point the client at, and it is the one to use for private code:
+your source never leaves your machine, whichever git host you use.
+
+To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`: it clones
+the repo shallow to a temp dir (public `github.com`, `gitlab.com`, or `bitbucket.org` only), runs the same
+read-only analysis, returns the result, and deletes the clone. The tools then take a `repo` URL and an optional
+`ref`. It binds `0.0.0.0:8848/mcp` by default; pass `--host 127.0.0.1` to keep it on your own machine, or `--port`
+(or `$PORT`) to change the port. Health checks answer at `/health` (use this one on Cloud Run, which reserves
+`/healthz`) and `/healthz`. Every request clones and scans, so keep a hosted instance behind authentication, such
+as Cloud Run's IAM, unless you accept paying for anyone's scans.
 
 ## Next
 
