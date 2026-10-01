@@ -607,6 +607,29 @@ export function buildProgram(version = readVersion()): Command {
     });
 
   program
+    .command('mcp')
+    .description(
+      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain. Serves over stdio by default; --http runs a remote server that scans a public repo by URL.',
+    )
+    .option('--http', 'serve over HTTP (Streamable HTTP) instead of stdio, for remote clients')
+    .option('--port <port>', 'port for --http', process.env.PORT ?? '8848')
+    .option('--host <host>', 'host for --http', '0.0.0.0')
+    /* v8 ignore start -- thin glue: dynamic import + start a blocking server */
+    .action(async (options: { http?: boolean; port: string; host: string }) => {
+      if (options.http) {
+        const { createRemoteHttpServer } = await import('../mcp/remote/http.js');
+        const port = Number(options.port) || 8848;
+        createRemoteHttpServer(version).listen(port, options.host, () => {
+          console.error(`archprint MCP server listening on http://${options.host}:${port}/mcp`);
+        });
+        return;
+      }
+      const { startMcpServer } = await import('../mcp/server.js');
+      await startMcpServer(version);
+    });
+  /* v8 ignore stop */
+
+  program
     .command('migrate')
     .alias('upgrade')
     .description(

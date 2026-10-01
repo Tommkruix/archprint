@@ -17,6 +17,11 @@ Your `CLAUDE.md` is guidance. Your lint rules are enforcement. Archprint closes 
 enforcement from patterns your codebase already demonstrates, so you adopt rules you can trust instead of
 authoring them by hand.
 
+When an AI agent is doing the writing, it can read those inferred rules and their evidence on demand through
+Archprint's read-only MCP server (`archprint mcp`), so the context it works from is your codebase's real,
+evidence-backed boundaries rather than a hand-written summary. It reports; enforcement still runs in your
+linter. See [Use with AI agents](#use-with-ai-agents-mcp).
+
 Validated at scale: `scan` and `recommend` ran across all 92,861 real public TypeScript repositories with zero
 crashes, and the full `init`/`wire`/`eject` round-trip ran clean on a 2,000-repo stratified sample. A companion
 benchmark, [AgentRuleBench](https://github.com/Tommkruix/agentrulebench), measures the guidance-vs-enforcement
@@ -237,6 +242,33 @@ eslint-plugin-boundaries element-types config, ts-arch tests, and the Mermaid an
 can confirm before wiring. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
 
+## Use with AI agents (MCP)
+
+`archprint mcp` runs archprint as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent can
+ask what architecture rules your repo already follows, with the evidence, before it writes code. It exposes three
+read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Point Claude Desktop, Claude
+Code, Cursor, or any MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "archprint": { "command": "npx", "args": ["-y", "archprint", "mcp"] }
+  }
+}
+```
+
+That default is a local stdio server: it runs on your machine and reads the repo you point your client at.
+
+To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`. It clones
+the repo shallow to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only
+public `github.com`, `gitlab.com`, and `bitbucket.org` URLs; nothing is written or kept). The tools then take a
+`repo` URL (and an optional `ref`). It listens on `0.0.0.0:8848/mcp` by default (set `--host 127.0.0.1` to keep it
+to your own machine, or `--port`/`$PORT` to change the port); put an authenticating rate-limited proxy in front
+before exposing it publicly.
+
+The tools are read-only (they never write to the repo); use the CLI's `generate`/`wire` to actually emit and
+enforce rules.
+
 ## How it compares
 
 Verified against each tool's documentation (TypeScript ecosystem). The two columns that matter are the ones no
@@ -269,6 +301,7 @@ orphans, reachability) and knip (dead code); rather than compete, it emits into 
 | `archprint recommend [path]`    | Recommend a rule set from the repo's evidence and detected stack (works on a fresh repo too); names the installed tool that will enforce each rule.                                                                                                                                                                                                                                                                                                                                                                      |
 | `archprint wire`                | Reference the generated rules from the enforcement tools your repo uses (flat eslint config, `.dependency-cruiser.json`) via a managed, reversible reference. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                |
 | `archprint eject`               | Remove archprint's generated files, its config, the managed README section, and any wired references. `--out <dir>`, `--dry-run`.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `archprint mcp`                 | Run archprint as an MCP server so Claude, Cursor, and other agents can call read-only `scan`, `recommend`, and `explain` tools for a repo's inferred architecture rules and evidence. Serves over stdio by default; `--http` runs a remote server that scans a public repo by URL.                                                                                                                                                                                                                                       |
 
 ## Documentation
 

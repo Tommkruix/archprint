@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { analyzeImports, walkRepo } from '../../src/scanner/file-walker.js';
+import { analyzeImports, isWorkspacePackagePath, walkRepo } from '../../src/scanner/file-walker.js';
 
 const walkerFixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,6 +24,22 @@ describe('walkRepo', () => {
   });
 });
 
+describe('isWorkspacePackagePath', () => {
+  const pkgs = ['@acme/db', '@acme/ui'];
+
+  it('matches the package directory itself and files under it', () => {
+    expect(isWorkspacePackagePath('/r/node_modules/@acme/db', pkgs)).toBe(true);
+    expect(isWorkspacePackagePath('/r/node_modules/@acme/db/src/index.ts', pkgs)).toBe(true);
+    expect(isWorkspacePackagePath('/r/node_modules/@acme/db\\win\\x.ts', pkgs)).toBe(true);
+  });
+
+  it('does not match a different package that shares a prefix or an external', () => {
+    expect(isWorkspacePackagePath('/r/node_modules/@acme/db-extra/index.ts', pkgs)).toBe(false);
+    expect(isWorkspacePackagePath('/r/node_modules/react/index.js', pkgs)).toBe(false);
+    expect(isWorkspacePackagePath('/r/src/db.ts', pkgs)).toBe(false);
+  });
+});
+
 describe('analyzeImports', () => {
   it('resolves an aliased import through a barrel to its leaf module', () => {
     const imports = analyzeImports(walkerFixture, path.join(walkerFixture, 'user.service.ts'));
@@ -35,6 +51,18 @@ describe('analyzeImports', () => {
     expect(imported?.throughBarrel).toBe(true);
     expect(imported?.valueLeafPaths.some((p) => p.endsWith('/leaf.ts'))).toBe(true);
     expect(imported?.valueLeafPaths.some((p) => p.endsWith('/index.ts'))).toBe(false);
+  });
+
+  it('resolves a baseUrl file import to its first-party leaf while skipping externals', () => {
+    const dir = path.join(walkerFixture, '..', 'baseurl-file');
+    const imports = analyzeImports(dir, path.join(dir, 'src', 'entry.ts'));
+    const bySpecifier = new Map(imports.map((imp) => [imp.specifier, imp]));
+
+    expect(bySpecifier.get('utils')?.valueLeafPaths.some((p) => p.endsWith('/utils.ts'))).toBe(
+      true,
+    );
+    expect(bySpecifier.get('./rel')?.valueLeafPaths.some((p) => p.endsWith('/rel.ts'))).toBe(true);
+    expect(bySpecifier.get('react')?.valueLeafPaths).toEqual([]);
   });
 
   it('resolves default and dynamic imports across relative, external, missing, and barrel targets', () => {

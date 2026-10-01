@@ -21,4 +21,6 @@ features:
     details: Each candidate is measured against the code with a Wilson-score confidence gate. Mechanical families auto-enforce; structural ones are held for review.
   - title: Enforced where you already lint
     details: Emits a minimal .archprint/ directory, one self-contained file per linter you already use (ESLint and dependency-cruiser), wires into your config with a managed, reversible reference, and ejects cleanly.
+  - title: Readable by your AI agent
+    details: Run archprint as a read-only MCP server so Claude, Cursor, and other agents can read the repo's inferred rules and evidence as context before they write code. It reports; enforcement still lives in your linter.
 ---
