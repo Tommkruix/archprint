@@ -3,7 +3,13 @@
 Archprint mines the architecture rules your repo already follows, gates them on evidence, and emits them into
 the tools you already use.
 
+**Find the rules your code already follows, and see the evidence for one:**
+
 ![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](/demo/scan.gif)
+
+**Ask for them over MCP, the way Claude Code or Cursor does:**
+
+![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](/demo/mcp.gif)
 
 ## Try it in your browser
 
@@ -131,8 +137,6 @@ evidence and the files that break it, and `archprint_explain` takes any rule lab
 
 That is a local stdio server over the repo you point the client at, and it is the one to use for private code:
 your source never leaves your machine, whichever git host you use.
-
-![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](/demo/mcp.gif)
 
 To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`: it clones
 the repo shallow to a temp dir (public `github.com`, `gitlab.com`, or `bitbucket.org` only), runs the same
