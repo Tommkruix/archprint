@@ -10,6 +10,7 @@ export interface RemoteHttpOptions {
 }
 
 const MCP_PATH = '/mcp';
+const HEALTH_PATHS = new Set(['/health', '/healthz']);
 const DEFAULT_MAX_CONCURRENT = 4;
 const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
@@ -22,7 +23,7 @@ export function createRemoteHttpServer(version: string, options: RemoteHttpOptio
   async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (req.method === 'GET' && url.pathname === '/healthz')
+      if (req.method === 'GET' && HEALTH_PATHS.has(url.pathname))
         return drainAnd(req, res, 200, { status: 'ok' });
       if (req.method === 'GET' && url.pathname === MCP_PATH) {
         return drainAnd(req, res, 405, { error: 'This server is stateless; use POST to /mcp.' });

@@ -138,7 +138,7 @@ A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 
 trimmed:
 
 ```
-Archprint v0.7.0
+Archprint v0.7.1
 Scanned 2,232 TypeScript files
 Workspace aliases: 18 resolved
 
@@ -257,14 +257,17 @@ Code, Cursor, or any MCP client at it:
 }
 ```
 
-That default is a local stdio server: it runs on your machine and reads the repo you point your client at.
+That default is a local stdio server, and it is the one to use for private code: it runs on your machine against
+your local checkout, so your source never leaves it, whichever git host you use.
 
 To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`. It clones
 the repo shallow to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only
 public `github.com`, `gitlab.com`, and `bitbucket.org` URLs; nothing is written or kept). The tools then take a
 `repo` URL (and an optional `ref`). It listens on `0.0.0.0:8848/mcp` by default (set `--host 127.0.0.1` to keep it
-to your own machine, or `--port`/`$PORT` to change the port); put an authenticating rate-limited proxy in front
-before exposing it publicly.
+to your own machine, or `--port`/`$PORT` to change the port) and answers health checks at `/health` (use this one
+on Cloud Run, which reserves `/healthz`) and `/healthz`. Every request clones and scans, so a server anyone can
+reach spends compute on anyone's behalf: keep it behind authentication, such as Cloud Run's IAM, unless you accept
+that cost.
 
 The tools are read-only (they never write to the repo); use the CLI's `generate`/`wire` to actually emit and
 enforce rules.
