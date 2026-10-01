@@ -8,7 +8,7 @@ export const TOOLS = [
   {
     name: 'archprint_scan',
     description:
-      'List the architecture rules this TypeScript repo already follows, with the evidence: which families are AUTO (clears the confidence gate) or SUGGEST (short of it, worth review), how many files conform vs. break each, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
+      'List the architecture rules this TypeScript repo already follows, with the evidence: each rule stated in plain words, whether it is AUTO (clears the confidence gate) or SUGGEST (short of it, worth review), how many files conform vs. break it, the files that break it, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -34,11 +34,14 @@ export const TOOLS = [
   {
     name: 'archprint_explain',
     description:
-      'Explain the confidence-gate evidence behind one inferred rule id (e.g. AP-002): its gate status, conformance stats, and the files that violate it. Read-only.',
+      'Explain the confidence-gate evidence behind one rule from archprint_scan, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, conformance stats, and every file that breaks it. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'rule id, e.g. AP-002' },
+        id: {
+          type: 'string',
+          description: 'rule label from archprint_scan, e.g. AP-002 or env-access',
+        },
         path: { type: 'string', description: 'app or monorepo-root directory (default ".")' },
       },
       required: ['id'],

@@ -9,6 +9,7 @@ import type { Recommendations } from './recommend.js';
 import { CONFIG_FILE, type ArchprintConfig } from './archprint-config.js';
 import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
+import { FAMILY_STATEMENTS } from './rule-statements.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
@@ -263,7 +264,7 @@ export function renderReport(
     const suffix = testIso.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
     const floor = `${(testIso.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`TEST ISOLATION ${suffix}`)));
-    lines.push(`  production code must not import test files   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['test-isolation']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${testIso.productionFileCount - testIso.offenderCount}/${testIso.productionFileCount} production files stay clean of ${testIso.testFileCount} test file(s)`,
@@ -283,9 +284,7 @@ export function renderReport(
     const suffix = deps.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
     const floor = `${(deps.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`DEPENDENCY HYGIENE ${suffix}`)));
-    lines.push(
-      `  import dependencies by their public entry, not their internals   confidence ${floor}`,
-    );
+    lines.push(`  ${FAMILY_STATEMENTS['dependency-hygiene']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${deps.externalImporterCount - deps.offenderCount}/${deps.externalImporterCount} files importing packages avoid their build/impl dirs`,
@@ -302,7 +301,7 @@ export function renderReport(
     const suffix = entry.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(entry.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`ENTRY PURITY ${suffix}`)));
-    lines.push(`  framework entries must not be imported by other code   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['entry-purity']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${entry.entryCount - entry.offenderCount}/${entry.entryCount} framework entries are imported by nothing`,
@@ -322,7 +321,7 @@ export function renderReport(
     const suffix = phantom.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
     const floor = `${(phantom.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`DEPENDENCY DECLARATION ${suffix}`)));
-    lines.push(`  import only packages declared in package.json   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['phantom-deps']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${phantom.externalImporterCount - phantom.offenderCount}/${phantom.externalImporterCount} files import only declared packages`,
@@ -342,7 +341,7 @@ export function renderReport(
     const suffix = deepRel.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
     const floor = `${(deepRel.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`IMPORT STYLE ${suffix}`)));
-    lines.push(`  prefer workspace aliases over deep relative imports   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['import-style']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${deepRel.relativeImporterCount - deepRel.offenderCount}/${deepRel.relativeImporterCount} files with relative imports avoid ../../../`,
@@ -359,7 +358,7 @@ export function renderReport(
     const suffix = con.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
     const floor = `${(con.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`CONSOLE ISOLATION ${suffix}`)));
-    lines.push(`  library code must not use console   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['console-isolation']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${con.libraryFileCount - con.offenderCount}/${con.libraryFileCount} library files avoid console`,
@@ -374,7 +373,7 @@ export function renderReport(
     const suffix = env.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(env.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`ENV ACCESS ${suffix}`)));
-    lines.push(`  read process.env only in the config layer   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['env-access']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${env.subjectFileCount - env.offenderCount}/${env.subjectFileCount} non-config files avoid direct process.env`,
@@ -390,7 +389,7 @@ export function renderReport(
     const suffix = wpkg.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(wpkg.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`WORKSPACE PACKAGE API ${suffix}`)));
-    lines.push(`  import workspace packages by name, not a deep path   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['workspace-package-api']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${wpkg.consumerCount - wpkg.offenderCount}/${wpkg.consumerCount} consumers import packages by name`,
@@ -410,7 +409,7 @@ export function renderReport(
     const suffix = stories.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(stories.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`STORIES ISOLATION ${suffix}`)));
-    lines.push(`  Storybook stories must not be imported by other code   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['stories-isolation']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${stories.storyCount - stories.offenderCount}/${stories.storyCount} stories are imported by nothing`,
@@ -430,7 +429,7 @@ export function renderReport(
     const suffix = uiData.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(uiData.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`UI / DATA SEPARATION ${suffix}`)));
-    lines.push(`  UI components must not import the data layer directly   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['ui-data']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${uiData.componentCount - uiData.offenderCount}/${uiData.componentCount} components reach data only through services`,
@@ -447,7 +446,7 @@ export function renderReport(
     const suffix = sc.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
     const floor = `${(sc.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`SERVER / CLIENT BOUNDARY ${suffix}`)));
-    lines.push(`  "use client" modules must not import server-only code   confidence ${floor}`);
+    lines.push(`  ${FAMILY_STATEMENTS['server-client']}   confidence ${floor}`);
     lines.push(
       dim(
         `          Evidence: ${sc.clientCount - sc.offenderCount}/${sc.clientCount} client modules avoid server-only imports`,
