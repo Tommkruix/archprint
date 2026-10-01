@@ -41,8 +41,8 @@ Nothing that could be wrong is written as enforcement without you opting in.
 > reversible in one command (`archprint eject`), and deterministic, and a rule archprint marks
 > "enforce now" is checked to pass on your code before it says so. `scan` and `recommend` are stable;
 > the structural families stay review-only while they are hardened. Versioning is still 0.x, so the CLI
-> surface and rule format can refine between minor versions (the 0.6.0 release moved output to the
-> `.archprint/` layout; run `archprint migrate` to upgrade), but the analysis is not experimental.
+> surface and rule format can refine between minor versions (the compact `.archprint/` layout arrived in
+> 0.6.0; `archprint migrate` upgrades an older setup in place), but the analysis is not experimental.
 
 ## What makes it different
 
@@ -138,7 +138,7 @@ A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 
 trimmed:
 
 ```
-Archprint v0.2.0
+Archprint v0.7.0
 Scanned 2,232 TypeScript files
 Workspace aliases: 18 resolved
 
@@ -331,8 +331,8 @@ graph) is in place and tested, and an adversarial correctness audit (three round
 the false-positive rate on auto-generated rules to zero for the mechanical families, which is why those
 auto-enforce while the structural-inference families are held for review. Versioning is still 0.x, so the CLI
 surface and rule format can refine between minor versions, that is a maturing surface, not experimental
-analysis; the 0.6.0 release moved the output to the compact `.archprint/` layout, and `archprint migrate`
-upgrades an older setup in place.
+analysis; the compact `.archprint/` layout arrived in 0.6.0, and `archprint migrate` upgrades an older setup
+in place.
 
 Production-ready today: `scan` and `recommend` (insight), and auto-enforcement of the mechanical families,
 with a self-consistency check at generate time, an `init` scaffolder for fresh repos, and framework coverage
