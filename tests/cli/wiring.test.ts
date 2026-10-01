@@ -116,8 +116,20 @@ describe('wiring transforms', () => {
   it('keeps a single-line empty array valid (the closer is not swallowed by the comment)', () => {
     const result = wireEslintContent('export default [];\n', './x.mjs');
     expect(result.changed).toBe(true);
-    expect(result.content).toContain('\n];');
-    expect(result.content).not.toMatch(/managed\];/);
+    expect(result.content).toContain(
+      'export default [...archprintRules /* archprint:managed */, ];',
+    );
+    expect(unwireEslintContent(result.content!)).toBe('export default [];\n');
+  });
+
+  it('round-trips a config whose array starts on the same line as its first entry', () => {
+    const src =
+      "import tseslint from 'typescript-eslint';\n\nexport default [{ ignores: ['dist/'] }, ...tseslint.configs.recommended];\n";
+    const result = wireEslintContent(src, './x.mjs');
+    expect(result.content).toContain(
+      'export default [...archprintRules /* archprint:managed */, { ignores',
+    );
+    expect(unwireEslintContent(result.content!)).toBe(src);
   });
 
   it('unwire restores the original content exactly (round-trip)', () => {

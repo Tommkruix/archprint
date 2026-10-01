@@ -7,6 +7,7 @@ export const MANAGED_START =
   '// archprint:start (managed by archprint; run `archprint eject` to remove)';
 export const MANAGED_END = '// archprint:end';
 const SPREAD_MARK = '// archprint:managed';
+const INLINE_SPREAD = '...archprintRules /* archprint:managed */, ';
 const ESLINT_CONFIG_NAMES = [
   'eslint.config.js',
   'eslint.config.mjs',
@@ -78,8 +79,10 @@ export function wireEslintContent(content: string, reference: string): WireResul
   const insertAt = findInsertionPoint(content);
   if (insertAt === null) return { changed: false, reason: 'no-array-export' };
   const remainder = content.slice(insertAt);
-  const separator = remainder.startsWith('\n') ? '' : '\n';
-  const withSpread = `${content.slice(0, insertAt)}\n  ...archprintRules, ${SPREAD_MARK}${separator}${remainder}`;
+  const spread = remainder.startsWith('\n')
+    ? `\n  ...archprintRules, ${SPREAD_MARK}`
+    : INLINE_SPREAD;
+  const withSpread = `${content.slice(0, insertAt)}${spread}${remainder}`;
   const importBlock = `${MANAGED_START}\nimport archprintRules from '${reference}';\n${MANAGED_END}\n`;
   return { changed: true, content: importBlock + withSpread };
 }
@@ -100,7 +103,7 @@ export function unwireEslintContent(content: string): string {
     if (line.includes(SPREAD_MARK)) continue;
     kept.push(line);
   }
-  return kept.join('\n');
+  return kept.join('\n').replace(INLINE_SPREAD, '');
 }
 
 export function rewriteEslintReference(content: string, newRef: string): string {
