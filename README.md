@@ -150,7 +150,6 @@ A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 
 trimmed:
 
 ```
-Archprint v0.7.1
 Scanned 2,232 TypeScript files
 Workspace aliases: 18 resolved
 
