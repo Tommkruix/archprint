@@ -1,5 +1,17 @@
 # archprint
 
+## 0.7.0
+
+### Minor Changes
+
+- Add `archprint mcp --http`, a remote MCP server that scans a public repository by URL. It clones the repo shallow to a temp directory (public github.com, gitlab.com, or bitbucket.org only), runs the same read-only `scan`, `recommend`, and `explain` analysis, returns the result, and deletes the clone, so an agent can inspect a repo's architecture without anything being installed locally. The tools take a `repo` URL and an optional `ref`. The server is stateless and binds `0.0.0.0:8848/mcp` by default (`--host`/`--port`, or `$PORT`); put an authenticating, rate-limited proxy in front before exposing it publicly.
+- Add `archprint mcp`, which runs archprint as an MCP server over stdio so Claude, Cursor, and other agents can inspect the architecture rules a repo already follows before they write code. It exposes three read-only tools, `archprint_scan` (the rules the repo follows, with evidence), `archprint_recommend` (what to enforce now, review, or adopt), and `archprint_explain` (the confidence-gate evidence behind one rule id), and never writes to the repo. Point any MCP client at `npx -y archprint mcp`.
+
+### Patch Changes
+
+- Make deep scans dramatically faster on real repositories by not loading `node_modules` into the analysis. Deep resolution now resolves first-party imports (including `baseUrl` and `paths`) and workspace packages, but skips pulling external dependencies into the TypeScript program, and caches module resolution. A single large app drops from about 5 minutes to under 20 seconds and a 14-app monorepo from over 30 minutes to about 2 minutes, with byte-identical results, so `generate` is now practical on large codebases.
+- Scanning now skips everything git ignores, not just the root `.gitignore`: nested `.gitignore` files in subdirectories and repo-local `.git/info/exclude` are honored too. This keeps generated, vendored, and locally excluded directories out of the analysis, so a scan of a monorepo root is both faster and matches what you would expect git to track. Machine-global excludes are intentionally not read, so the same repository scans identically across machines.
+
 ## 0.6.0
 
 ### Minor Changes
