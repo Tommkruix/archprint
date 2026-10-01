@@ -169,6 +169,31 @@ describe('deploy credential isolation', () => {
     expect(run.stdout).toBe(isolated);
   });
 
+  it('pins Application Default Credentials inside the isolated directory', () => {
+    const stubDir = scratch();
+    const bin = path.join(stubDir, 'gcloud');
+    writeFileSync(bin, '#!/bin/sh\nprintf "%s" "$GOOGLE_APPLICATION_CREDENTIALS"\n');
+    chmodSync(bin, 0o755);
+    const isolated = path.join(scratch(), 'cloudsdk');
+
+    const run = spawnSync('sh', [path.join(deployDir, 'gcloud'), 'version'], {
+      env: {
+        ...process.env,
+        PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+        ARCHPRINT_CLOUDSDK_CONFIG: isolated,
+        GOOGLE_APPLICATION_CREDENTIALS: path.join(
+          process.env.HOME ?? '',
+          '.config',
+          'gcloud',
+          'application_default_credentials.json',
+        ),
+      },
+      encoding: 'utf8',
+    });
+
+    expect(run.stdout).toBe(path.join(isolated, 'application_default_credentials.json'));
+  });
+
   const disguises = (home: string): [string, string][] => [
     ['exact', `${home}/.config/gcloud`],
     ['trailing slash', `${home}/.config/gcloud/`],
@@ -204,6 +229,64 @@ describe('deploy credential isolation', () => {
       expect(existsSync(marker), 'gcloud must never be reached').toBe(false);
     });
   }
+
+  it('ignores gcloud overrides inherited from the environment', () => {
+    const stubDir = scratch();
+    writeFileSync(
+      path.join(stubDir, 'gcloud'),
+      '#!/bin/sh\nprintf "%s|%s|%s" "${CLOUDSDK_AUTH_ACCESS_TOKEN:-}" "${CLOUDSDK_CORE_ACCOUNT:-}" "${CLOUDSDK_CORE_PROJECT:-}"\n',
+    );
+    chmodSync(path.join(stubDir, 'gcloud'), 0o755);
+
+    const run = spawnSync('sh', [path.join(deployDir, 'gcloud'), 'version'], {
+      env: {
+        ...process.env,
+        PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+        ARCHPRINT_CLOUDSDK_CONFIG: path.join(scratch(), 'cloudsdk'),
+        CLOUDSDK_AUTH_ACCESS_TOKEN: 'token-from-another-account',
+        CLOUDSDK_CORE_ACCOUNT: 'someone@other-org.example',
+        CLOUDSDK_CORE_PROJECT: 'another-project',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(run.stdout).toBe('||');
+  });
+
+  it('uploads only the Dockerfile to Cloud Build', () => {
+    const rules = readFileSync(path.join(deployDir, '.gcloudignore'), 'utf8')
+      .split('\n')
+      .filter(Boolean);
+    expect(rules[0]).toBe('*');
+    expect(rules.filter((rule) => rule.startsWith('!'))).toEqual(['!Dockerfile']);
+  });
+
+  it('refuses a cloud command when the account guard has not run', () => {
+    const probe = path.join(deployDir, '.probe-unguarded.sh');
+    writeFileSync(probe, '#!/bin/sh\nset -eu\n. "$(dirname -- "$0")/lib.sh"\ngc version\n');
+    try {
+      const stubDir = scratch();
+      const marker = path.join(scratch(), 'gcloud-ran');
+      writeFileSync(path.join(stubDir, 'gcloud'), `#!/bin/sh\ntouch "${marker}"\n`);
+      chmodSync(path.join(stubDir, 'gcloud'), 0o755);
+
+      const run = spawnSync('sh', [probe], {
+        env: {
+          ...process.env,
+          PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+          ARCHPRINT_CLOUD_CONF: confFile('PROJECT=p\nREGION=r\nACCOUNT=a@example.com\n'),
+          ARCHPRINT_CLOUDSDK_CONFIG: path.join(scratch(), 'cloudsdk'),
+        },
+        encoding: 'utf8',
+      });
+
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).toMatch(/before the account guard ran/);
+      expect(existsSync(marker), 'gcloud must never be reached').toBe(false);
+    } finally {
+      rmSync(probe, { force: true });
+    }
+  });
 
   it('keeps the real config out of version control', () => {
     const ignores = (file: string): boolean =>

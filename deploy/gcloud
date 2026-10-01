@@ -1,12 +1,14 @@
 #!/bin/sh
-# Runs gcloud against this repo's own credential directory, never the machine default.
-# gcloud keeps credentials, the active account and the active project in one directory for the
-# whole machine, so a bare `gcloud` runs as whichever account is active and `gcloud auth login`
-# repoints that account's work in every other terminal. Sign in with `deploy/gcloud auth login`.
 set -eu
 
-# Collapse `.`, `..` and repeated slashes without touching the filesystem, so a missing
-# intermediate directory cannot hide a `..` that climbs back into the machine default.
+without_trailing_slash() {
+  value=$1
+  while [ "$value" != "/" ] && [ "$value" != "${value%/}" ]; do
+    value=${value%/}
+  done
+  printf '%s' "$value"
+}
+
 lexical_path() {
   _input=$1
   case $_input in
@@ -47,8 +49,6 @@ deepest_existing() {
   printf '%s' "$_dir"
 }
 
-# Physical path: resolve the deepest existing ancestor (pwd -P follows symlinks; realpath is not
-# POSIX and the directory may not exist yet) and re-append whatever is still missing.
 resolved_path() {
   _full=$(lexical_path "$1")
   _base=$(deepest_existing "$_full")
@@ -72,15 +72,19 @@ refuse() {
   exit 1
 }
 
+for _var in $(env | sed -n 's/^\(CLOUDSDK_[A-Za-z0-9_]*\)=.*/\1/p'); do
+  case $_var in
+    CLOUDSDK_PYTHON | CLOUDSDK_PYTHON_SITEPACKAGES) ;;
+    *) unset "$_var" ;;
+  esac
+done
+
 CLOUDSDK_CONFIG=$(lexical_path "${ARCHPRINT_CLOUDSDK_CONFIG:-$HOME/.config/gcloud-archprint}")
 
 default_path=$(lexical_path "$HOME/.config/gcloud")
 machine_default=$(resolved_path "$default_path")
 requested=$(resolved_path "$CLOUDSDK_CONFIG")
 
-# Compared case-insensitively so a case-insensitive volume cannot alias the default under another
-# spelling, including before the default directory exists (when an identity check has nothing to
-# compare against). Refusing a deliberate case variant of the default is the safe direction.
 requested_folded=$(lowercase "$requested")
 default_folded=$(lowercase "$machine_default")
 
@@ -88,8 +92,6 @@ case "$requested_folded" in
   "$default_folded" | "$default_folded"/*) refuse ;;
 esac
 
-# A case-insensitive volume, a symlink or a hard link can alias the same directory under another
-# name, which no string comparison catches. Compare identity when the default actually exists.
 if [ -d "$default_path" ]; then
   requested_dir=$(deepest_existing "$CLOUDSDK_CONFIG")
   if [ -d "$requested_dir" ] && [ "$requested_dir" -ef "$default_path" ]; then
@@ -98,6 +100,9 @@ if [ -d "$default_path" ]; then
 fi
 
 export CLOUDSDK_CONFIG
+
+GOOGLE_APPLICATION_CREDENTIALS="$CLOUDSDK_CONFIG/application_default_credentials.json"
+export GOOGLE_APPLICATION_CREDENTIALS
 
 mkdir -p "$CLOUDSDK_CONFIG"
 chmod 700 "$CLOUDSDK_CONFIG"

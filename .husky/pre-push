@@ -1,1 +1,1 @@
-npm run typecheck && npm test
+sh deploy/check-no-secrets.sh && npm run typecheck && npm test
