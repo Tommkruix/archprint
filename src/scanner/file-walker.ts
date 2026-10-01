@@ -209,6 +209,19 @@ function createFastImportAnalyzer(
     specifierLevelImports(absoluteFilePath, classifyEdge);
 }
 
+export function isWorkspacePackagePath(
+  filePath: string,
+  workspacePackages: readonly string[],
+): boolean {
+  return workspacePackages.some((pkg) => {
+    const marker = `/node_modules/${pkg}`;
+    const at = filePath.indexOf(marker);
+    if (at === -1) return false;
+    const next = filePath[at + marker.length];
+    return next === undefined || next === '/' || next === '\\';
+  });
+}
+
 export function createImportAnalyzer(
   appDir: string,
   options: { resolve?: boolean } = {},
@@ -232,9 +245,41 @@ export function createImportAnalyzer(
     return createFastImportAnalyzer((specifier) => classifyEdge(specifier, undefined));
   }
 
+  const isWorkspacePath = (filePath: string): boolean =>
+    isWorkspacePackagePath(filePath, workspacePackages);
+
   const project = new Project({
     tsConfigFilePath: path.join(appDir, 'tsconfig.json'),
     skipAddingFilesFromTsConfig: true,
+    resolutionHost: (moduleResolutionHost, getCompilerOptions) => {
+      const compilerOptions = getCompilerOptions();
+      const blocksExternal = (filePath: string): boolean =>
+        filePath.includes('/node_modules/') && !isWorkspacePath(filePath);
+      const firstPartyOnlyHost: ts.ModuleResolutionHost = {
+        ...moduleResolutionHost,
+        fileExists: (filePath) =>
+          !blocksExternal(filePath) && moduleResolutionHost.fileExists(filePath),
+        directoryExists: moduleResolutionHost.directoryExists
+          ? (dirPath) => !blocksExternal(dirPath) && moduleResolutionHost.directoryExists!(dirPath)
+          : undefined,
+      };
+      const canonical = (f: string): string =>
+        ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase();
+      const cache = ts.createModuleResolutionCache(appDir, canonical, compilerOptions);
+      return {
+        resolveModuleNames: (moduleNames, containingFile) =>
+          moduleNames.map(
+            (moduleName) =>
+              ts.resolveModuleName(
+                moduleName,
+                containingFile,
+                compilerOptions,
+                firstPartyOnlyHost,
+                cache,
+              ).resolvedModule,
+          ),
+      };
+    },
   });
   const aliasDirs = Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
     prefix: key.replace(/\/?\*$/, ''),
