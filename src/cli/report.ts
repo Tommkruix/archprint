@@ -6,7 +6,7 @@ import type { RoleBoundary } from '../detector/role-layering-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 import type { Recommendations } from './recommend.js';
-import type { ArchprintConfig } from './archprint-config.js';
+import { CONFIG_FILE, type ArchprintConfig } from './archprint-config.js';
 import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
@@ -644,11 +644,13 @@ export function renderInit(
     for (const r of manifest.adopt) lines.push(dim(`  - ${r.title}`) + evidence(r));
     lines.push('');
   }
-  lines.push(
-    dim(
-      `Wrote archprint.json. Wire ${manifest.rulesDir}/*.json into your dependency-cruiser / eslint`,
-    ),
-    dim("config, then run your linter. Re-run 'archprint scan' any time to see the evidence."),
-  );
+  lines.push(dim(`Wrote ${manifest.rulesDir}/${CONFIG_FILE}.`));
+  if (writtenCount > 0) {
+    lines.push(
+      dim("Run 'archprint wire' to reference the rules from your linter config, then run your"),
+      dim('linter.'),
+    );
+  }
+  lines.push(dim("Re-run 'archprint scan' any time to see the evidence."));
   return lines.join('\n');
 }
