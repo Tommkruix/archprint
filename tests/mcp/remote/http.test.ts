@@ -76,12 +76,14 @@ describe('remote http server', () => {
     });
   });
 
-  it('answers the health check', async () => {
-    const { base } = await start();
-    const response = await fetch(`${base}/healthz`);
-    expect(response.status).toBe(200);
-    expect(((await response.json()) as { status: string }).status).toBe('ok');
-  });
+  for (const healthPath of ['/health', '/healthz']) {
+    it(`answers the health check at ${healthPath}`, async () => {
+      const { base } = await start();
+      const response = await fetch(`${base}${healthPath}`);
+      expect(response.status).toBe(200);
+      expect(((await response.json()) as { status: string }).status).toBe('ok');
+    });
+  }
 
   it('404s an unknown path and 405s a GET on the MCP endpoint', async () => {
     const { url, base } = await start();

@@ -41,8 +41,8 @@ Nothing that could be wrong is written as enforcement without you opting in.
 > reversible in one command (`archprint eject`), and deterministic, and a rule archprint marks
 > "enforce now" is checked to pass on your code before it says so. `scan` and `recommend` are stable;
 > the structural families stay review-only while they are hardened. Versioning is still 0.x, so the CLI
-> surface and rule format can refine between minor versions (the 0.6.0 release moved output to the
-> `.archprint/` layout; run `archprint migrate` to upgrade), but the analysis is not experimental.
+> surface and rule format can refine between minor versions (the compact `.archprint/` layout arrived in
+> 0.6.0; `archprint migrate` upgrades an older setup in place), but the analysis is not experimental.
 
 ## What makes it different
 
@@ -138,7 +138,7 @@ A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 
 trimmed:
 
 ```
-Archprint v0.2.0
+Archprint v0.7.1
 Scanned 2,232 TypeScript files
 Workspace aliases: 18 resolved
 
@@ -257,14 +257,17 @@ Code, Cursor, or any MCP client at it:
 }
 ```
 
-That default is a local stdio server: it runs on your machine and reads the repo you point your client at.
+That default is a local stdio server, and it is the one to use for private code: it runs on your machine against
+your local checkout, so your source never leaves it, whichever git host you use.
 
 To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`. It clones
 the repo shallow to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only
 public `github.com`, `gitlab.com`, and `bitbucket.org` URLs; nothing is written or kept). The tools then take a
 `repo` URL (and an optional `ref`). It listens on `0.0.0.0:8848/mcp` by default (set `--host 127.0.0.1` to keep it
-to your own machine, or `--port`/`$PORT` to change the port); put an authenticating rate-limited proxy in front
-before exposing it publicly.
+to your own machine, or `--port`/`$PORT` to change the port) and answers health checks at `/health` (use this one
+on Cloud Run, which reserves `/healthz`) and `/healthz`. Every request clones and scans, so a server anyone can
+reach spends compute on anyone's behalf: keep it behind authentication, such as Cloud Run's IAM, unless you accept
+that cost.
 
 The tools are read-only (they never write to the repo); use the CLI's `generate`/`wire` to actually emit and
 enforce rules.
@@ -331,8 +334,8 @@ graph) is in place and tested, and an adversarial correctness audit (three round
 the false-positive rate on auto-generated rules to zero for the mechanical families, which is why those
 auto-enforce while the structural-inference families are held for review. Versioning is still 0.x, so the CLI
 surface and rule format can refine between minor versions, that is a maturing surface, not experimental
-analysis; the 0.6.0 release moved the output to the compact `.archprint/` layout, and `archprint migrate`
-upgrades an older setup in place.
+analysis; the compact `.archprint/` layout arrived in 0.6.0, and `archprint migrate` upgrades an older setup
+in place.
 
 Production-ready today: `scan` and `recommend` (insight), and auto-enforcement of the mechanical families,
 with a self-consistency check at generate time, an `init` scaffolder for fresh repos, and framework coverage

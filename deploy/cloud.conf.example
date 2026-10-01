@@ -1,0 +1,5 @@
+PROJECT=your-project-id
+REGION=your-region
+ACCOUNT=you@example.com
+SERVICE=your-service-name
+BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX
