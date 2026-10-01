@@ -288,6 +288,43 @@ describe('deploy credential isolation', () => {
     }
   });
 
+  for (const [signedInAs, deletes] of [
+    ['a@example.com', true],
+    ['someone@other-org.example', false],
+  ] as const) {
+    it(`teardown ${deletes ? 'deletes only the configured service' : 'refuses under another account'}`, () => {
+      const stubDir = scratch();
+      const calls = path.join(scratch(), 'calls');
+      writeFileSync(
+        path.join(stubDir, 'gcloud'),
+        `#!/bin/sh\nif [ "$1" = "auth" ] && [ "$2" = "list" ]; then echo "${signedInAs}"; exit 0; fi\necho "$*" >> "${calls}"\n`,
+      );
+      chmodSync(path.join(stubDir, 'gcloud'), 0o755);
+
+      const run = spawnSync('sh', [path.join(deployDir, 'teardown.sh')], {
+        env: {
+          ...process.env,
+          PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+          ARCHPRINT_CLOUD_CONF: confFile(
+            'PROJECT=p\nREGION=r\nACCOUNT=a@example.com\nSERVICE=svc\n',
+          ),
+          ARCHPRINT_CLOUDSDK_CONFIG: path.join(scratch(), 'cloudsdk'),
+        },
+        encoding: 'utf8',
+      });
+
+      if (deletes) {
+        expect(run.status).toBe(0);
+        expect(readFileSync(calls, 'utf8').trim()).toBe(
+          'run services delete svc --region r --project=p',
+        );
+      } else {
+        expect(run.status).not.toBe(0);
+        expect(existsSync(calls), 'nothing may be deleted').toBe(false);
+      }
+    });
+  }
+
   it('keeps the real config out of version control', () => {
     const ignores = (file: string): boolean =>
       spawnSync('git', ['check-ignore', file], { cwd: repoRoot, encoding: 'utf8' }).status === 0;

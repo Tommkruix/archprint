@@ -3,6 +3,21 @@
 Archprint mines the architecture rules your repo already follows, gates them on evidence, and emits them into
 the tools you already use.
 
+**Find the rules your code already follows, and see the evidence for one:**
+
+![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](/demo/scan.gif)
+
+**Ask for them over MCP, the way Claude Code or Cursor does:**
+
+![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](/demo/mcp.gif)
+
+## Try it in your browser
+
+[Open the demo in StackBlitz](https://stackblitz.com/github/Tommkruix/archprint-demo), nothing to install. It is a
+small Next.js API whose routes reach the database only through a service layer. The scan runs as soon as it opens,
+and the [demo's README](https://github.com/Tommkruix/archprint-demo#try-it) walks through enforcing a rule in
+ESLint, breaking it, and asking for the rules over MCP.
+
 ## Install
 
 ```bash
@@ -108,7 +123,9 @@ contract: `0` on success, `1` on error.
 
 `archprint mcp` runs archprint as an MCP server over stdio so Claude, Cursor, and other agents can inspect the
 rules your repo already follows before they write code. It exposes read-only `archprint_scan`,
-`archprint_recommend`, and `archprint_explain` tools. Point any MCP client at it:
+`archprint_recommend`, and `archprint_explain` tools. Each rule comes back stated in plain words, with its
+evidence and the files that break it, and `archprint_explain` takes any rule label from the scan (for example
+`AP-002` or `env-access`). Point any MCP client at it:
 
 ```json
 {

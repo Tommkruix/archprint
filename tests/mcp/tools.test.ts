@@ -50,12 +50,24 @@ describe('mcp tools', () => {
 
   it('explainTool returns the gate evidence for a known rule', () => {
     const result = explainTool('AP-002', auto);
-    expect(result.pattern.id).toBe('AP-002');
-    expect(result.pattern.gate).toBeDefined();
+    expect(result.rule.label).toBe('AP-002');
+    expect(result.rule.statement).toBe(result.pattern?.description);
+    expect(result.pattern?.gate).toBeDefined();
   });
 
-  it('explainTool throws for an unknown rule id', () => {
-    expect(() => explainTool('AP-999', auto)).toThrow(/No pattern/);
+  it('explainTool explains a family rule and names every file that breaks it', () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'archprint-mcp-'));
+    tmpDirs.push(tmp);
+    cpSync(auto, tmp, { recursive: true });
+    writeFileSync(path.join(tmp, 'lib', 'flag.ts'), 'export const flag = process.env.FLAG;\n');
+    const result = explainTool('env-access', tmp);
+    expect(result.rule.statement).toBe('read process.env only in the config layer');
+    expect(result.rule.exceptions).toEqual(['lib/flag.ts']);
+    expect(result.pattern).toBeUndefined();
+  });
+
+  it('explainTool throws for an unknown rule id and lists the rules it found', () => {
+    expect(() => explainTool('AP-999', auto)).toThrow(/No rule "AP-999".*Rules found: .*AP-002/);
   });
 
   it('scanTool throws when there is no tsconfig and no discoverable app', () => {
@@ -76,8 +88,8 @@ describe('mcp runTool dispatch', () => {
 
   it('routes archprint_explain and requires an id', () => {
     expect(
-      (runTool('archprint_explain', { id: 'AP-002', path: auto }) as { pattern: { id: string } })
-        .pattern.id,
+      (runTool('archprint_explain', { id: 'AP-002', path: auto }) as { rule: { label: string } })
+        .rule.label,
     ).toBe('AP-002');
     expect(() => runTool('archprint_explain', { path: auto })).toThrow(/requires an "id"/);
   });

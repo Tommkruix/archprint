@@ -9,6 +9,9 @@ hero:
       text: Get started
       link: /getting-started
     - theme: alt
+      text: Try it in your browser
+      link: https://stackblitz.com/github/Tommkruix/archprint-demo
+    - theme: alt
       text: Concepts
       link: /concepts
     - theme: alt

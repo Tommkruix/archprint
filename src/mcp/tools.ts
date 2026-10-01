@@ -2,7 +2,12 @@ import * as path from 'node:path';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers } from '../scanner/enforcers.js';
 import { scanRepo } from '../cli/scan.js';
-import { toScanSummary, type ScanSummary } from '../cli/summary.js';
+import {
+  summarizeRules,
+  toScanSummary,
+  type RuleSummary,
+  type ScanSummary,
+} from '../cli/summary.js';
 import { buildRecommendations, detectStack, type Recommendations } from '../cli/recommend.js';
 import type { DetectedPattern } from '../detector/pattern-detector.js';
 
@@ -45,16 +50,27 @@ export function recommendTool(input: string): AppRecommendations[] {
 
 export interface ExplainResult {
   app: string;
-  pattern: DetectedPattern;
+  rule: RuleSummary;
+  pattern?: DetectedPattern;
 }
 
 export function explainTool(id: string, input: string): ExplainResult {
   const { root, dirs } = resolveAppDirs(input);
+  const wanted = id.toLowerCase();
+  const known: string[] = [];
   for (const dir of dirs) {
-    const pattern = scanRepo(dir, { deep: false }).patterns.find(
-      (candidate) => candidate.config.id.toLowerCase() === id.toLowerCase(),
-    );
-    if (pattern) return { app: displayApp(dir, root), pattern: pattern.result };
+    const scan = scanRepo(dir, { deep: false });
+    const rules = summarizeRules(scan, Number.POSITIVE_INFINITY);
+    const rule = rules.find((candidate) => candidate.label.toLowerCase() === wanted);
+    if (rule) {
+      const pattern = scan.patterns.find(
+        (candidate) => candidate.config.id.toLowerCase() === wanted,
+      );
+      return { app: displayApp(dir, root), rule, ...(pattern && { pattern: pattern.result }) };
+    }
+    known.push(...rules.map((candidate) => candidate.label));
   }
-  throw new Error(`No pattern "${id}" found under ${path.resolve(input)}.`);
+  throw new Error(
+    `No rule "${id}" found under ${path.resolve(input)}. Rules found: ${[...new Set(known)].join(', ') || 'none'}.`,
+  );
 }

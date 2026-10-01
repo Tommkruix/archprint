@@ -13,6 +13,18 @@ already respects, and turns the ones that pass a statistical confidence gate int
 install lint rules. Every rule ships with the evidence behind it: how many files conform, how many break it,
 and how confident the inference is.
 
+**Find the rules your code already follows, and see the evidence for one:**
+
+![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](docs/public/demo/scan.gif)
+
+**Ask for them over MCP, the way Claude Code or Cursor does:**
+
+![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](docs/public/demo/mcp.gif)
+
+**Try it in your browser, nothing to install:** [open the demo in StackBlitz](https://stackblitz.com/github/Tommkruix/archprint-demo).
+The scan runs as soon as it opens, and the [demo's README](https://github.com/Tommkruix/archprint-demo#try-it)
+walks through enforcing a rule in ESLint, breaking it, and asking for the rules over MCP.
+
 Your `CLAUDE.md` is guidance. Your lint rules are enforcement. Archprint closes the gap by generating the
 enforcement from patterns your codebase already demonstrates, so you adopt rules you can trust instead of
 authoring them by hand.
@@ -138,7 +150,6 @@ A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 
 trimmed:
 
 ```
-Archprint v0.7.1
 Scanned 2,232 TypeScript files
 Workspace aliases: 18 resolved
 
@@ -246,8 +257,10 @@ this layout and rewires your configs in place.
 
 `archprint mcp` runs archprint as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent can
 ask what architecture rules your repo already follows, with the evidence, before it writes code. It exposes three
-read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Point Claude Desktop, Claude
-Code, Cursor, or any MCP client at it:
+read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Each rule comes back stated
+in plain words, with its evidence and the files that break it, and `archprint_explain` takes any rule label from
+the scan (for example `AP-002` or `env-access`). Point Claude Desktop, Claude Code, Cursor, or any MCP client at
+it:
 
 ```json
 {
