@@ -252,8 +252,10 @@ this layout and rewires your configs in place.
 
 `archprint mcp` runs archprint as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent can
 ask what architecture rules your repo already follows, with the evidence, before it writes code. It exposes three
-read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Point Claude Desktop, Claude
-Code, Cursor, or any MCP client at it:
+read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Each rule comes back stated
+in plain words, with its evidence and the files that break it, and `archprint_explain` takes any rule label from
+the scan (for example `AP-002` or `env-access`). Point Claude Desktop, Claude Code, Cursor, or any MCP client at
+it:
 
 ```json
 {

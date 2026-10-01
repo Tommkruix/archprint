@@ -30,7 +30,7 @@ describe('remote tools', () => {
 
   it('recommends and explains against the cloned working tree', async () => {
     expect(await toolsFor(auto).remoteRecommend(anyRepo)).toHaveLength(1);
-    expect((await toolsFor(auto).remoteExplain('AP-002', anyRepo)).pattern.id).toBe('AP-002');
+    expect((await toolsFor(auto).remoteExplain('AP-002', anyRepo)).rule.label).toBe('AP-002');
   });
 
   it('rejects an invalid repo URL before cloning', async () => {

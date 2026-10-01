@@ -117,7 +117,9 @@ contract: `0` on success, `1` on error.
 
 `archprint mcp` runs archprint as an MCP server over stdio so Claude, Cursor, and other agents can inspect the
 rules your repo already follows before they write code. It exposes read-only `archprint_scan`,
-`archprint_recommend`, and `archprint_explain` tools. Point any MCP client at it:
+`archprint_recommend`, and `archprint_explain` tools. Each rule comes back stated in plain words, with its
+evidence and the files that break it, and `archprint_explain` takes any rule label from the scan (for example
+`AP-002` or `env-access`). Point any MCP client at it:
 
 ```json
 {
