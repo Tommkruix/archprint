@@ -1,0 +1,105 @@
+#!/bin/sh
+# Runs gcloud against this repo's own credential directory, never the machine default.
+# gcloud keeps credentials, the active account and the active project in one directory for the
+# whole machine, so a bare `gcloud` runs as whichever account is active and `gcloud auth login`
+# repoints that account's work in every other terminal. Sign in with `deploy/gcloud auth login`.
+set -eu
+
+# Collapse `.`, `..` and repeated slashes without touching the filesystem, so a missing
+# intermediate directory cannot hide a `..` that climbs back into the machine default.
+lexical_path() {
+  _input=$1
+  case $_input in
+    /*) _abs=1 ;;
+    *) _abs=0 ;;
+  esac
+  _out=''
+  _oldifs=$IFS
+  IFS='/'
+  set -f
+  for _part in $_input; do
+    case $_part in
+      '' | '.') ;;
+      '..')
+        if [ -n "$_out" ]; then
+          _out=${_out%/*}
+        elif [ "$_abs" -eq 0 ]; then
+          _out='/..'
+        fi
+        ;;
+      *) _out="$_out/$_part" ;;
+    esac
+  done
+  set +f
+  IFS="$_oldifs"
+  if [ "$_abs" -eq 1 ]; then
+    printf '%s' "${_out:-/}"
+  else
+    printf '%s' "${_out#/}"
+  fi
+}
+
+deepest_existing() {
+  _dir=$1
+  while [ -n "$_dir" ] && [ "$_dir" != "/" ] && [ ! -d "$_dir" ]; do
+    _dir=$(dirname -- "$_dir")
+  done
+  printf '%s' "$_dir"
+}
+
+# Physical path: resolve the deepest existing ancestor (pwd -P follows symlinks; realpath is not
+# POSIX and the directory may not exist yet) and re-append whatever is still missing.
+resolved_path() {
+  _full=$(lexical_path "$1")
+  _base=$(deepest_existing "$_full")
+  _suffix=${_full#"$_base"}
+  if [ -d "$_base" ]; then
+    _base=$( (CDPATH= cd -- "$_base" 2>/dev/null && pwd -P) || printf '%s' "$_base")
+  fi
+  case $_base in
+    /) ;;
+    */) _base=${_base%/} ;;
+  esac
+  printf '%s%s' "$_base" "$_suffix"
+}
+
+lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+refuse() {
+  echo "deploy: refusing to use the machine default gcloud configuration." >&2
+  exit 1
+}
+
+CLOUDSDK_CONFIG=$(lexical_path "${ARCHPRINT_CLOUDSDK_CONFIG:-$HOME/.config/gcloud-archprint}")
+
+default_path=$(lexical_path "$HOME/.config/gcloud")
+machine_default=$(resolved_path "$default_path")
+requested=$(resolved_path "$CLOUDSDK_CONFIG")
+
+# Compared case-insensitively so a case-insensitive volume cannot alias the default under another
+# spelling, including before the default directory exists (when an identity check has nothing to
+# compare against). Refusing a deliberate case variant of the default is the safe direction.
+requested_folded=$(lowercase "$requested")
+default_folded=$(lowercase "$machine_default")
+
+case "$requested_folded" in
+  "$default_folded" | "$default_folded"/*) refuse ;;
+esac
+
+# A case-insensitive volume, a symlink or a hard link can alias the same directory under another
+# name, which no string comparison catches. Compare identity when the default actually exists.
+if [ -d "$default_path" ]; then
+  requested_dir=$(deepest_existing "$CLOUDSDK_CONFIG")
+  if [ -d "$requested_dir" ] && [ "$requested_dir" -ef "$default_path" ]; then
+    refuse
+  fi
+fi
+
+export CLOUDSDK_CONFIG
+
+mkdir -p "$CLOUDSDK_CONFIG"
+chmod 700 "$CLOUDSDK_CONFIG"
+
+exec gcloud "$@"

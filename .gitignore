@@ -22,3 +22,5 @@ tests/cli/__prog__/
 
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+deploy/cloud.conf*
+!deploy/cloud.conf.example
