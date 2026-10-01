@@ -1,6 +1,4 @@
 #!/bin/sh
-# One-time. A budget alerts, it does not cap spend. Kept out of bootstrap because it lives on the billing
-# account rather than the project, and a script that recreates budgets duplicates them.
 set -eu
 
 . "$(dirname -- "$0")/lib.sh"
@@ -22,8 +20,6 @@ gc_unpinned auth application-default set-quota-project "$PROJECT" >/dev/null 2>&
 
 project_number=$(gc_unpinned projects describe "$PROJECT" --format="value(projectNumber)")
 
-# EXCLUDE_ALL_CREDITS: the default measures spend after free credit, so it reads near zero for the whole
-# trial window and never fires.
 gc_unpinned billing budgets create \
   --billing-account="$BILLING_ACCOUNT" \
   --display-name="$BUDGET_NAME" \

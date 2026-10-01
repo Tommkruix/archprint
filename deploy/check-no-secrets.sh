@@ -1,8 +1,4 @@
 #!/bin/sh
-# Refuses the push if a secret from the local config reached a tracked file.
-# Scans the tree rather than the diff, so removing a value that already leaked is still possible.
-# Only values that can never legitimately appear are checked: the project id and service name are
-# guessable from the public package name and do occur in tests.
 set -eu
 
 root=$(git rev-parse --show-toplevel)

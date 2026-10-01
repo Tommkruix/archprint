@@ -1,4 +1,3 @@
-# Copy to deploy/cloud.conf and fill in. That file is gitignored and is the only place these values live.
 PROJECT=your-project-id
 REGION=your-region
 ACCOUNT=you@example.com

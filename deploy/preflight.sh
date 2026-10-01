@@ -1,5 +1,4 @@
 #!/bin/sh
-# Answers which account this would run as, before anything can act or fail.
 set -eu
 
 . "$(dirname -- "$0")/lib.sh"

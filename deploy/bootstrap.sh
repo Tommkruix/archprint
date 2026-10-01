@@ -1,5 +1,4 @@
 #!/bin/sh
-# Creates the project, links billing and enables the APIs. Idempotent.
 set -eu
 
 . "$(dirname -- "$0")/lib.sh"
@@ -25,8 +24,6 @@ case $billing in
     ;;
 esac
 
-# Without an active project, APIs reached through Application Default Credentials attribute the call
-# elsewhere and fail with SERVICE_DISABLED.
 gc_unpinned config set project "$PROJECT" >/dev/null 2>&1
 
 for api in run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com billingbudgets.googleapis.com; do

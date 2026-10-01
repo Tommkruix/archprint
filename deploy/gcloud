@@ -1,5 +1,4 @@
 #!/bin/sh
-# Runs gcloud against this repo's own credential directory, never the machine default.
 set -eu
 
 without_trailing_slash() {
@@ -10,7 +9,6 @@ without_trailing_slash() {
   printf '%s' "$value"
 }
 
-# Collapse before touching the filesystem: a missing intermediate would otherwise hide a `..`.
 lexical_path() {
   _input=$1
   case $_input in
@@ -51,7 +49,6 @@ deepest_existing() {
   printf '%s' "$_dir"
 }
 
-# realpath is not POSIX and the directory may not exist yet, so resolve the deepest existing ancestor.
 resolved_path() {
   _full=$(lexical_path "$1")
   _base=$(deepest_existing "$_full")
@@ -81,7 +78,6 @@ default_path=$(lexical_path "$HOME/.config/gcloud")
 machine_default=$(resolved_path "$default_path")
 requested=$(resolved_path "$CLOUDSDK_CONFIG")
 
-# Case-folded so a case-insensitive volume cannot alias the default, including before it exists.
 requested_folded=$(lowercase "$requested")
 default_folded=$(lowercase "$machine_default")
 
@@ -89,7 +85,6 @@ case "$requested_folded" in
   "$default_folded" | "$default_folded"/*) refuse ;;
 esac
 
-# Catches symlinks, hard links and case aliases that no string comparison can.
 if [ -d "$default_path" ]; then
   requested_dir=$(deepest_existing "$CLOUDSDK_CONFIG")
   if [ -d "$requested_dir" ] && [ "$requested_dir" -ef "$default_path" ]; then
@@ -99,7 +94,6 @@ fi
 
 export CLOUDSDK_CONFIG
 
-# A separate credential channel from gcloud's own login; pin it so it cannot fall back to the default.
 GOOGLE_APPLICATION_CREDENTIALS="$CLOUDSDK_CONFIG/application_default_credentials.json"
 export GOOGLE_APPLICATION_CREDENTIALS
 

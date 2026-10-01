@@ -1,5 +1,4 @@
 # shellcheck shell=sh
-# Sourced by every deploy script. No step reads gcloud's active account or project.
 
 DEPLOY_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 GCLOUD="$DEPLOY_DIR/gcloud"
@@ -38,7 +37,6 @@ gc() {
   "$GCLOUD" "$@" --project="$PROJECT"
 }
 
-# For commands that take the project as a positional argument, such as creating it.
 gc_unpinned() {
   require_guard
   "$GCLOUD" "$@"
