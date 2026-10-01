@@ -1,5 +1,15 @@
 # archprint
 
+## 0.7.1
+
+### Patch Changes
+
+- The remote MCP server now answers health checks at `/health` as well as `/healthz`. Cloud Run reserves `/healthz` and answers it before the request reaches the server, so use `/health` there.
+
+  The docs now say plainly which server to use for what: the local stdio server (`archprint mcp`) is the one for private code, because it reads your local checkout and your source never leaves your machine; the remote HTTP server scans public repositories by URL, and since every request clones and scans, a hosted instance belongs behind authentication.
+
+- Refresh the README so it describes the current release: the sample CLI output no longer shows an old version banner, and the wording about the `.archprint/` layout is stated as when it arrived rather than as the latest release, so it stays accurate in future versions.
+
 ## 0.7.0
 
 ### Minor Changes
