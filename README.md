@@ -13,6 +13,12 @@ already respects, and turns the ones that pass a statistical confidence gate int
 install lint rules. Every rule ships with the evidence behind it: how many files conform, how many break it,
 and how confident the inference is.
 
+![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](https://raw.githubusercontent.com/Tommkruix/archprint/main/docs/public/demo/scan.gif)
+
+**Try it in your browser, nothing to install:** [open the demo in StackBlitz](https://stackblitz.com/github/Tommkruix/archprint-demo).
+The scan runs as soon as it opens, and the [demo's README](https://github.com/Tommkruix/archprint-demo#try-it)
+walks through enforcing a rule in ESLint, breaking it, and asking for the rules over MCP.
+
 Your `CLAUDE.md` is guidance. Your lint rules are enforcement. Archprint closes the gap by generating the
 enforcement from patterns your codebase already demonstrates, so you adopt rules you can trust instead of
 authoring them by hand.
@@ -259,6 +265,8 @@ Code, Cursor, or any MCP client at it:
 
 That default is a local stdio server, and it is the one to use for private code: it runs on your machine against
 your local checkout, so your source never leaves it, whichever git host you use.
+
+![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](https://raw.githubusercontent.com/Tommkruix/archprint/main/docs/public/demo/mcp.gif)
 
 To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`. It clones
 the repo shallow to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only

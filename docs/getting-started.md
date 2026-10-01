@@ -3,6 +3,15 @@
 Archprint mines the architecture rules your repo already follows, gates them on evidence, and emits them into
 the tools you already use.
 
+![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](/demo/scan.gif)
+
+## Try it in your browser
+
+[Open the demo in StackBlitz](https://stackblitz.com/github/Tommkruix/archprint-demo), nothing to install. It is a
+small Next.js API whose routes reach the database only through a service layer. The scan runs as soon as it opens,
+and the [demo's README](https://github.com/Tommkruix/archprint-demo#try-it) walks through enforcing a rule in
+ESLint, breaking it, and asking for the rules over MCP.
+
 ## Install
 
 ```bash
@@ -120,6 +129,8 @@ rules your repo already follows before they write code. It exposes read-only `ar
 
 That is a local stdio server over the repo you point the client at, and it is the one to use for private code:
 your source never leaves your machine, whichever git host you use.
+
+![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](/demo/mcp.gif)
 
 To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`: it clones
 the repo shallow to a temp dir (public `github.com`, `gitlab.com`, or `bitbucket.org` only), runs the same

@@ -42,6 +42,15 @@ Useful scripts:
   tests; reserve `v8 ignore` for genuinely defensive or unreachable branches, each with a stated reason.
 - Generated ESLint rules are tested with ESLint's `RuleTester` (valid and invalid cases).
 
+## Demo media
+
+The GIFs in the README and docs are recorded from
+[archprint-demo](https://github.com/Tommkruix/archprint-demo) with [VHS](https://github.com/charmbracelet/vhs).
+The scripts live in `scripts/demo/`, and `scripts/demo/record.sh` clones the demo at a pinned commit, installs the
+archprint version in `package.json` from npm, and re-records every GIF into `docs/public/demo/`. Pass names to
+record only some of them, for example `scripts/demo/record.sh scan mcp`. Re-record after each release so the
+version shown matches the one published.
+
 ## Commits and changesets
 
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) (`type(scope): summary`), for example
