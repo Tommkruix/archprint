@@ -519,6 +519,8 @@ describe('init', () => {
     expect((config().enforced as unknown[]).length).toBeGreaterThan(0);
     expect(output()).toContain('initialized');
     expect(output()).toContain('Enforcing now');
+    expect(output()).toContain('Wrote .archprint/config.json.');
+    expect(output()).toContain("Run 'archprint wire'");
   });
 
   it('records "." for the app path when run from the app directory', async () => {
@@ -547,6 +549,7 @@ describe('init', () => {
     await run(['init', reject]);
     expect(config()).toHaveProperty('adopt');
     expect(output()).toContain('initialized');
+    expect(output()).not.toContain('archprint wire');
   });
 
   it('includes structural families with --include-structural and notes the caveat', async () => {
