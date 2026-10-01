@@ -47,9 +47,12 @@ Useful scripts:
 The GIFs in the README and docs are recorded from
 [archprint-demo](https://github.com/Tommkruix/archprint-demo) with [VHS](https://github.com/charmbracelet/vhs).
 The scripts live in `scripts/demo/`, and `scripts/demo/record.sh` clones the demo at a pinned commit, installs the
-archprint version in `package.json` from npm, and re-records every GIF into `docs/public/demo/`. Pass names to
-record only some of them, for example `scripts/demo/record.sh scan mcp`. Re-record after each release so the
-version shown matches the one published.
+archprint version in `package.json` from npm, and re-records every GIF into `docs/public/demo/` from a clean
+environment. Pass names to record only some of them, for example `scripts/demo/record.sh scan explain`. The
+`claude-code` recording runs Claude Code from a separate profile (`CLAUDE_DEMO_PROFILE`, default
+`~/.config/claude-archprint-demo`), so none of your own settings or history can appear on screen; sign in to it once
+with `CLAUDE_CONFIG_DIR=<that path> claude`. Check every frame before committing, and re-record after each release
+so the version shown matches the one published.
 
 ## Commits and changesets
 
