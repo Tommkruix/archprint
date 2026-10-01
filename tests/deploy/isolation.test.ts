@@ -230,6 +230,41 @@ describe('deploy credential isolation', () => {
     });
   }
 
+  it('uploads only the Dockerfile to Cloud Build', () => {
+    const rules = readFileSync(path.join(deployDir, '.gcloudignore'), 'utf8')
+      .split('\n')
+      .filter(Boolean);
+    expect(rules[0]).toBe('*');
+    expect(rules.filter((rule) => rule.startsWith('!'))).toEqual(['!Dockerfile']);
+  });
+
+  it('refuses a cloud command when the account guard has not run', () => {
+    const probe = path.join(deployDir, '.probe-unguarded.sh');
+    writeFileSync(probe, '#!/bin/sh\nset -eu\n. "$(dirname -- "$0")/lib.sh"\ngc version\n');
+    try {
+      const stubDir = scratch();
+      const marker = path.join(scratch(), 'gcloud-ran');
+      writeFileSync(path.join(stubDir, 'gcloud'), `#!/bin/sh\ntouch "${marker}"\n`);
+      chmodSync(path.join(stubDir, 'gcloud'), 0o755);
+
+      const run = spawnSync('sh', [probe], {
+        env: {
+          ...process.env,
+          PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+          ARCHPRINT_CLOUD_CONF: confFile('PROJECT=p\nREGION=r\nACCOUNT=a@example.com\n'),
+          ARCHPRINT_CLOUDSDK_CONFIG: path.join(scratch(), 'cloudsdk'),
+        },
+        encoding: 'utf8',
+      });
+
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).toMatch(/before the account guard ran/);
+      expect(existsSync(marker), 'gcloud must never be reached').toBe(false);
+    } finally {
+      rmSync(probe, { force: true });
+    }
+  });
+
   it('keeps the real config out of version control', () => {
     const ignores = (file: string): boolean =>
       spawnSync('git', ['check-ignore', file], { cwd: repoRoot, encoding: 'utf8' }).status === 0;
