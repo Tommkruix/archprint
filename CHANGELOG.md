@@ -1,5 +1,16 @@
 # archprint
 
+## 0.8.0
+
+### Minor Changes
+
+- The MCP tools and `scan --json` now say what each rule means and which files break it. Every rule carries a plain-language `statement` (the same wording `archprint scan` prints) and an `exceptions` list naming the files that break it (up to 10; `violatingFiles` still has the full count). `archprint_explain` now explains any rule from the scan by its label, such as `env-access` or `lib !-> app`, not only the `AP-` rules, and returns every exception file. An agent can now answer "what rules does this repo follow?" accurately from a single scan, instead of guessing what a family name means.
+
+### Patch Changes
+
+- `archprint init` now ends with the right next step. It names the config file it actually wrote (`.archprint/config.json`) and tells you to run `archprint wire` to reference the generated rules from your linter config, instead of describing an older file layout.
+- The README and docs now open with a short recording of `archprint scan` and `archprint explain` on a real Next.js API, and link to a demo you can try in the browser on StackBlitz with nothing to install. The MCP section shows an MCP client calling `archprint_scan`.
+
 ## 0.7.1
 
 ### Patch Changes
