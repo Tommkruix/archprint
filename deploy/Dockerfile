@@ -4,7 +4,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-ARG ARCHPRINT_VERSION=0.7.0
+ARG ARCHPRINT_VERSION=0.7.1
 RUN npm install -g "archprint@${ARCHPRINT_VERSION}" && npm cache clean --force
 
 USER node
