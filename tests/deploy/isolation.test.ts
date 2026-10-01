@@ -169,6 +169,31 @@ describe('deploy credential isolation', () => {
     expect(run.stdout).toBe(isolated);
   });
 
+  it('pins Application Default Credentials inside the isolated directory', () => {
+    const stubDir = scratch();
+    const bin = path.join(stubDir, 'gcloud');
+    writeFileSync(bin, '#!/bin/sh\nprintf "%s" "$GOOGLE_APPLICATION_CREDENTIALS"\n');
+    chmodSync(bin, 0o755);
+    const isolated = path.join(scratch(), 'cloudsdk');
+
+    const run = spawnSync('sh', [path.join(deployDir, 'gcloud'), 'version'], {
+      env: {
+        ...process.env,
+        PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+        ARCHPRINT_CLOUDSDK_CONFIG: isolated,
+        GOOGLE_APPLICATION_CREDENTIALS: path.join(
+          process.env.HOME ?? '',
+          '.config',
+          'gcloud',
+          'application_default_credentials.json',
+        ),
+      },
+      encoding: 'utf8',
+    });
+
+    expect(run.stdout).toBe(path.join(isolated, 'application_default_credentials.json'));
+  });
+
   const disguises = (home: string): [string, string][] => [
     ['exact', `${home}/.config/gcloud`],
     ['trailing slash', `${home}/.config/gcloud/`],

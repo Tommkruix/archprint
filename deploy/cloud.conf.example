@@ -1,7 +1,6 @@
-# Copy to deploy/cloud.conf and fill in. deploy/cloud.conf is gitignored and is the only place
-# the project, region and account are recorded. Never commit it and never put these values in a
-# tracked file. Nothing here is a secret; real secrets belong in Secret Manager.
+# Copy to deploy/cloud.conf and fill in. That file is gitignored and is the only place these values live.
 PROJECT=your-project-id
-REGION=us-central1
+REGION=your-region
 ACCOUNT=you@example.com
-SERVICE=archprint-mcp
+SERVICE=your-service-name
+BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX

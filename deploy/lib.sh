@@ -1,6 +1,5 @@
 # shellcheck shell=sh
-# Loads the local config and refuses to act as any account but the configured one.
-# Sourced by every deploy script; no step reads gcloud's active account or project.
+# Sourced by every deploy script. No step reads gcloud's active account or project.
 
 DEPLOY_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 GCLOUD="$DEPLOY_DIR/gcloud"
@@ -27,4 +26,20 @@ guard() {
   fi
   [ -n "$signed_in" ] || stop "no account is signed in. Run: $GCLOUD auth login"
   [ "$signed_in" = "$ACCOUNT" ] || stop "signed in as $signed_in but the config expects $ACCOUNT. Refusing."
+  ARCHPRINT_DEPLOY_GUARDED=1
+}
+
+require_guard() {
+  [ "${ARCHPRINT_DEPLOY_GUARDED:-}" = "1" ] || stop "a cloud command was attempted before the account guard ran."
+}
+
+gc() {
+  require_guard
+  "$GCLOUD" "$@" --project="$PROJECT"
+}
+
+# For commands that take the project as a positional argument, such as creating it.
+gc_unpinned() {
+  require_guard
+  "$GCLOUD" "$@"
 }
