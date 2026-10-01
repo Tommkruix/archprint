@@ -31,3 +31,22 @@ for api in run.googleapis.com artifactregistry.googleapis.com cloudbuild.googlea
   gc services enable "$api" >/dev/null
 done
 echo "deploy: APIs enabled."
+
+IMAGE_REPOSITORY=cloud-run-source-deploy
+
+if ! gc artifacts repositories describe "$IMAGE_REPOSITORY" --location="$REGION" >/dev/null 2>&1; then
+  echo "deploy: creating image repository."
+  gc artifacts repositories create "$IMAGE_REPOSITORY" --repository-format=docker --location="$REGION" >/dev/null
+fi
+
+policy=$(mktemp)
+trap 'rm -f "$policy"' EXIT
+cat >"$policy" <<'EOF'
+[
+  {"name": "keep-latest", "action": {"type": "Keep"}, "mostRecentVersions": {"keepCount": 2}},
+  {"name": "delete-older", "action": {"type": "Delete"}, "condition": {"tagState": "any"}}
+]
+EOF
+gc artifacts repositories set-cleanup-policies "$IMAGE_REPOSITORY" \
+  --location="$REGION" --policy="$policy" --no-dry-run >/dev/null
+echo "deploy: image repository keeps only the two most recent images."

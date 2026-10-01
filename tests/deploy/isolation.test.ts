@@ -230,6 +230,29 @@ describe('deploy credential isolation', () => {
     });
   }
 
+  it('ignores gcloud overrides inherited from the environment', () => {
+    const stubDir = scratch();
+    writeFileSync(
+      path.join(stubDir, 'gcloud'),
+      '#!/bin/sh\nprintf "%s|%s|%s" "${CLOUDSDK_AUTH_ACCESS_TOKEN:-}" "${CLOUDSDK_CORE_ACCOUNT:-}" "${CLOUDSDK_CORE_PROJECT:-}"\n',
+    );
+    chmodSync(path.join(stubDir, 'gcloud'), 0o755);
+
+    const run = spawnSync('sh', [path.join(deployDir, 'gcloud'), 'version'], {
+      env: {
+        ...process.env,
+        PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+        ARCHPRINT_CLOUDSDK_CONFIG: path.join(scratch(), 'cloudsdk'),
+        CLOUDSDK_AUTH_ACCESS_TOKEN: 'token-from-another-account',
+        CLOUDSDK_CORE_ACCOUNT: 'someone@other-org.example',
+        CLOUDSDK_CORE_PROJECT: 'another-project',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(run.stdout).toBe('||');
+  });
+
   it('uploads only the Dockerfile to Cloud Build', () => {
     const rules = readFileSync(path.join(deployDir, '.gcloudignore'), 'utf8')
       .split('\n')

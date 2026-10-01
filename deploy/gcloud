@@ -72,6 +72,13 @@ refuse() {
   exit 1
 }
 
+for _var in $(env | sed -n 's/^\(CLOUDSDK_[A-Za-z0-9_]*\)=.*/\1/p'); do
+  case $_var in
+    CLOUDSDK_PYTHON | CLOUDSDK_PYTHON_SITEPACKAGES) ;;
+    *) unset "$_var" ;;
+  esac
+done
+
 CLOUDSDK_CONFIG=$(lexical_path "${ARCHPRINT_CLOUDSDK_CONFIG:-$HOME/.config/gcloud-archprint}")
 
 default_path=$(lexical_path "$HOME/.config/gcloud")
