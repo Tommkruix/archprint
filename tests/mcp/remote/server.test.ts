@@ -94,6 +94,18 @@ describe('remote server descriptors', () => {
     expect(byName.archprint_scan!.inputSchema.required).toEqual(['repo']);
     expect(byName.archprint_explain!.inputSchema.required).toEqual(['id', 'repo']);
   });
+
+  it('marks every remote tool read-only and open-world, since it fetches a repository', () => {
+    for (const tool of REMOTE_TOOLS) {
+      expect(tool.title).toMatch(/^[A-Z]/);
+      expect(tool.annotations).toEqual({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      });
+    }
+  });
 });
 
 describe('remote server over an in-memory transport', () => {

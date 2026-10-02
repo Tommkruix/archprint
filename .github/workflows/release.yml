@@ -37,10 +37,30 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: changesets/action@v2
+      - id: changesets
+        uses: changesets/action@v2
         if: steps.state.outputs.skip != 'true'
         with:
-          version-script: npx changeset version
+          version-script: npm run version-packages
           publish-script: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish to the MCP Registry
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          MCP_PUBLISHER_VERSION: 1.8.1
+        run: |
+          version=$(node -p "require('./package.json').version")
+          for attempt in $(seq 1 60); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/archprint/$version")
+            [ "$status" = "200" ] && break
+            sleep 20
+          done
+          [ "$status" = "200" ] || { echo "npm did not serve archprint@$version in time"; exit 1; }
+          base="https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}"
+          curl -sSfLO "$base/mcp-publisher_linux_amd64.tar.gz"
+          curl -sSfL "$base/registry_${MCP_PUBLISHER_VERSION}_checksums.txt" \
+            | grep ' mcp-publisher_linux_amd64.tar.gz$' | sha256sum -c -
+          tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

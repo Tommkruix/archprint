@@ -288,6 +288,13 @@ scan (for example `AP-002` or `env-access`). Point Claude Desktop, Claude Code, 
 }
 ```
 
+**Things to ask your agent.** You do not name the tools; the agent picks them:
+
+- "What architecture rules does this repo already follow?"
+- "Which file breaks the env-access rule, and how should I fix it?"
+- "I am adding a new API route. What rules should it follow in this codebase?"
+- "Which rules should we enforce now, and which are worth adopting?"
+
 **Your code stays on your machine.** This default is a local server: it reads your local checkout, so it is the
 one to use for private code, and your source never leaves your machine, whichever git host you use.
 
