@@ -46,20 +46,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to the MCP Registry
-        if: steps.changesets.outputs.published == 'true'
+        if: steps.changesets.outputs.published == 'true' || steps.state.outputs.skip == 'true'
         env:
           MCP_PUBLISHER_VERSION: 1.8.1
         run: |
+          fetch() { curl -s -o /dev/null -w '%{http_code}' --max-time 120 --retry 3 --retry-all-errors "$1" || echo 000; }
           version=$(node -p "require('./package.json').version")
+          name=$(node -p "require('./package.json').mcpName")
+          served=000
           for attempt in $(seq 1 60); do
-            status=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/archprint/$version")
-            [ "$status" = "200" ] && break
+            served=$(fetch "https://registry.npmjs.org/archprint/$version")
+            [ "$served" = "200" ] && break
             sleep 20
           done
-          [ "$status" = "200" ] || { echo "npm did not serve archprint@$version in time"; exit 1; }
+          [ "$served" = "200" ] || { echo "npm did not serve archprint@$version in time; rerun this workflow."; exit 1; }
+          if [ "$(npm view "archprint@$version" mcpName 2>/dev/null)" != "$name" ]; then
+            echo "archprint@$version on npm does not declare mcpName $name; nothing to publish to the MCP Registry."
+            exit 0
+          fi
+          encoded=$(node -p "encodeURIComponent('$name')")
+          if [ "$(fetch "https://registry.modelcontextprotocol.io/v0.1/servers/$encoded/versions/$version")" = "200" ]; then
+            echo "$name $version is already in the MCP Registry."
+            exit 0
+          fi
           base="https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}"
-          curl -sSfLO "$base/mcp-publisher_linux_amd64.tar.gz"
-          curl -sSfL "$base/registry_${MCP_PUBLISHER_VERSION}_checksums.txt" \
+          curl -sSfLO --retry 3 "$base/mcp-publisher_linux_amd64.tar.gz"
+          curl -sSfL --retry 3 "$base/registry_${MCP_PUBLISHER_VERSION}_checksums.txt" \
             | grep ' mcp-publisher_linux_amd64.tar.gz$' | sha256sum -c -
           tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
           ./mcp-publisher login github-oidc
