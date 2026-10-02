@@ -161,6 +161,25 @@ evidence and the files that break it, and `archprint_explain` takes any rule lab
 }
 ```
 
+If the client says the server failed to start or `npx` was not found, it cannot see your shell's `PATH`. Desktop
+apps opened from the Dock or Start menu do not load it, which is common when Node comes from nvm or Homebrew. A full
+path to `npx` alone is not enough, because `npx` itself needs `node` on the `PATH`. Point both at the folder that
+`dirname "$(which node)"` prints, for example `/opt/homebrew/bin`:
+
+```json
+{
+  "mcpServers": {
+    "archprint": {
+      "command": "/opt/homebrew/bin/npx",
+      "args": ["-y", "archprint", "mcp"],
+      "env": { "PATH": "/opt/homebrew/bin:/usr/bin:/bin" }
+    }
+  }
+}
+```
+
+Starting the editor from a terminal also works, because it then inherits your shell's `PATH`.
+
 That is a local stdio server over the repo you point the client at, and it is the one to use for private code:
 your source never leaves your machine, whichever git host you use.
 
