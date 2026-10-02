@@ -23,7 +23,7 @@ export const TOOLS = [
   {
     name: 'archprint_recommend',
     description:
-      'Recommend an architecture rule set for this repo from its evidence and detected stack: what to enforce now, what to review before enforcing, and what comparable repos commonly adopt that this repo does not yet. Read-only.',
+      'Recommend an architecture rule set for this repo from its evidence and detected stack: what to enforce now, what the code already follows that archprint reports but does not write a rule for yet (reportOnly), what to review before enforcing, and what comparable repos commonly adopt that this repo does not yet. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {

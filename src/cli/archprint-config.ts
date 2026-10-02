@@ -20,6 +20,7 @@ export interface ArchprintConfig {
   stack: string[];
   rulesDir: string;
   enforced: Recommendation[];
+  reportOnly: Recommendation[];
   review: Recommendation[];
   adopt: Recommendation[];
   evidence: { apps: number; asOf: string };
@@ -52,6 +53,7 @@ export function buildConfig(
     stack: recommendations.stack,
     rulesDir: location.rulesDir,
     enforced: recommendations.enforceNow,
+    reportOnly: recommendations.reportOnly,
     review: recommendations.review,
     adopt: recommendations.adopt,
     evidence: recommendations.evidence,
@@ -85,6 +87,7 @@ export function recordManagedFiles(
     stack: [],
     rulesDir: path.relative(cwd, outDir) || outDir,
     enforced: [],
+    reportOnly: [],
     review: [],
     adopt: [],
     evidence: { apps: 0, asOf: '' },
@@ -104,6 +107,7 @@ export function readConfig(outDir: string): ArchprintConfig | null {
       stack: parsed.stack ?? [],
       rulesDir: parsed.rulesDir ?? '.archprint',
       enforced: parsed.enforced ?? [],
+      reportOnly: parsed.reportOnly ?? [],
       review: parsed.review ?? [],
       adopt: parsed.adopt ?? [],
       evidence: parsed.evidence ?? { apps: 0, asOf: '' },

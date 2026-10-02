@@ -19,6 +19,15 @@ the tools you already use.
 
 ![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](/demo/claude-code.gif)
 
+**Cursor works the same way, with Grok 4.7 rather than Claude.** In the desktop app's chat, its agent called
+archprint's scan tool on its own; this screenshot shows the tool result and the answer:
+
+![Cursor's desktop chat, running Grok 4.7, answering from archprint's scan result: the rules and lib/db.ts as the one exception](/demo/cursor-app.png)
+
+In the terminal (`cursor-agent`), it asks once before running the tool, then answers from it:
+
+![Cursor's terminal agent, running Grok 4.7, approving archprint_scan once and answering with the rules and lib/db.ts as the one exception](/demo/cursor.gif)
+
 **Measured, with and without archprint.** The same question in Claude Code (Opus 5.5) on the demo app (70
 files), five runs each, median [range]:
 
@@ -74,8 +83,9 @@ archprint init apps/web
 
 `init` scans the repo, writes the auto-trusted (mechanical) rules into `.archprint/` (only for the linters
 your repo uses, it detects ESLint and dependency-cruiser), adds a managed section to your `README.md`
-explaining what it did, and prints three tiers: what is enforced now, what to review before
-enforcing, and what comparable repos commonly adopt that you do not yet. Then reference the generated rules from
+explaining what it did, and prints the tiers: what is enforced now, what your code follows that is reported but
+not written as a rule yet (circular dependencies today), what to review before enforcing, and what comparable repos
+commonly adopt that you do not yet. Then reference the generated rules from
 your linter:
 
 ```bash
@@ -135,8 +145,9 @@ updating the package); it moves everything to `.archprint/` and rewires your lin
 archprint recommend apps/web
 ```
 
-`recommend` works even with little code to learn from: it sorts every rule family into enforce-now / review /
-adopt-from-day-one, names the installed tool that will enforce each rule (or what to install), and the adopt
+`recommend` works even with little code to learn from: it sorts every rule family into enforce-now /
+followed-but-reported-only / review / adopt-from-day-one, names the installed tool that will enforce each rule it
+can write (or what to install), and the adopt
 tier is backed by a census of tens of thousands of public TypeScript repos (stack-aware), not hand-picked
 defaults.
 
@@ -160,6 +171,25 @@ evidence and the files that break it, and `archprint_explain` takes any rule lab
   }
 }
 ```
+
+If the client says the server failed to start or `npx` was not found, it cannot see your shell's `PATH`. Desktop
+apps opened from the Dock or Start menu do not load it, which is common when Node comes from nvm or Homebrew. A full
+path to `npx` alone is not enough, because `npx` itself needs `node` on the `PATH`. Point both at the folder that
+`dirname "$(which node)"` prints, for example `/opt/homebrew/bin`:
+
+```json
+{
+  "mcpServers": {
+    "archprint": {
+      "command": "/opt/homebrew/bin/npx",
+      "args": ["-y", "archprint", "mcp"],
+      "env": { "PATH": "/opt/homebrew/bin:/usr/bin:/bin" }
+    }
+  }
+}
+```
+
+Starting the editor from a terminal also works, because it then inherits your shell's `PATH`.
 
 That is a local stdio server over the repo you point the client at, and it is the one to use for private code:
 your source never leaves your machine, whichever git host you use.

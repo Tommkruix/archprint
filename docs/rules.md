@@ -21,10 +21,11 @@ the UI layer (AP-002). Markers (what counts as "the DB client" or "the UI layer"
 different but valid convention; AP-001 is treated as a case study (idiomatic direct-ORM is common), AP-002 is
 the confirmatory rule.
 
-### Circular dependencies — Auto
+### Circular dependencies — Report
 
 Detects runtime import cycles in the module graph; gated on how cycle-free the repo already is. Type-only edges
-are excluded, so a cycle closed only by an `import type` is not flagged. **When not to use:** rarely, cycles are
+are excluded, so a cycle closed only by an `import type` is not flagged. The family is trusted, but Archprint does
+not write a lint rule for it yet; dependency-cruiser's `no-circular` rule enforces it if you need that now. **When not to use:** rarely, cycles are
 a near-universal smell.
 
 ### Test isolation — Auto

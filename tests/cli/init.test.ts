@@ -5,7 +5,8 @@ import type { Recommendations } from '../../src/cli/recommend.js';
 const recommendations: Recommendations = {
   stack: ['next', 'react'],
   evidence: { apps: 100, asOf: '2026-09-01' },
-  enforceNow: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
+  enforceNow: [{ title: 'Console isolation', rate: 22.2, enforcer: 'eslint' }],
+  reportOnly: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
   review: [{ title: 'Entry purity', rate: 2.7, enforcer: 'dependency-cruiser' }],
   adopt: [{ title: 'Test isolation', rate: 33.4, enforcer: 'eslint' }],
 };
@@ -33,7 +34,8 @@ describe('buildConfig', () => {
       app: '.',
       stack: ['next', 'react'],
       rulesDir: '.archprint',
-      enforced: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
+      enforced: [{ title: 'Console isolation', rate: 22.2, enforcer: 'eslint' }],
+      reportOnly: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
       review: [{ title: 'Entry purity', rate: 2.7, enforcer: 'dependency-cruiser' }],
       adopt: [{ title: 'Test isolation', rate: 33.4, enforcer: 'eslint' }],
       evidence: { apps: 100, asOf: '2026-09-01' },

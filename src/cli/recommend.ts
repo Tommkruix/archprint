@@ -210,6 +210,7 @@ export interface Recommendations {
   stack: string[];
   evidence: { apps: number; asOf: string };
   enforceNow: Recommendation[];
+  reportOnly: Recommendation[];
   review: Recommendation[];
   adopt: Recommendation[];
 }
@@ -231,6 +232,7 @@ export function buildRecommendations(
   enforcers: InstalledEnforcers,
 ): Recommendations {
   const enforceNow: Recommendation[] = [];
+  const reportOnly: Recommendation[] = [];
   const review: Recommendation[] = [];
   const adopt: Recommendation[] = [];
   for (const family of FAMILIES) {
@@ -240,19 +242,22 @@ export function buildRecommendations(
       rate: adoptionRate(family.title, stack),
       enforcer: resolveEnforcer(family.key, enforcers),
     };
-    if (status === 'AUTO' && isStableFamily(family.key)) enforceNow.push(entry);
+    if (status === 'AUTO' && isStableFamily(family.key))
+      (FAMILY_TOOL[family.key] === 'none' ? reportOnly : enforceNow).push(entry);
     else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);
     else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);
   }
   const byRate = (a: Recommendation, b: Recommendation): number =>
     (b.rate ?? -1) - (a.rate ?? -1) || a.title.localeCompare(b.title);
   enforceNow.sort(byRate);
+  reportOnly.sort(byRate);
   review.sort(byRate);
   adopt.sort(byRate);
   return {
     stack: [...stack].sort(),
     evidence: { apps: ADOPTION_CATALOG.meta.apps, asOf: ADOPTION_CATALOG.meta.asOf },
     enforceNow,
+    reportOnly,
     review,
     adopt,
   };
