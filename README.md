@@ -296,10 +296,24 @@ it:
 }
 ```
 
-If the client reports that the server failed to start or `npx` was not found, it usually cannot see your shell's
-`PATH`. Desktop apps opened from the Dock or Start menu do not load it, which is common when Node comes from nvm or
-Homebrew. Set `"command"` to the full path that `which npx` prints (for example `/opt/homebrew/bin/npx`), or start
-the editor from a terminal.
+If the client says the server failed to start or `npx` was not found, it cannot see your shell's `PATH`. Desktop
+apps opened from the Dock or Start menu do not load it, which is common when Node comes from nvm or Homebrew. A full
+path to `npx` alone is not enough, because `npx` itself needs `node` on the `PATH`. Point both at the folder that
+`dirname "$(which node)"` prints, for example `/opt/homebrew/bin`:
+
+```json
+{
+  "mcpServers": {
+    "archprint": {
+      "command": "/opt/homebrew/bin/npx",
+      "args": ["-y", "archprint", "mcp"],
+      "env": { "PATH": "/opt/homebrew/bin:/usr/bin:/bin" }
+    }
+  }
+}
+```
+
+Starting the editor from a terminal also works, because it then inherits your shell's `PATH`.
 
 That default is a local stdio server, and it is the one to use for private code: it runs on your machine against
 your local checkout, so your source never leaves it, whichever git host you use.
