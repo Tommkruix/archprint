@@ -50,28 +50,35 @@ jobs:
         env:
           MCP_PUBLISHER_VERSION: 1.8.1
         run: |
-          fetch() { curl -s -o /dev/null -w '%{http_code}' --max-time 120 --retry 3 --retry-all-errors "$1" || echo 000; }
+          status() { curl -s -o /dev/null -w '%{http_code}' --max-time "$2" "$1" || echo 000; }
           version=$(node -p "require('./package.json').version")
-          name=$(node -p "require('./package.json').mcpName")
+          name=$(node -p "require('./package.json').mcpName ?? ''")
+          [ -n "$name" ] || { echo "package.json has no mcpName; cannot publish to the MCP Registry."; exit 1; }
           served=000
           for attempt in $(seq 1 60); do
-            served=$(fetch "https://registry.npmjs.org/archprint/$version")
+            served=$(status "https://registry.npmjs.org/archprint/$version" 20)
             [ "$served" = "200" ] && break
             sleep 20
           done
-          [ "$served" = "200" ] || { echo "npm did not serve archprint@$version in time; rerun this workflow."; exit 1; }
+          if [ "$served" != "200" ]; then
+            echo "npm did not serve archprint@$version within 20 minutes. Wait until it does, then rerun."
+            exit 1
+          fi
           if [ "$(npm view "archprint@$version" mcpName 2>/dev/null)" != "$name" ]; then
             echo "archprint@$version on npm does not declare mcpName $name; nothing to publish to the MCP Registry."
             exit 0
           fi
-          encoded=$(node -p "encodeURIComponent('$name')")
-          if [ "$(fetch "https://registry.modelcontextprotocol.io/v0.1/servers/$encoded/versions/$version")" = "200" ]; then
+          encoded=$(node -p "encodeURIComponent(process.argv[1])" -- "$name")
+          listed=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 --retry 3 --retry-all-errors \
+            --retry-max-time 300 "https://registry.modelcontextprotocol.io/v0.1/servers/$encoded/versions/$version" || echo 000)
+          if [ "$listed" = "200" ]; then
             echo "$name $version is already in the MCP Registry."
             exit 0
           fi
           base="https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}"
-          curl -sSfLO --retry 3 "$base/mcp-publisher_linux_amd64.tar.gz"
-          curl -sSfL --retry 3 "$base/registry_${MCP_PUBLISHER_VERSION}_checksums.txt" \
+          download="curl -sSfL --max-time 300 --retry 3 --retry-all-errors"
+          $download -O "$base/mcp-publisher_linux_amd64.tar.gz"
+          $download "$base/registry_${MCP_PUBLISHER_VERSION}_checksums.txt" \
             | grep ' mcp-publisher_linux_amd64.tar.gz$' | sha256sum -c -
           tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
           ./mcp-publisher login github-oidc
