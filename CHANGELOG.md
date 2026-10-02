@@ -1,5 +1,13 @@
 # archprint
 
+## 0.8.1
+
+### Patch Changes
+
+- `archprint eject` now restores an ESLint config exactly when its array starts on the same line as its first entry (for example `export default [{ ignores: ['dist/'] }, ...]`). `wire` used to break that line to insert its reference, and `eject` left the line break behind. `wire` now inserts the reference inline on that line, and `eject` removes exactly what it added. Configs with a multi-line array are unchanged.
+- Scanning now skips the same files git does for `.gitignore` patterns where a wildcard has to reach past a partial match, such as `f*o/*/*` matching `foo/b/c`. Before, a few such patterns failed to match and those files were scanned. Scan output is unchanged on the large repositories we checked.
+- The README and docs show three short recordings (scan, explain, and asking Claude Code in plain words) and a measured comparison of the same question in Claude Code with and without archprint on the demo app, with the method, harness and every answer published alongside.
+
 ## 0.8.0
 
 ### Minor Changes
