@@ -3,13 +3,35 @@
 Archprint mines the architecture rules your repo already follows, gates them on evidence, and emits them into
 the tools you already use.
 
-**Find the rules your code already follows, and see the evidence for one:**
+**Find the rules your code already follows:**
 
-![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](/demo/scan.gif)
+![archprint scan listing the rules a Next.js API already follows, with the evidence for each](/demo/scan.gif)
 
-**Ask for them over MCP, the way Claude Code or Cursor does:**
+**See the evidence behind one:**
 
-![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](/demo/mcp.gif)
+![archprint explain showing the confidence gate behind AP-001](/demo/explain.gif)
+
+**Or just ask your agent.** Claude Code calls archprint over MCP on its own:
+
+![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](/demo/claude-code.gif)
+
+**Measured, with and without archprint.** The same question in Claude Code (Opus 5.5) on the demo app (70
+files), five runs each, median [range]:
+
+|                   | Without archprint         | With archprint            |
+| ----------------- | ------------------------- | ------------------------- |
+| Tokens read       | 81k [58k to 96k]          | 52k [52k to 52k]          |
+| Tokens written    | 1.1k [1.1k to 1.4k]       | 0.6k [0.6k to 0.6k]       |
+| Cost per question | $0.083 [$0.078 to $0.153] | $0.037 [$0.032 to $0.076] |
+| Time              | 17 s [15 to 19]           | 10 s [9 to 31]            |
+| Tool calls        | 5 [4 to 10]               | 2 [2 to 2]                |
+
+Both found the main rule (routes reach the database only through `lib/services/`). With archprint, every run gave
+the evidence for each rule and named the one file that breaks one (`lib/db.ts` reads `process.env` outside the
+config layer); no run without it noticed that. Without archprint, Claude also described naming conventions
+archprint does not check. About 50k of the tokens read in both columns are Claude Code's own system prompt. This
+is one small repo; larger ones are not measured yet.
+[Method, harness and every answer](https://github.com/Tommkruix/archprint-demo/tree/main/bench).
 
 ## Try it in your browser
 

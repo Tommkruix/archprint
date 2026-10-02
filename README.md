@@ -13,13 +13,35 @@ already respects, and turns the ones that pass a statistical confidence gate int
 install lint rules. Every rule ships with the evidence behind it: how many files conform, how many break it,
 and how confident the inference is.
 
-**Find the rules your code already follows, and see the evidence for one:**
+**Find the rules your code already follows:**
 
-![archprint scan finding the rules a Next.js API already follows, then explaining the evidence behind one](docs/public/demo/scan.gif)
+![archprint scan listing the rules a Next.js API already follows, with the evidence for each](docs/public/demo/scan.gif)
 
-**Ask for them over MCP, the way Claude Code or Cursor does:**
+**See the evidence behind one:**
 
-![An MCP client connecting to archprint mcp, listing its tools, and calling archprint_scan](docs/public/demo/mcp.gif)
+![archprint explain showing the confidence gate behind AP-001](docs/public/demo/explain.gif)
+
+**Or just ask your agent.** Claude Code calls archprint over MCP on its own:
+
+![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](docs/public/demo/claude-code.gif)
+
+**Measured, with and without archprint.** The same question in Claude Code (Opus 5.5) on the demo app (70
+files), five runs each, median [range]:
+
+|                   | Without archprint         | With archprint            |
+| ----------------- | ------------------------- | ------------------------- |
+| Tokens read       | 81k [58k to 96k]          | 52k [52k to 52k]          |
+| Tokens written    | 1.1k [1.1k to 1.4k]       | 0.6k [0.6k to 0.6k]       |
+| Cost per question | $0.083 [$0.078 to $0.153] | $0.037 [$0.032 to $0.076] |
+| Time              | 17 s [15 to 19]           | 10 s [9 to 31]            |
+| Tool calls        | 5 [4 to 10]               | 2 [2 to 2]                |
+
+Both found the main rule (routes reach the database only through `lib/services/`). With archprint, every run gave
+the evidence for each rule and named the one file that breaks one (`lib/db.ts` reads `process.env` outside the
+config layer); no run without it noticed that. Without archprint, Claude also described naming conventions
+archprint does not check. About 50k of the tokens read in both columns are Claude Code's own system prompt. This
+is one small repo; larger ones are not measured yet.
+[Method, harness and every answer](https://github.com/Tommkruix/archprint-demo/tree/main/bench).
 
 **Try it in your browser, nothing to install:** [open the demo in StackBlitz](https://stackblitz.com/github/Tommkruix/archprint-demo).
 The scan runs as soon as it opens, and the [demo's README](https://github.com/Tommkruix/archprint-demo#try-it)
@@ -181,28 +203,28 @@ components across React (`.tsx`), Angular (`.component.ts`, `.directive.ts`), an
 components (it reads the `<script>` block of `.vue`/`.svelte` files), so the component-aware rules apply
 regardless of framework.
 
-| Detector                         | Rule it can infer                                                                                                    | Ships as |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
-| Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          | Auto     |
-| Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         | Auto     |
-| Test isolation                   | Production (non-test) code must not import test or spec files                                                        | Auto     |
-| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Review   |
-| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Review   |
-| Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    | Auto     |
-| Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     | Auto     |
-| Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          | Auto     |
-| Layer boundaries                 | Files in one layer must not import another, inferred from the dominant dependency direction                          | Review   |
-| Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) | Review   |
-| Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            | Review   |
-| UI / data separation             | Reusable UI components must not import the DB/data layer directly                                                    | Review   |
-| Server / client boundary         | A Next.js `"use client"` module must not import a `server-only` module                                               | Review   |
-| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                  | Review   |
-| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                                | Review   |
-| Env access                       | Read `process.env` only in the config/env layer                                                                      | Review   |
-| Workspace package API            | Import a monorepo workspace package by its name, not a deep path into its source                                     | Review   |
-| Stories isolation                | Storybook `.stories` files must not be imported by other code                                                        | Review   |
-| Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates)                                      | Report   |
-| Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                        | Report   |
+| Detector                           | Rule it can infer                                                                                                          | Ships as |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Forbidden imports (AP-001, AP-002) | AP-001: a request entry (route handler) must not import the DB client. AP-002: a server entry must not import the UI layer | Auto     |
+| Circular dependencies              | The module graph should stay acyclic (gated on how cycle free it already is)                                               | Auto     |
+| Test isolation                     | Production (non-test) code must not import test or spec files                                                              | Auto     |
+| Dependency hygiene                 | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                           | Review   |
+| Dependency declaration             | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                         | Review   |
+| Import style                       | Prefer workspace aliases over deep relative imports (`../../../`)                                                          | Auto     |
+| Console isolation                  | Library (non-CLI) code must not call `console.*`                                                                           | Auto     |
+| Public API (barrel) boundaries     | Files outside a feature or package must import it through its `index` barrel, not deep import its internals                | Auto     |
+| Layer boundaries                   | Files in one layer must not import another, inferred from the dominant dependency direction                                | Review   |
+| Role layering                      | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER)       | Review   |
+| Entry purity                       | Framework entries (pages, routes, layouts) must not be imported by other first-party code                                  | Review   |
+| UI / data separation               | Reusable UI components must not import the DB/data layer directly                                                          | Review   |
+| Server / client boundary           | A Next.js `"use client"` module must not import a `server-only` module                                                     | Review   |
+| Feature-slice isolation            | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                        | Review   |
+| App isolation                      | Sibling apps under an `apps`/`services` container must not import each other directly                                      | Review   |
+| Env access                         | Read `process.env` only in the config/env layer                                                                            | Review   |
+| Workspace package API              | Import a monorepo workspace package by its name, not a deep path into its source                                           | Review   |
+| Stories isolation                  | Storybook `.stories` files must not be imported by other code                                                              | Review   |
+| Orphan modules                     | Files nothing imports and that are not framework entries (dead code candidates)                                            | Report   |
+| Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
 ## The confidence gate
 
