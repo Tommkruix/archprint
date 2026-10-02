@@ -34,7 +34,7 @@ export const REMOTE_TOOLS = [
   {
     name: 'archprint_recommend',
     description:
-      'Clone a public repository by URL (read-only, ephemeral) and recommend an architecture rule set from its evidence and stack: what to enforce now, what to review before enforcing, and what comparable repos commonly adopt that this one does not yet.',
+      'Clone a public repository by URL (read-only, ephemeral) and recommend an architecture rule set from its evidence and stack: what to enforce now, what the code already follows that archprint reports but does not write a rule for yet (reportOnly), what to review before enforcing, and what comparable repos commonly adopt that this one does not yet.',
     inputSchema: { type: 'object', properties: { ...repoProperty }, required: ['repo'] },
   },
   {

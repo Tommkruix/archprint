@@ -76,6 +76,7 @@ describe('renderAdoptionMarkdown', () => {
         stack: [],
         evidence: { apps: 1, asOf: 'x' },
         enforceNow: [{ title: 'Console isolation', rate: 50, enforcer: 'eslint' }],
+        reportOnly: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
         review: [{ title: 'Layer boundaries', rate: null, enforcer: 'dependency-cruiser' }],
         adopt: [],
       },
@@ -85,6 +86,8 @@ describe('renderAdoptionMarkdown', () => {
     expect(md).toContain('## Enforcing now');
     expect(md).toContain('- Console isolation (eslint) (50% of comparable repos)');
     expect(md).toContain('- Layer boundaries (dependency-cruiser)');
+    expect(md).toContain('## Report only');
+    expect(md).toContain('- Circular dependencies (56.8% of comparable repos)');
     expect(md).not.toContain('## Worth adopting');
   });
 });
@@ -110,6 +113,19 @@ describe('buildRecommendations', () => {
     const layer = structural.review.find((r) => r.title === 'Layer boundaries');
     expect(layer).toBeDefined();
     expect(typeof layer?.rate).toBe('number');
+  });
+
+  it('reports a followed family that no tool can enforce instead of claiming to enforce it', () => {
+    const rec = buildRecommendations(
+      scanRepo(fixture('cli-auto'), { deep: false }),
+      new Set(),
+      allTools,
+    );
+    expect(rec.reportOnly.map((r) => r.title)).toEqual(['Circular dependencies']);
+    expect(rec.enforceNow.some((r) => r.title === 'Circular dependencies')).toBe(false);
+    const out = renderRecommendations(rec, '1.0.0');
+    expect(out).toContain('REPORT ONLY');
+    expect(out.indexOf('Circular dependencies')).toBeGreaterThan(out.indexOf('REPORT ONLY'));
   });
 
   it('adopts families common in comparable repos, drops rare ones, sorted by rate', () => {

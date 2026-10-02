@@ -73,10 +73,10 @@ are never left with config for a tool you do not have (`--emit all` forces every
   ESLint setup, which already parses your TypeScript), so it can be committed, published, or shared and adopted
   in one line,
 - `.archprint/dependency-cruiser.json`: one `forbidden` ruleset (when dependency-cruiser is present),
-- `.archprint/config.json`: the system file recording what is enforced, held for review, worth adopting, and
-  the managed outputs `eject` removes,
-- a managed section in your `README.md` explaining what is enforced, held for review, and worth adopting, plus a
-  managed `.prettierignore` entry so the generated files stay out of your formatter.
+- `.archprint/config.json`: the system file recording what is enforced, followed but only reported, held for
+  review, worth adopting, and the managed outputs `eject` removes,
+- a managed section in your `README.md` explaining what is enforced, followed but only reported, held for review,
+  and worth adopting, plus a managed `.prettierignore` entry so the generated files stay out of your formatter.
 
 `--expand` additionally writes the granular artifacts inside `.archprint/`: per-family ESLint and
 dependency-cruiser JSON, a plugin, per-rule cards with passing and failing fixtures, ts-arch tests, and the

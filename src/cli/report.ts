@@ -549,6 +549,11 @@ export function renderAdoptionBody(rec: Recommendations): string {
       rec.enforceNow,
     ),
     ...adoptionSection(
+      'Report only',
+      'Your code already follows these, but archprint does not write a rule for them yet, so nothing enforces them.',
+      rec.reportOnly,
+    ),
+    ...adoptionSection(
       'Held for review',
       'Close, but the evidence is thin or the inference could be wrong. Review with `archprint scan` before enforcing.',
       rec.review,
@@ -589,6 +594,11 @@ export function renderRecommendations(rec: Recommendations, version: string): st
       lines.push(green(`  + ${r.title}`) + enforcerTag(r) + evidence(r));
     lines.push(dim('  Run: archprint generate'), '');
   }
+  if (rec.reportOnly.length > 0) {
+    lines.push(bold('REPORT ONLY (followed, no rule written yet)'));
+    for (const r of rec.reportOnly) lines.push(`  • ${r.title}` + evidence(r));
+    lines.push('');
+  }
   if (rec.review.length > 0) {
     lines.push(yellow(bold('REVIEW AND ADOPT (close, thin evidence)')));
     for (const r of rec.review) lines.push(yellow(`  ~ ${r.title}`) + enforcerTag(r) + evidence(r));
@@ -599,7 +609,12 @@ export function renderRecommendations(rec: Recommendations, version: string): st
     for (const r of rec.adopt) lines.push(dim(`  - ${r.title}`) + evidence(r));
     lines.push('');
   }
-  if (rec.enforceNow.length === 0 && rec.review.length === 0 && rec.adopt.length === 0) {
+  if (
+    rec.enforceNow.length === 0 &&
+    rec.reportOnly.length === 0 &&
+    rec.review.length === 0 &&
+    rec.adopt.length === 0
+  ) {
     lines.push(dim('No recommendations: no stack detected and no code to learn from yet.'));
   }
   return lines.join('\n');
@@ -632,6 +647,11 @@ export function renderInit(
     lines.push('');
   } else {
     lines.push(dim('No rules your code already follows cleanly enough to enforce yet.'), '');
+  }
+  if (manifest.reportOnly.length > 0) {
+    lines.push(bold('Report only (followed, no rule written yet)'));
+    for (const r of manifest.reportOnly) lines.push(`  • ${r.title}` + evidence(r));
+    lines.push('');
   }
   if (manifest.review.length > 0) {
     lines.push(yellow(bold('Review before enforcing (close, thin or lower-confidence evidence)')));

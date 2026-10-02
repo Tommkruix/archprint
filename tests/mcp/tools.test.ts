@@ -40,10 +40,11 @@ describe('mcp tools', () => {
     expect(apps.map((a) => a.app).sort()).toEqual(['app-a', 'app-b']);
   });
 
-  it('recommendTool returns the three tiers', () => {
+  it('recommendTool returns every tier, with cycles reported rather than enforced', () => {
     const apps = recommendTool(auto);
     expect(apps).toHaveLength(1);
     expect(Array.isArray(apps[0]!.enforceNow)).toBe(true);
+    expect(apps[0]!.reportOnly.map((r) => r.title)).toEqual(['Circular dependencies']);
     expect(Array.isArray(apps[0]!.review)).toBe(true);
     expect(Array.isArray(apps[0]!.adopt)).toBe(true);
   });
