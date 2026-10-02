@@ -296,6 +296,11 @@ it:
 }
 ```
 
+If the client reports that the server failed to start or `npx` was not found, it usually cannot see your shell's
+`PATH`. Desktop apps opened from the Dock or Start menu do not load it, which is common when Node comes from nvm or
+Homebrew. Set `"command"` to the full path that `which npx` prints (for example `/opt/homebrew/bin/npx`), or start
+the editor from a terminal.
+
 That default is a local stdio server, and it is the one to use for private code: it runs on your machine against
 your local checkout, so your source never leaves it, whichever git host you use.
 
