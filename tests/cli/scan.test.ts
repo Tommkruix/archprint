@@ -546,13 +546,13 @@ describe('cli scan', () => {
     expect(report).toContain('utils reaches api through another layer');
   });
 
-  it('renders enforceable dependency hygiene and its offender count when suggested', () => {
+  it('renders dependency hygiene as held for review, and its offender count when suggested', () => {
     const base = emptyScan({ fileCount: 100, aliasCount: 1 });
     const auto = renderReport(
       { ...base, dependencyInternals: fakeDependencyInternals(40, 0) },
       '1.0.0',
     );
-    expect(auto).toContain('DEPENDENCY HYGIENE (enforceable)');
+    expect(auto).toContain('DEPENDENCY HYGIENE (review before enforcing)');
 
     const suggest = renderReport(
       { ...base, dependencyInternals: fakeDependencyInternals(20, 2) },
@@ -646,9 +646,9 @@ describe('cli scan', () => {
     expect(renderReport(emptyScan(), '1.0.0')).not.toContain('IMPORT STYLE');
   });
 
-  it('renders enforceable and suggested dependency declaration, hidden with no externals', () => {
+  it('renders dependency declaration as held for review or suggested, hidden with no externals', () => {
     const auto = renderReport(emptyScan({ phantomDependencies: fakePhantom(40, 0) }), '1.0.0');
-    expect(auto).toContain('DEPENDENCY DECLARATION (enforceable)');
+    expect(auto).toContain('DEPENDENCY DECLARATION (review before enforcing)');
     const suggest = renderReport(emptyScan({ phantomDependencies: fakePhantom(20, 2) }), '1.0.0');
     expect(suggest).toContain('DEPENDENCY DECLARATION (suggested)');
     expect(suggest).toContain('Undeclared (phantom) imports: 2');
@@ -749,7 +749,9 @@ describe('cli scan', () => {
       aliasCount: 1,
       cycles: withCycles([], 40),
     });
-    expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies');
+    expect(renderReport(scan, '1.0.0')).toContain(
+      'No circular dependencies (report only, no rule written yet).',
+    );
   });
 
   it('reports nothing-generatable and omits the footer in deep mode', () => {

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Tommkruix/archprint",
+  "title": "Archprint",
+  "description": "Mine the architecture rules your TypeScript repo already enforces, with the evidence attached.",
+  "repository": {
+    "url": "https://github.com/Tommkruix/archprint",
+    "source": "github"
+  },
+  "version": "0.8.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "archprint",
+      "version": "0.8.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

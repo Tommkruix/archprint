@@ -204,5 +204,5 @@ as Cloud Run's IAM, unless you accept paying for anyone's scans.
 
 ## Next
 
-- [Concepts](./concepts.md) — the confidence gate, mechanical vs. structural, fast vs. deep, the lifecycle.
-- [Rules](./rules.md) — every rule family: what it detects, its evidence, and when not to use it.
+- [Concepts](./concepts.md): the confidence gate, mechanical vs. structural, fast vs. deep, the lifecycle.
+- [Rules](./rules.md): every rule family: what it detects, its evidence, and when not to use it.

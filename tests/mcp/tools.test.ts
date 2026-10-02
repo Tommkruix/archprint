@@ -137,6 +137,21 @@ describe('mcp server over an in-memory transport', () => {
     await client.close();
   });
 
+  it('marks every tool read-only, non-destructive and local, with a human-readable title', async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    for (const tool of tools) {
+      expect(tool.title).toMatch(/^[A-Z]/);
+      expect(tool.annotations).toEqual({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+    }
+    await client.close();
+  });
+
   it('runs archprint_scan and returns its JSON result', async () => {
     const client = await connect();
     const result = (await client.callTool({

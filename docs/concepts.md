@@ -22,10 +22,10 @@ A candidate rule (for example "request-entry files must not import the DB client
 code: how many files in the governed role conform, how many break it, and how confident that ratio is given the
 sample size. Each candidate lands in one of three states:
 
-- **AUTO** — high confidence the rule genuinely holds. Emitted as enforcement.
-- **SUGGEST** — the code mostly follows it, but the evidence is thinner or the role is less certain. Surfaced
+- **AUTO**: high confidence the rule genuinely holds. Emitted as enforcement.
+- **SUGGEST**: the code mostly follows it, but the evidence is thinner or the role is less certain. Surfaced
   for you to review and adopt deliberately.
-- **REJECT** — not followed consistently enough, or the rule governs nothing (vacuous). Not emitted.
+- **REJECT**: not followed consistently enough, or the rule governs nothing (vacuous). Not emitted.
 
 The confidence number is a **Wilson score lower bound** on the true conformance rate, not the raw ratio. This
 fuses the observed ratio with the sample size: 100% conformance over 4 files is not the same as 100% over 400.

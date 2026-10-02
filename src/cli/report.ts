@@ -5,7 +5,8 @@ import type { AppIsolationGroup } from '../detector/app-isolation-detector.js';
 import type { RoleBoundary } from '../detector/role-layering-detector.js';
 import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
-import type { Recommendations } from './recommend.js';
+import { autoTier, type AutoTier, type Recommendations } from './recommend.js';
+import type { FamilyKey } from '../detector/family-maturity.js';
 import { CONFIG_FILE, type ArchprintConfig } from './archprint-config.js';
 import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
@@ -112,6 +113,14 @@ function roleLayerLines(boundary: RoleBoundary): string[] {
   return lines;
 }
 
+const AUTO_LABELS: Record<AutoTier, string> = {
+  enforce: '(enforceable)',
+  'report-only': '(report only, no rule written yet)',
+  review: '(review before enforcing)',
+};
+
+const autoLabel = (key: FamilyKey): string => AUTO_LABELS[autoTier(key)];
+
 export function renderReport(
   scan: ScanResult,
   version: string,
@@ -147,7 +156,7 @@ export function renderReport(
     (boundary) => boundary.gate.status === 'SUGGEST',
   );
   if (autoLayers.length > 0) {
-    lines.push(green(bold('LAYER BOUNDARIES (review before enforcing)')));
+    lines.push(green(bold(`LAYER BOUNDARIES ${autoLabel('layer')}`)));
     for (const boundary of autoLayers) {
       lines.push(...layerLines(boundary));
       if (reachesLayer(scan.reachability, boundary.from, boundary.to)) {
@@ -171,7 +180,7 @@ export function renderReport(
   const autoRoles = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'AUTO');
   const suggestRoles = scan.roleLayering.boundaries.filter((b) => b.gate.status === 'SUGGEST');
   if (autoRoles.length > 0) {
-    lines.push(green(bold('ROLE LAYERING (review before enforcing)')));
+    lines.push(green(bold(`ROLE LAYERING ${autoLabel('role-layering')}`)));
     for (const boundary of autoRoles) lines.push(...roleLayerLines(boundary));
     lines.push('');
   }
@@ -193,7 +202,7 @@ export function renderReport(
     }
     lines.push('');
   } else if (scan.cycles.gate.status === 'AUTO') {
-    lines.push(green('No circular dependencies (the no-cycles rule is enforceable).'), '');
+    lines.push(green(`No circular dependencies ${autoLabel('cycles')}.`), '');
   }
   if (scan.orphans.orphans.length > 0) {
     lines.push(
@@ -215,7 +224,7 @@ export function renderReport(
   const autoApi = scan.publicApi.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApi = scan.publicApi.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoApi.length > 0) {
-    lines.push(green(bold('PUBLIC API BOUNDARIES (enforceable)')));
+    lines.push(green(bold(`PUBLIC API BOUNDARIES ${autoLabel('public-api')}`)));
     for (const g of autoApi) lines.push(...apiLines(g));
     lines.push('');
   }
@@ -228,7 +237,7 @@ export function renderReport(
   const autoSlices = scan.featureSlices.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestSlices = scan.featureSlices.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoSlices.length > 0) {
-    lines.push(green(bold('FEATURE SLICE ISOLATION (review before enforcing)')));
+    lines.push(green(bold(`FEATURE SLICE ISOLATION ${autoLabel('feature-slice')}`)));
     for (const g of autoSlices) lines.push(...sliceLines(g));
     lines.push('');
   }
@@ -243,7 +252,7 @@ export function renderReport(
   const autoApps = scan.appIsolation.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApps = scan.appIsolation.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoApps.length > 0) {
-    lines.push(green(bold('APP ISOLATION (review before enforcing)')));
+    lines.push(green(bold(`APP ISOLATION ${autoLabel('app-isolation')}`)));
     for (const g of autoApps) lines.push(...appLines(g));
     lines.push('');
   }
@@ -261,7 +270,7 @@ export function renderReport(
     (testIso.gate.status === 'AUTO' || testIso.gate.status === 'SUGGEST')
   ) {
     const label = testIso.gate.status === 'AUTO' ? green : yellow;
-    const suffix = testIso.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = testIso.gate.status === 'AUTO' ? autoLabel('test-isolation') : '(suggested)';
     const floor = `${(testIso.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`TEST ISOLATION ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['test-isolation']}   confidence ${floor}`);
@@ -281,7 +290,7 @@ export function renderReport(
     (deps.gate.status === 'AUTO' || deps.gate.status === 'SUGGEST')
   ) {
     const label = deps.gate.status === 'AUTO' ? green : yellow;
-    const suffix = deps.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = deps.gate.status === 'AUTO' ? autoLabel('dependency-hygiene') : '(suggested)';
     const floor = `${(deps.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`DEPENDENCY HYGIENE ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['dependency-hygiene']}   confidence ${floor}`);
@@ -298,7 +307,7 @@ export function renderReport(
   const entry = scan.entryPurity;
   if (entry.entryCount > 0 && (entry.gate.status === 'AUTO' || entry.gate.status === 'SUGGEST')) {
     const label = entry.gate.status === 'AUTO' ? green : yellow;
-    const suffix = entry.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
+    const suffix = entry.gate.status === 'AUTO' ? autoLabel('entry-purity') : '(suggested)';
     const floor = `${(entry.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`ENTRY PURITY ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['entry-purity']}   confidence ${floor}`);
@@ -318,7 +327,7 @@ export function renderReport(
     (phantom.gate.status === 'AUTO' || phantom.gate.status === 'SUGGEST')
   ) {
     const label = phantom.gate.status === 'AUTO' ? green : yellow;
-    const suffix = phantom.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = phantom.gate.status === 'AUTO' ? autoLabel('phantom-deps') : '(suggested)';
     const floor = `${(phantom.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`DEPENDENCY DECLARATION ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['phantom-deps']}   confidence ${floor}`);
@@ -338,7 +347,7 @@ export function renderReport(
     (deepRel.gate.status === 'AUTO' || deepRel.gate.status === 'SUGGEST')
   ) {
     const label = deepRel.gate.status === 'AUTO' ? green : yellow;
-    const suffix = deepRel.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = deepRel.gate.status === 'AUTO' ? autoLabel('import-style') : '(suggested)';
     const floor = `${(deepRel.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`IMPORT STYLE ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['import-style']}   confidence ${floor}`);
@@ -355,7 +364,7 @@ export function renderReport(
   const con = scan.consoleIsolation;
   if (con.libraryFileCount > 0 && (con.gate.status === 'AUTO' || con.gate.status === 'SUGGEST')) {
     const label = con.gate.status === 'AUTO' ? green : yellow;
-    const suffix = con.gate.status === 'AUTO' ? '(enforceable)' : '(suggested)';
+    const suffix = con.gate.status === 'AUTO' ? autoLabel('console-isolation') : '(suggested)';
     const floor = `${(con.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`CONSOLE ISOLATION ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['console-isolation']}   confidence ${floor}`);
@@ -370,7 +379,7 @@ export function renderReport(
   const env = scan.envAccess;
   if (env.subjectFileCount > 0 && (env.gate.status === 'AUTO' || env.gate.status === 'SUGGEST')) {
     const label = env.gate.status === 'AUTO' ? green : yellow;
-    const suffix = env.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
+    const suffix = env.gate.status === 'AUTO' ? autoLabel('env-access') : '(suggested)';
     const floor = `${(env.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`ENV ACCESS ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['env-access']}   confidence ${floor}`);
@@ -386,7 +395,7 @@ export function renderReport(
   const wpkg = scan.workspacePackageApi;
   if (wpkg.consumerCount > 0 && (wpkg.gate.status === 'AUTO' || wpkg.gate.status === 'SUGGEST')) {
     const label = wpkg.gate.status === 'AUTO' ? green : yellow;
-    const suffix = wpkg.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
+    const suffix = wpkg.gate.status === 'AUTO' ? autoLabel('workspace-package-api') : '(suggested)';
     const floor = `${(wpkg.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`WORKSPACE PACKAGE API ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['workspace-package-api']}   confidence ${floor}`);
@@ -406,7 +415,7 @@ export function renderReport(
     (stories.gate.status === 'AUTO' || stories.gate.status === 'SUGGEST')
   ) {
     const label = stories.gate.status === 'AUTO' ? green : yellow;
-    const suffix = stories.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
+    const suffix = stories.gate.status === 'AUTO' ? autoLabel('stories-isolation') : '(suggested)';
     const floor = `${(stories.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`STORIES ISOLATION ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['stories-isolation']}   confidence ${floor}`);
@@ -426,7 +435,7 @@ export function renderReport(
     (uiData.gate.status === 'AUTO' || uiData.gate.status === 'SUGGEST')
   ) {
     const label = uiData.gate.status === 'AUTO' ? green : yellow;
-    const suffix = uiData.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
+    const suffix = uiData.gate.status === 'AUTO' ? autoLabel('ui-data') : '(suggested)';
     const floor = `${(uiData.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`UI / DATA SEPARATION ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['ui-data']}   confidence ${floor}`);
@@ -443,7 +452,7 @@ export function renderReport(
   const sc = scan.serverClient;
   if (sc.clientCount > 0 && (sc.gate.status === 'AUTO' || sc.gate.status === 'SUGGEST')) {
     const label = sc.gate.status === 'AUTO' ? green : yellow;
-    const suffix = sc.gate.status === 'AUTO' ? '(review before enforcing)' : '(suggested)';
+    const suffix = sc.gate.status === 'AUTO' ? autoLabel('server-client') : '(suggested)';
     const floor = `${(sc.gate.conditions.confidence.value * 100).toFixed(0)}%`;
     lines.push(label(bold(`SERVER / CLIENT BOUNDARY ${suffix}`)));
     lines.push(`  ${FAMILY_STATEMENTS['server-client']}   confidence ${floor}`);

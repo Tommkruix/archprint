@@ -64,8 +64,8 @@ so the version shown matches the one published.
 
 Archprint uses two long-lived branches:
 
-- **`develop`** — the integration branch. **Open all PRs against `develop`.**
-- **`main`** — the release branch. Always releasable; publishing to npm is automated on merge to `main`.
+- **`develop`**: the integration branch. **Open all PRs against `develop`.**
+- **`main`**: the release branch. Always releasable; publishing to npm is automated on merge to `main`.
 
 The flow:
 
