@@ -39,8 +39,9 @@ Archprint is deliberately honest about which inferences it will stand behind una
 correctness audit (three rounds over four real repositories) split the rule families in two:
 
 - **Mechanical families** rest on unambiguous signals (no import cycles, production must not import tests, no
-  `console` in library code, import style, public-API barrels, and the DB/UI-in-server-entry rules). These had **zero false positives every round**, so an AUTO result from them
-  auto-generates as enforcement.
+  `console` in library code, import style, public-API barrels, and the DB/UI-in-server-entry rules). These had
+  **zero false positives every round**, so an AUTO result from them auto-generates as enforcement. The one
+  exception is cycles: Archprint reports them but does not write a rule for them yet.
 - **Held-for-review families** are emitted only with `--include-structural`, after you look at the evidence.
   Most infer a "layer" or "role" from file paths, which a path can misread (layer and role boundaries, UI/data
   separation, entry purity, server/client, feature-slice and app isolation, env access, workspace-package,

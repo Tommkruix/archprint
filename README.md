@@ -19,14 +19,14 @@ breaks one without noticing.
 
 Archprint reads a TypeScript project, finds the rules its code already follows, and shows you the proof for each
 one: how many files follow it, which files break it, and how sure it is. The rules you trust become automatic
-checks in the tools your team already runs, so a break is caught the moment it is written, not weeks later in
-review.
+checks in the tools your team already runs, so a break is caught the next time lint runs (in your editor, a
+pre-commit hook or CI), not weeks later in review.
 
 Think of it as a building inspector who surveys the house first and writes down how it was actually built,
 instead of handing you a rulebook from somewhere else.
 
-- **For developers and tech leads:** inferred, evidence-backed lint rules for ESLint and dependency-cruiser, set up
-  in one command and removed in one command.
+- **For developers and tech leads:** inferred, evidence-backed lint rules for ESLint and dependency-cruiser,
+  generated with `init`, connected with `wire`, and removed with `eject`.
 - **For teams using AI coding agents:** Claude Code, Cursor and other agents can ask Archprint for the project's
   rules, with the evidence, before they write code.
 - **For anyone evaluating a codebase:** a quick, honest picture of how a project is actually structured.
@@ -69,8 +69,8 @@ still runs in your linter.
 
 ![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](docs/public/demo/claude-code.gif)
 
-**Cursor works the same way, with Grok 4.7 rather than Claude.** In the desktop app's chat, its agent called
-Archprint's scan tool on its own; this screenshot shows the tool result and the answer:
+**Cursor works the same way.** In these recordings Cursor was set to Grok 4.7, not Claude. In the desktop app's
+chat, its agent called Archprint's scan tool on its own; this screenshot shows the tool result and the answer:
 
 ![Cursor's desktop chat, running Grok 4.7, answering from archprint's scan result: the rules and lib/db.ts as the one exception](docs/public/demo/cursor-app.png)
 
@@ -106,8 +106,9 @@ Setup for Claude Desktop, Claude Code, Cursor and other clients is in [MCP setup
 
 ## Quick start
 
-Requires Node 20 or newer. Run these from your project folder (a folder with a `tsconfig.json`; for a monorepo,
-an app such as `apps/web`, or the root, where Archprint finds the apps itself).
+Requires Node 20 or newer. Run these in a folder with a `tsconfig.json`. In a monorepo, `scan` and `recommend`
+also accept the root and cover every app, while `init` and `generate` work on one app at a time (for example
+`apps/web`); at a root with several apps they list them and ask you to pick one.
 
 ```bash
 # 1. See the rules your code already follows, with the evidence. Changes nothing.
@@ -170,25 +171,29 @@ holds with how many files it was checked on. Each rule lands in one of three gro
 
 - **AUTO** (enforceable): the 95% lower bound on conformance is at least 90%, with at most 3 exceptions and a
   confidently classified role.
-- **SUGGEST** (provisional): the pattern looks like a rule (at least 80% observed) but the sample is too thin to
-  be confident. Surfaced for review, not auto-generated.
+- **SUGGEST** (provisional): the pattern holds in at least 80% of files, but one of the AUTO conditions fails:
+  the evidence is too thin, there are more than 3 exceptions, or the role is less certain. Surfaced for review,
+  not auto-generated.
 - **REJECT**: not enough signal.
 
 **2. Could the rule itself be wrong?** A rule can pass the numbers and still be wrong if Archprint guessed a
-folder's purpose incorrectly. So only the **mechanical** families, which rest on unambiguous signals, turn on
-automatically: forbidden imports (AP-001, AP-002), circular dependencies, test isolation, import style, console
+folder's purpose incorrectly. So only the **mechanical** families, which rest on unambiguous signals, are trusted
+without review: forbidden imports (AP-001, AP-002), circular dependencies, test isolation, import style, console
 isolation, and public-API barrels. An adversarial correctness audit (three rounds over four real repositories)
-found zero false positives in these every round.
+found zero false positives in these every round. All of them except circular dependencies are written as lint
+rules; for cycles, Archprint reports the result but does not write a rule yet.
 
 The **structural** families infer a "layer" or "role" from paths, which can be wrong (layer and role boundaries,
 UI/data separation, entry purity, server/client, feature-slice and app isolation, env access, workspace package
 API, stories isolation). Dependency hygiene, whose enforcement can over-flag, and dependency declaration are held
 back too. All of these are held for your review by default and written as enforcement only with
-`--include-structural`, regardless of their statistical score, until they earn the same clean record. Nothing that could be wrong is enforced without you opting in.
+`--include-structural`, regardless of their statistical score, until they earn the same clean record. Nothing
+that could be wrong is enforced without you opting in.
 
-And before `init` or `generate` calls a rule "enforce now", it checks the rule passes on your current code. A
-generated rule also lets through the few known exception files it was inferred from, so adopting it keeps your
-lint green while new violations are still caught.
+Generated rules are green by construction: each one lets through the few known exception files it was inferred
+from, so adopting it keeps your lint green while new violations are still caught, and a self-consistency check
+refuses to write a rule whose evidence does not hold together. To run the generated rules against your code before
+connecting them, use `archprint generate --check`.
 
 ## What it can detect
 
@@ -202,7 +207,7 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Detector                           | Rule it can infer                                                                                                          | Ships as |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | Forbidden imports (AP-001, AP-002) | AP-001: a request entry (route handler) must not import the DB client. AP-002: a server entry must not import the UI layer | Auto     |
-| Circular dependencies              | The module graph should stay acyclic (gated on how cycle free it already is)                                               | Auto     |
+| Circular dependencies              | The module graph should stay acyclic (gated on how cycle free it already is); reported, no lint rule written yet           | Report   |
 | Test isolation                     | Production (non-test) code must not import test or spec files                                                              | Auto     |
 | Dependency hygiene                 | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                           | Review   |
 | Dependency declaration             | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                         | Review   |
@@ -337,7 +342,7 @@ other TypeScript tool fills:
 Honest caveat: in other ecosystems, [Tach](https://github.com/gauge-sh/tach) (Python) and ArchLint (Java) do
 auto-infer module boundaries, so Archprint's specific niche is auto-inference **plus statistical evidence gating
 in the TypeScript ecosystem**. Archprint also overlaps in detection with dependency-cruiser (cycles, orphans,
-reachability) and knip (dead code); rather than compete, it emits into those tools' formats.
+reachability) and knip (dead code); rather than compete, it writes the rules it generates in those tools' formats.
 
 ## Commands
 
@@ -349,7 +354,7 @@ reachability) and knip (dead code); rather than compete, it emits into those too
 - **`archprint explain <id> [path]`**: shows the gate breakdown for one rule, with a codeframe per exception plus
   how to fix, when not to use it, and how to enforce it.
 - **`archprint recommend [path]`**: recommends a rule set from the repo's evidence and detected stack (works on a
-  fresh repo too), and names the installed tool that will enforce each rule.
+  fresh repo too), and names the installed tool that will enforce each rule it can write.
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
   `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo,
@@ -406,11 +411,12 @@ no randomness, and the analysis engine is pinned to an exact version.
 ## Status
 
 Published on npm and safe to run on your real repo. Every rule is review-gated by default, reversible in one
-command (`archprint eject`), and deterministic, and a rule Archprint marks "enforce now" is checked to pass on your
-code before it says so.
+command (`archprint eject`), and deterministic, and generated rules are green by construction on the code they
+were inferred from.
 
-- **Validated at scale:** `scan` and `recommend` ran across all 92,861 real public TypeScript repositories with
-  zero crashes, and the full `init`/`wire`/`eject` round-trip ran clean on a 2,000-repo stratified sample.
+- **Validated at scale:** `scan` and `recommend` ran over a corpus of 92,861 public TypeScript repositories (61,690
+  apps) with zero crashes; 91 repos (0.1%) could not be fetched or timed out. The full `init`/`wire`/`eject`
+  round-trip ran clean on a 2,000-repo stratified sample.
 - **Production-ready today:** `scan` and `recommend`, and auto-enforcement of the mechanical families, with a
   self-consistency check at generate time, an `init` scaffolder for fresh repos, and framework coverage across
   React, Angular, Vue, and Svelte. The engine (twenty detectors, the confidence gate, and emitters for a
@@ -432,7 +438,7 @@ guidance-vs-enforcement question directly (a pre-registered, honest null result 
   problems as you write.
 - **AUTO / SUGGEST / REJECT:** how confident Archprint is in a rule; see
   [How it decides what to trust](#how-it-decides-what-to-trust).
-- **Mechanical / structural families:** rules based on unambiguous signals (turned on automatically) versus rules
+- **Mechanical / structural families:** rules based on unambiguous signals (trusted without review) versus rules
   that depend on guessing a folder's role (held for your review).
 - **MCP:** an open standard that lets AI agents use outside tools such as Archprint.
 
