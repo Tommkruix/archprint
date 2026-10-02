@@ -69,8 +69,9 @@ uses, Archprint detects ESLint and dependency-cruiser and emits each rule for a 
 are never left with config for a tool you do not have (`--emit all` forces every format):
 
 - `.archprint/eslint.mjs`: one self-contained ESLint flat-config file that inlines every inferred ESLint rule
-  (forbidden imports, import-style, console isolation) and needs only eslint, so it can be committed, published,
-  or shared and adopted in one line,
+  (forbidden imports, import-style, console isolation) and needs no extra plugins (it adds rules to your existing
+  ESLint setup, which already parses your TypeScript), so it can be committed, published, or shared and adopted
+  in one line,
 - `.archprint/dependency-cruiser.json`: one `forbidden` ruleset (when dependency-cruiser is present),
 - `.archprint/config.json`: the system file recording what is enforced, held for review, worth adopting, and
   the managed outputs `eject` removes,

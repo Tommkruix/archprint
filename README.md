@@ -108,7 +108,7 @@ Setup for Claude Desktop, Claude Code, Cursor and other clients is in [MCP setup
 
 Requires Node 20 or newer. Run these in a folder with a `tsconfig.json`. In a monorepo, `scan` and `recommend`
 also accept the root and cover every app, while `init` and `generate` work on one app at a time (for example
-`apps/web`); at a root with several apps they list them and ask you to pick one.
+`apps/web`); at a root with several apps they stop, list the apps, and ask you to rerun with one.
 
 ```bash
 # 1. See the rules your code already follows, with the evidence. Changes nothing.
@@ -171,9 +171,9 @@ holds with how many files it was checked on. Each rule lands in one of three gro
 
 - **AUTO** (enforceable): the 95% lower bound on conformance is at least 90%, with at most 3 exceptions and a
   confidently classified role.
-- **SUGGEST** (provisional): the pattern holds in at least 80% of files, but one of the AUTO conditions fails:
-  the evidence is too thin, there are more than 3 exceptions, or the role is less certain. Surfaced for review,
-  not auto-generated.
+- **SUGGEST** (provisional): the pattern holds in at least 80% of files and the role is at least 50% certain,
+  but one AUTO condition fails: the confidence floor is under 90% (too few files, or too many that break it),
+  more than 3 files break it, or the role is under 80% certain. Surfaced for review, not auto-generated.
 - **REJECT**: not enough signal.
 
 **2. Could the rule itself be wrong?** A rule can pass the numbers and still be wrong if Archprint guessed a
@@ -243,7 +243,8 @@ a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the form
 
 - **`.archprint/eslint.mjs`**: one self-contained ESLint flat-config file that inlines every inferred ESLint rule
   (marker-based forbidden imports, `no-restricted-imports` import-style boundaries, console isolation) and needs
-  only eslint, so you can commit it, publish it, or hand it to another repo and adopt it in one line
+  no extra plugins: it adds rules to your existing ESLint setup, which already parses your TypeScript. So you can
+  commit it, publish it, or hand it to another repo and adopt it in one line
   (`import archprint from './.archprint/eslint.mjs'`). It self-ignores `**/.archprint/**`. The forbidden-import
   rules (AP-) ship as a generated local eslint plugin inside it, so wiring the eslint config enforces them too, no
   extra install.
