@@ -39,14 +39,14 @@ Archprint is deliberately honest about which inferences it will stand behind una
 correctness audit (three rounds over four real repositories) split the rule families in two:
 
 - **Mechanical families** rest on unambiguous signals (no import cycles, production must not import tests, no
-  `console` in library code, no undeclared dependencies, import style, public-API barrels, and the
-  DB/UI-in-server-entry rules). These had **zero false positives every round**, so an AUTO result from them
-  auto-generates as enforcement.
+  `console` in library code, import style, public-API barrels, and the DB/UI-in-server-entry rules). These had
+  **zero false positives every round**, so an AUTO result from them auto-generates as enforcement. The one
+  exception is cycles: Archprint reports them but does not write a rule for them yet.
 - **Held-for-review families** are emitted only with `--include-structural`, after you look at the evidence.
   Most infer a "layer" or "role" from file paths, which a path can misread (layer and role boundaries, UI/data
   separation, entry purity, server/client, feature-slice and app isolation, env access, workspace-package,
   stories); dependency hygiene is here too, because its enforcement can over-flag a package whose entry
-  resolves through `src/`.
+  resolves through `src/`, and so is dependency declaration.
 
 Nothing whose inferred layer or role could be wrong is written as enforcement without you opting in. See
 [rules.md](./rules.md) for the per-family breakdown.
@@ -69,8 +69,9 @@ uses, Archprint detects ESLint and dependency-cruiser and emits each rule for a 
 are never left with config for a tool you do not have (`--emit all` forces every format):
 
 - `.archprint/eslint.mjs`: one self-contained ESLint flat-config file that inlines every inferred ESLint rule
-  (forbidden imports, import-style, console isolation) and needs only eslint, so it can be committed, published,
-  or shared and adopted in one line,
+  (forbidden imports, import-style, console isolation) and needs no extra plugins (it adds rules to your existing
+  ESLint setup, which already parses your TypeScript), so it can be committed, published, or shared and adopted
+  in one line,
 - `.archprint/dependency-cruiser.json`: one `forbidden` ruleset (when dependency-cruiser is present),
 - `.archprint/config.json`: the system file recording what is enforced, held for review, worth adopting, and
   the managed outputs `eject` removes,
