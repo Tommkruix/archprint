@@ -203,28 +203,28 @@ components across React (`.tsx`), Angular (`.component.ts`, `.directive.ts`), an
 components (it reads the `<script>` block of `.vue`/`.svelte` files), so the component-aware rules apply
 regardless of framework.
 
-| Detector                         | Rule it can infer                                                                                                    | Ships as |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
-| Forbidden imports (marker based) | A role (route handler, server entry) must not import a target (the DB client, the UI layer)                          | Auto     |
-| Circular dependencies            | The module graph should stay acyclic (gated on how cycle free it already is)                                         | Auto     |
-| Test isolation                   | Production (non-test) code must not import test or spec files                                                        | Auto     |
-| Dependency hygiene               | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                     | Review   |
-| Dependency declaration           | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                   | Review   |
-| Import style                     | Prefer workspace aliases over deep relative imports (`../../../`)                                                    | Auto     |
-| Console isolation                | Library (non-CLI) code must not call `console.*`                                                                     | Auto     |
-| Public API (barrel) boundaries   | Files outside a feature or package must import it through its `index` barrel, not deep import its internals          | Auto     |
-| Layer boundaries                 | Files in one layer must not import another, inferred from the dominant dependency direction                          | Review   |
-| Role layering                    | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER) | Review   |
-| Entry purity                     | Framework entries (pages, routes, layouts) must not be imported by other first-party code                            | Review   |
-| UI / data separation             | Reusable UI components must not import the DB/data layer directly                                                    | Review   |
-| Server / client boundary         | A Next.js `"use client"` module must not import a `server-only` module                                               | Review   |
-| Feature-slice isolation          | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                  | Review   |
-| App isolation                    | Sibling apps under an `apps`/`services` container must not import each other directly                                | Review   |
-| Env access                       | Read `process.env` only in the config/env layer                                                                      | Review   |
-| Workspace package API            | Import a monorepo workspace package by its name, not a deep path into its source                                     | Review   |
-| Stories isolation                | Storybook `.stories` files must not be imported by other code                                                        | Review   |
-| Orphan modules                   | Files nothing imports and that are not framework entries (dead code candidates)                                      | Report   |
-| Transitive reachability          | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                        | Report   |
+| Detector                           | Rule it can infer                                                                                                          | Ships as |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Forbidden imports (AP-001, AP-002) | AP-001: a request entry (route handler) must not import the DB client. AP-002: a server entry must not import the UI layer | Auto     |
+| Circular dependencies              | The module graph should stay acyclic (gated on how cycle free it already is)                                               | Auto     |
+| Test isolation                     | Production (non-test) code must not import test or spec files                                                              | Auto     |
+| Dependency hygiene                 | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                           | Review   |
+| Dependency declaration             | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                         | Review   |
+| Import style                       | Prefer workspace aliases over deep relative imports (`../../../`)                                                          | Auto     |
+| Console isolation                  | Library (non-CLI) code must not call `console.*`                                                                           | Auto     |
+| Public API (barrel) boundaries     | Files outside a feature or package must import it through its `index` barrel, not deep import its internals                | Auto     |
+| Layer boundaries                   | Files in one layer must not import another, inferred from the dominant dependency direction                                | Review   |
+| Role layering                      | Semantic tiers keep their direction (a REPOSITORY must not import a SERVICE, a SERVICE must not import a CONTROLLER)       | Review   |
+| Entry purity                       | Framework entries (pages, routes, layouts) must not be imported by other first-party code                                  | Review   |
+| UI / data separation               | Reusable UI components must not import the DB/data layer directly                                                          | Review   |
+| Server / client boundary           | A Next.js `"use client"` module must not import a `server-only` module                                                     | Review   |
+| Feature-slice isolation            | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                        | Review   |
+| App isolation                      | Sibling apps under an `apps`/`services` container must not import each other directly                                      | Review   |
+| Env access                         | Read `process.env` only in the config/env layer                                                                            | Review   |
+| Workspace package API              | Import a monorepo workspace package by its name, not a deep path into its source                                           | Review   |
+| Stories isolation                  | Storybook `.stories` files must not be imported by other code                                                              | Review   |
+| Orphan modules                     | Files nothing imports and that are not framework entries (dead code candidates)                                            | Report   |
+| Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
 ## The confidence gate
 
