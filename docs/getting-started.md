@@ -11,6 +11,10 @@ the tools you already use.
 
 ![archprint explain showing the confidence gate behind AP-001](/demo/explain.gif)
 
+**Enforce them in ESLint, watch a break get caught, and remove it all again:**
+
+![archprint init and wire adding the rules to ESLint, lint catching a route that imports the database, and eject restoring the config exactly](/demo/enforce.gif)
+
 **Or just ask your agent.** Claude Code calls archprint over MCP on its own:
 
 ![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](/demo/claude-code.gif)
