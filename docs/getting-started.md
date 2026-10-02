@@ -19,8 +19,12 @@ the tools you already use.
 
 ![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](/demo/claude-code.gif)
 
-**Cursor works the same way.** Cursor's agent in the terminal (`cursor-agent`, running Grok 4.7, not Claude) asks
-once before it runs archprint's scan tool, then answers from it:
+**Cursor works the same way, with Grok 4.7 rather than Claude.** In the desktop app's chat, its agent called
+archprint's scan tool on its own; this screenshot shows the tool result and the answer:
+
+![Cursor's desktop chat, running Grok 4.7, answering from archprint's scan result: the rules and lib/db.ts as the one exception](/demo/cursor-app.png)
+
+In the terminal (`cursor-agent`), it asks once before running the tool, then answers from it:
 
 ![Cursor's terminal agent, running Grok 4.7, approving archprint_scan once and answering with the rules and lib/db.ts as the one exception](/demo/cursor.gif)
 
