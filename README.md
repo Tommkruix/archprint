@@ -29,10 +29,10 @@ and how confident the inference is.
 
 ![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](docs/public/demo/claude-code.gif)
 
-**Cursor works the same way.** Asked the same question, Cursor's agent (running Grok 4.7, not Claude) called
-archprint's scan tool on its own; this screenshot shows the tool result and its answer:
+**Cursor works the same way.** Cursor's agent in the terminal (`cursor-agent`, running Grok 4.7, not Claude) asks
+once before it runs archprint's scan tool, then answers from it:
 
-![Cursor's agent, running Grok 4.7, answering from archprint's scan result: nine rules and lib/db.ts as the one exception](docs/public/demo/cursor.png)
+![Cursor's terminal agent, running Grok 4.7, approving archprint_scan once and answering with the rules and lib/db.ts as the one exception](docs/public/demo/cursor.gif)
 
 **Measured, with and without archprint.** The same question in Claude Code (Opus 5.5) on the demo app (70
 files), five runs each, median [range]:

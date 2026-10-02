@@ -16,7 +16,7 @@ git -C "$DEMO_DIR" checkout -q "$DEMO_COMMIT"
 (cd "$DEMO_DIR" && npm ci --no-audit --no-fund >/dev/null &&
   npm install --no-save --no-audit --no-fund "archprint@$version" >/dev/null)
 
-[ "$#" -gt 0 ] || set -- scan explain enforce claude-code
+[ "$#" -gt 0 ] || set -- scan explain enforce claude-code cursor
 cd "$root"
 for tape in "$@"; do
   git -C "$DEMO_DIR" checkout -q -- .

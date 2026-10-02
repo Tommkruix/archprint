@@ -51,7 +51,7 @@ archprint version in `package.json` from npm, and re-records every GIF into `doc
 environment. Pass names to record only some of them, for example `scripts/demo/record.sh scan explain`. The
 `claude-code` recording runs Claude Code from a separate profile (`CLAUDE_DEMO_PROFILE`, default
 `~/.config/claude-archprint-demo`), so none of your own settings or history can appear on screen; sign in to it once
-with `CLAUDE_CONFIG_DIR=<that path> claude`. Check every frame before committing, and re-record after each release
+with `CLAUDE_CONFIG_DIR=<that path> claude`. The `cursor` recording needs the Cursor CLI (`cursor-agent`), signed in. Check every frame before committing, and re-record after each release
 so the version shown matches the one published.
 
 ## Commits and changesets
