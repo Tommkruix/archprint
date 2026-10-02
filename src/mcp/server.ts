@@ -4,9 +4,18 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { explainTool, recommendTool, scanTool } from './tools.js';
 import { errorResponse, okResponse, type ToolResponse } from './tool-response.js';
 
+const READ_ONLY = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
+
 export const TOOLS = [
   {
     name: 'archprint_scan',
+    title: 'Scan architecture rules',
+    annotations: READ_ONLY,
     description:
       'List the architecture rules this TypeScript repo already follows, with the evidence: each rule stated in plain words, whether it is AUTO (clears the confidence gate) or SUGGEST (short of it, worth review), how many files conform vs. break it, the files that break it, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
     inputSchema: {
@@ -22,6 +31,8 @@ export const TOOLS = [
   },
   {
     name: 'archprint_recommend',
+    title: 'Recommend architecture rules',
+    annotations: READ_ONLY,
     description:
       'Recommend an architecture rule set for this repo from its evidence and detected stack: what to enforce now, what the code already follows that archprint reports but does not write a rule for yet (reportOnly), what to review before enforcing, and what comparable repos commonly adopt that this repo does not yet. Read-only.',
     inputSchema: {
@@ -33,6 +44,8 @@ export const TOOLS = [
   },
   {
     name: 'archprint_explain',
+    title: 'Explain an architecture rule',
+    annotations: READ_ONLY,
     description:
       'Explain the confidence-gate evidence behind one rule from archprint_scan, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, conformance stats, and every file that breaks it. Read-only.',
     inputSchema: {

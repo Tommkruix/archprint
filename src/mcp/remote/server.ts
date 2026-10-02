@@ -14,9 +14,18 @@ const repoProperty = {
   },
 } as const;
 
+const READ_ONLY_REMOTE = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+} as const;
+
 export const REMOTE_TOOLS = [
   {
     name: 'archprint_scan',
+    title: 'Scan architecture rules',
+    annotations: READ_ONLY_REMOTE,
     description:
       'Clone a public repository by URL (read-only, ephemeral) and list the architecture rules it already follows, with the evidence: which families are AUTO (clears the confidence gate) or SUGGEST (worth review), how many files conform vs. break each, and the confidence.',
     inputSchema: {
@@ -33,12 +42,16 @@ export const REMOTE_TOOLS = [
   },
   {
     name: 'archprint_recommend',
+    title: 'Recommend architecture rules',
+    annotations: READ_ONLY_REMOTE,
     description:
       'Clone a public repository by URL (read-only, ephemeral) and recommend an architecture rule set from its evidence and stack: what to enforce now, what the code already follows that archprint reports but does not write a rule for yet (reportOnly), what to review before enforcing, and what comparable repos commonly adopt that this one does not yet.',
     inputSchema: { type: 'object', properties: { ...repoProperty }, required: ['repo'] },
   },
   {
     name: 'archprint_explain',
+    title: 'Explain an architecture rule',
+    annotations: READ_ONLY_REMOTE,
     description:
       'Clone a public repository by URL (read-only, ephemeral) and explain the confidence-gate evidence behind one inferred rule id (e.g. AP-002): its gate status, conformance stats, and the files that violate it.',
     inputSchema: {

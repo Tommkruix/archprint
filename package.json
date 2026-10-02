@@ -1,6 +1,7 @@
 {
   "name": "archprint",
   "version": "0.8.2",
+  "mcpName": "io.github.Tommkruix/archprint",
   "description": "Mine the architecture rules your TypeScript repo already enforces, with the evidence attached.",
   "keywords": [
     "eslint",
@@ -52,6 +53,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
+    "version-packages": "changeset version && node scripts/sync-server-json.mjs",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

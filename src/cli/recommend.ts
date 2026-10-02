@@ -32,6 +32,13 @@ const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   reachability: 'none',
 };
 
+export type AutoTier = 'enforce' | 'report-only' | 'review';
+
+export function autoTier(key: FamilyKey): AutoTier {
+  if (!isStableFamily(key)) return 'review';
+  return FAMILY_TOOL[key] === 'none' ? 'report-only' : 'enforce';
+}
+
 export function resolveEnforcer(key: FamilyKey, enforcers: InstalledEnforcers): string {
   const depcruise = enforcers.dependencyCruiser;
   const eslint = enforcers.eslint || !enforcers.dependencyCruiser;
@@ -242,8 +249,9 @@ export function buildRecommendations(
       rate: adoptionRate(family.title, stack),
       enforcer: resolveEnforcer(family.key, enforcers),
     };
-    if (status === 'AUTO' && isStableFamily(family.key))
-      (FAMILY_TOOL[family.key] === 'none' ? reportOnly : enforceNow).push(entry);
+    const tier = autoTier(family.key);
+    if (status === 'AUTO' && tier !== 'review')
+      (tier === 'report-only' ? reportOnly : enforceNow).push(entry);
     else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);
     else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);
   }
