@@ -91,12 +91,20 @@ describe('cli program', () => {
     await run(['recommend', auto, '--json']);
     const parsed = JSON.parse(output()) as {
       archprintVersion: string;
-      apps: { app: string; enforceNow: unknown[]; review: unknown[]; adopt: unknown[] }[];
+      apps: {
+        app: string;
+        enforceNow: { title: string }[];
+        reportOnly: { title: string }[];
+        review: unknown[];
+        adopt: unknown[];
+      }[];
     };
     expect(parsed.archprintVersion).toBe('9.9.9');
     expect(parsed.apps.length).toBeGreaterThan(0);
     expect(Array.isArray(parsed.apps[0]!.enforceNow)).toBe(true);
     expect(Array.isArray(parsed.apps[0]!.adopt)).toBe(true);
+    expect(parsed.apps[0]!.reportOnly.map((r) => r.title)).toEqual(['Circular dependencies']);
+    expect(parsed.apps[0]!.enforceNow.map((r) => r.title)).not.toContain('Circular dependencies');
   });
 
   it('recommend discovers every app under a monorepo root', async () => {
@@ -520,6 +528,15 @@ describe('init', () => {
     expect(output()).toContain('initialized');
     expect(output()).toContain('Enforcing now');
     expect(output()).toContain('Wrote .archprint/config.json.');
+    const reportedAt = output().indexOf('Report only');
+    expect(reportedAt).toBeGreaterThan(output().indexOf('Enforcing now'));
+    expect(output().indexOf('Circular dependencies')).toBeGreaterThan(reportedAt);
+    expect((config().reportOnly as { title: string }[]).map((r) => r.title)).toEqual([
+      'Circular dependencies',
+    ]);
+    expect((config().enforced as { title: string }[]).map((r) => r.title)).not.toContain(
+      'Circular dependencies',
+    );
     expect(output()).toContain("Run 'archprint wire'");
   });
 

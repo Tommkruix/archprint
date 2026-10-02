@@ -83,8 +83,9 @@ archprint init apps/web
 
 `init` scans the repo, writes the auto-trusted (mechanical) rules into `.archprint/` (only for the linters
 your repo uses, it detects ESLint and dependency-cruiser), adds a managed section to your `README.md`
-explaining what it did, and prints three tiers: what is enforced now, what to review before
-enforcing, and what comparable repos commonly adopt that you do not yet. Then reference the generated rules from
+explaining what it did, and prints the tiers: what is enforced now, what your code follows that is reported but
+not written as a rule yet (circular dependencies today), what to review before enforcing, and what comparable repos
+commonly adopt that you do not yet. Then reference the generated rules from
 your linter:
 
 ```bash
@@ -144,8 +145,9 @@ updating the package); it moves everything to `.archprint/` and rewires your lin
 archprint recommend apps/web
 ```
 
-`recommend` works even with little code to learn from: it sorts every rule family into enforce-now / review /
-adopt-from-day-one, names the installed tool that will enforce each rule (or what to install), and the adopt
+`recommend` works even with little code to learn from: it sorts every rule family into enforce-now /
+followed-but-reported-only / review / adopt-from-day-one, names the installed tool that will enforce each rule it
+can write (or what to install), and the adopt
 tier is backed by a census of tens of thousands of public TypeScript repos (stack-aware), not hand-picked
 defaults.
 

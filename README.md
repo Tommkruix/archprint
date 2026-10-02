@@ -227,9 +227,10 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Orphan modules                     | Files nothing imports and that are not framework entries (dead code candidates)                                            | Report   |
 | Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
-`recommend` (and `init`) sort every rule family into three tiers: rules your code already follows (enforce now),
-rules with thin evidence (review and adopt), and rules that comparable repos commonly follow but yours does not yet
-(adopt from day one). Each recommendation carries the share of comparable repos (your detected stack, else
+`recommend` (and `init`) sort every rule family into tiers: rules your code already follows (enforce now), rules
+your code follows that Archprint reports but does not write yet (circular dependencies today), rules with thin
+evidence (review and adopt), and rules that comparable repos commonly follow but yours does not yet (adopt from day
+one). Each recommendation carries the share of comparable repos (your detected stack, else
 overall) that already enforce that rule, mined from a census of tens of thousands of public TypeScript
 repositories. So even a fresh repo, with little code to learn from, gets a stack-aware baseline backed by what the
 ecosystem actually does rather than hand-picked defaults.
@@ -252,10 +253,10 @@ a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the form
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are added only with
   `--include-structural`, after you review them.
-- **`.archprint/config.json`**: what is enforced, held for review, and worth adopting, plus the list of managed
-  outputs `eject` removes.
-- **A managed section in your `README.md`** summarizing what is enforced now, held for review, and worth adopting
-  (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so the generated files stay
+- **`.archprint/config.json`**: what is enforced, followed but only reported, held for review, and worth
+  adopting, plus the list of managed outputs `eject` removes.
+- **A managed section in your `README.md`** summarizing what is enforced now, followed but only reported, held for
+  review, and worth adopting (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so the generated files stay
   out of your formatter.
 
 `--expand` additionally writes the granular artifacts inside `.archprint/`: the per-family ESLint and
