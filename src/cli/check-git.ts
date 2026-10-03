@@ -2,12 +2,18 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { gitEnv } from './git-env.js';
 
 export class CheckSetupError extends Error {}
 
 const git = (cwd: string, args: readonly string[]): string => {
   try {
-    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return execFileSync('git', args, {
+      cwd,
+      env: gitEnv(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   } catch (error) {
     const stderr = (error as { stderr?: string }).stderr?.trim();
     throw new CheckSetupError(`git ${args.join(' ')} failed${stderr ? `: ${stderr}` : ''}`);
