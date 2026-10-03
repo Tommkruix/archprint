@@ -114,16 +114,26 @@ also accept the root and cover every app, while `init` and `generate` work on on
 # 1. See the rules your code already follows, with the evidence. Changes nothing.
 npx archprint scan .
 
-# 2. Set up enforcement for the rules your code already follows cleanly,
+# 2. Ask why one rule is trusted (use a rule label from the scan)
+npx archprint explain AP-001 .
+
+# 3. Set up enforcement for the rules your code already follows cleanly,
 #    and record what to review or adopt next in .archprint/config.json
 npx archprint init .
 
-# 3. Connect the generated rules to your ESLint / dependency-cruiser config (one managed line)
+# 4. Connect the generated rules to your ESLint / dependency-cruiser config (one managed line)
 npx archprint wire
 
-# Then run your linter as usual. To undo everything, exactly:
+# 5. Run your linter as usual. Your code passes today; a new import that breaks a rule fails.
+npx eslint .
+
+# To undo everything, exactly:
 npx archprint eject
 ```
+
+**See it catch something.** After step 4, break a rule on purpose: for example, make a route file import your
+database client directly, then run your linter. That is the whole loop the
+[demo](https://stackblitz.com/github/Tommkruix/archprint-demo) walks through in the browser.
 
 To keep it in the project instead of using `npx`: `npm install --save-dev archprint`.
 
