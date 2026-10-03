@@ -1,7 +1,7 @@
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -73,6 +73,12 @@ describe('mcp tools', () => {
 
   it('scanTool throws when there is no tsconfig and no discoverable app', () => {
     expect(() => scanTool(here)).toThrow(/No tsconfig/);
+  });
+
+  it('reads a file:// URL or a path with surrounding spaces as the local directory it names', () => {
+    const expected = scanTool(auto);
+    expect(scanTool(pathToFileURL(auto).href)).toEqual(expected);
+    expect(scanTool(` ${auto} `)).toEqual(expected);
   });
 
   it('explains that a repository URL needs the remote server, instead of treating it as a directory', () => {

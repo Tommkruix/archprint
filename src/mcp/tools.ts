@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers } from '../scanner/enforcers.js';
 import { scanRepo } from '../cli/scan.js';
@@ -13,13 +14,19 @@ import type { DetectedPattern } from '../detector/pattern-detector.js';
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
 
-function resolveAppDirs(input: string): { root: string; dirs: string[] } {
-  if (URL_SCHEME.test(input.trim())) {
+const localPath = (input: string): string => {
+  const trimmed = input.trim();
+  if (trimmed.toLowerCase().startsWith('file://')) return fileURLToPath(trimmed);
+  if (URL_SCHEME.test(trimmed)) {
     throw new Error(
       `"${input}" is a URL, but this server reads directories on the machine it runs on. Clone the repository and pass its directory, or run \`archprint mcp --http\` to scan a public repository by URL.`,
     );
   }
-  const root = path.resolve(input);
+  return trimmed;
+};
+
+function resolveAppDirs(input: string): { root: string; dirs: string[] } {
+  const root = path.resolve(localPath(input));
   const dirs = discoverAppDirs(root);
   if (dirs.length === 0) {
     throw new Error(
