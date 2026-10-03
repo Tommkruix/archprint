@@ -506,6 +506,24 @@ describe('cli scan', () => {
     expect(renderExplain(pattern, fixture)).toContain('nothing to enforce');
   });
 
+  it('states each generated rule in plain words, with how many files it applies to follow it', () => {
+    const pattern = fakePattern('AP-001', 'AUTO');
+    const stated = {
+      ...pattern,
+      config: {
+        ...pattern.config,
+        description: 'A request handler must not import the database client directly.',
+      },
+    };
+    const report = renderReport(emptyScan({ patterns: [stated] }), '1.0.0');
+    expect(report).toContain(
+      '          A request handler must not import the database client directly.\n',
+    );
+    expect(report).toContain(
+      `Evidence: ${pattern.result.stats.conformingFileCount} of 50 files it applies to follow it`,
+    );
+  });
+
   it('separates AUTO into GENERATED and SUGGEST into SUGGESTIONS', () => {
     const scan = emptyScan({
       fileCount: 100,

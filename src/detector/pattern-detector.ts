@@ -180,7 +180,7 @@ export function detectUiLayerInServerEntry(
     id: 'AP-002',
     name: 'no-ui-layer-in-server-entry',
     description:
-      'A server-entry file must not import from the UI layer (inferred from where components live in this repo).',
+      'A request handler must not import UI components (found from where components live in this repo).',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: inferredUi.markers,
   });
@@ -198,7 +198,7 @@ export function detectDbClientInRequestEntry(
     id: 'AP-001',
     name: 'no-db-client-in-request-entry',
     description:
-      'A request-entry file must not import the database client directly; go through a service or data-access layer.',
+      'A request handler must not import the database client directly; go through a service or data-access layer.',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: inferredDb.markers,
   });
@@ -213,7 +213,7 @@ export function detectNoDbInRequestEntry(
     id: 'AP-001',
     name: 'no-direct-db-in-request-entry',
     description:
-      'Request-entry files must not import a database client directly; go through a service or data-access layer.',
+      'Request handlers must not import a database client directly; go through a service or data-access layer.',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: options.dbMarkers ?? DEFAULT_DB_MARKERS,
   });

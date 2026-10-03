@@ -18,7 +18,7 @@ pre-registered, and it reports an honest null result on the boundary it tested.
 
 ## The confidence gate
 
-A candidate rule (for example "request-entry files must not import the DB client") is measured against the
+A candidate rule (for example "request handlers must not import the database client") is measured against the
 code: how many files in the governed role conform, how many break it, and how confident that ratio is given the
 sample size. Each candidate lands in one of three states:
 
@@ -39,7 +39,7 @@ Archprint is deliberately honest about which inferences it will stand behind una
 correctness audit (three rounds over four real repositories) split the rule families in two:
 
 - **Mechanical families** rest on unambiguous signals (no import cycles, production must not import tests, no
-  `console` in library code, import style, public-API barrels, and the DB/UI-in-server-entry rules). These had
+  `console` in library code, import style, public-API barrels, and the rules keeping the database client and UI out of request handlers). These had
   **zero false positives every round**, so an AUTO result from them auto-generates as enforcement. The one
   exception is cycles: Archprint reports them but does not write a rule for them yet.
 - **Held-for-review families** are emitted only with `--include-structural`, after you look at the evidence.

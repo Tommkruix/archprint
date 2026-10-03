@@ -124,7 +124,9 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     commitAll('query the database in a route');
     await run(['check', '--base', 'main']);
     expect(output()).toContain('app/api/orders/route.ts:1  AP-001 (@prisma/client)');
-    expect(output()).toContain('When this rule was adopted, 45 of 45 files followed it');
+    expect(output()).toContain(
+      'When this rule was adopted, 45 of 45 files it applies to followed it',
+    );
     expect(process.exitCode).toBe(0);
     expect(existsSync(path.join(path.dirname(repo), 'base'))).toBe(false);
     expect(git('worktree', 'list').trim().split('\n')).toHaveLength(1);

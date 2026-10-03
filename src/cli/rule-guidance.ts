@@ -6,19 +6,19 @@ export interface RuleGuidance {
 const GUIDANCE: Record<string, RuleGuidance> = {
   'no-ui-layer-in-server-entry': {
     howToFix:
-      'Move the UI import out of the server entry: render the component from a client component, or lift the shared logic into a module that is not a route or server entry.',
+      'Move the UI import out of the request handler: render the component from a client component, or lift the shared logic into a module that is not a request handler.',
     whenNotToUse:
       'A framework that deliberately colocates server logic and view in one entry file (some full-stack file conventions) may not want this boundary.',
   },
   'no-db-client-in-request-entry': {
     howToFix:
-      'Route the database access through a service or data-access module instead of importing the DB client directly in the request entry.',
+      'Route the database access through a service or data-access module instead of importing the database client directly in the request handler.',
     whenNotToUse:
       'Small apps that intentionally keep data access inline, with no service layer, follow a different but equally valid convention.',
   },
   'no-direct-db-in-request-entry': {
     howToFix:
-      'Route the database access through a service or data-access module instead of importing the DB client directly in the request entry.',
+      'Route the database access through a service or data-access module instead of importing the database client directly in the request handler.',
     whenNotToUse:
       'Small apps that intentionally keep data access inline, with no service layer, follow a different but equally valid convention.',
   },

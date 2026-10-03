@@ -16,7 +16,7 @@ const consoleRule: AdoptedRule = {
 const dbRule = (markers: string[]): AdoptedRule => ({
   id: 'AP-001',
   family: 'forbidden-imports',
-  statement: 'A request-entry file must not import the database client directly.',
+  statement: 'A request handler must not import the database client directly.',
   mode: 'deep',
   roles: ['ROUTE_HANDLER'],
   forbidden: markers.map((source) => ({ source, flags: '' })),

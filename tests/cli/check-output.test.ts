@@ -14,7 +14,7 @@ import {
 const rule: AdoptedRule = {
   id: 'AP-001',
   family: 'forbidden-imports',
-  statement: 'A request-entry file must not import the database client directly.',
+  statement: 'A request handler must not import the database client directly.',
   mode: 'deep',
   roles: ['ROUTE_HANDLER'],
   forbidden: [{ source: 'drizzle-orm', flags: '' }],
@@ -49,9 +49,9 @@ const checked = (
 const skipped: CheckResult = { status: 'skipped', reason: 'no .archprint/rules.json' };
 
 describe('findingMessage', () => {
-  it('states the rule and labels the evidence as recorded when the rule was adopted', () => {
+  it('states the rule and the evidence recorded when the rule was adopted', () => {
     expect(findingMessage(rule)).toBe(
-      'A request-entry file must not import the database client directly. When this rule was adopted, 40 of 40 files followed it (confidence floor 91%).',
+      'A request handler must not import the database client directly. When this rule was adopted, 40 of 40 files it applies to followed it (confidence 91%).',
     );
   });
 
@@ -80,9 +80,13 @@ describe('githubAnnotations', () => {
   });
 
   it('points at the repo-relative file and line and escapes the workflow-command syntax', () => {
-    const [line] = githubAnnotations(checked({ appPath: 'apps/web' }), 'none');
+    const percent = { ...rule, statement: 'Keep coverage at 100%' };
+    const [line] = githubAnnotations(
+      checked({ appPath: 'apps/web', introduced: [reported({ rule: percent })] }),
+      'none',
+    );
     expect(line).toBe(
-      '::warning file=apps/web/app/api/users/route.ts,line=2,title=archprint%3A AP-001::A request-entry file must not import the database client directly. When this rule was adopted, 40 of 40 files followed it (confidence floor 91%25).',
+      '::warning file=apps/web/app/api/users/route.ts,line=2,title=archprint%3A AP-001::Keep coverage at 100%25. When this rule was adopted, 40 of 40 files it applies to followed it (confidence 91%25).',
     );
   });
 

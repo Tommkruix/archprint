@@ -1,0 +1,117 @@
+{
+  "format": 1,
+  "archprintVersion": "0.8.3",
+  "rules": [
+    {
+      "id": "AP-001",
+      "family": "forbidden-imports",
+      "statement": "A request handler (route, API handler, server action, controller) must not import the database client directly.",
+      "mode": "deep",
+      "roles": [
+        "CONTROLLER",
+        "ROUTE_HANDLER",
+        "SERVER_ACTION",
+        "API_HANDLER",
+        "TRPC_ROUTER"
+      ],
+      "forbidden": [
+        {
+          "source": "@prisma\\/(client|adapter-)",
+          "flags": ""
+        },
+        {
+          "source": "drizzle-orm",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)typeorm(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)mongoose(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)sequelize(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "@mikro-orm\\/",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)kysely(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)mongodb(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)pg(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)postgres(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "(^|\\/)mysql2(\\/|$)",
+          "flags": ""
+        },
+        {
+          "source": "@planetscale\\/database",
+          "flags": ""
+        },
+        {
+          "source": "@neondatabase\\/serverless",
+          "flags": ""
+        },
+        {
+          "source": "better-sqlite3",
+          "flags": ""
+        }
+      ],
+      "evidence": {
+        "conforming": 45,
+        "total": 45,
+        "floor": 0.9213
+      }
+    },
+    {
+      "id": "AP-002",
+      "family": "forbidden-imports",
+      "statement": "A request handler (route, API handler, server action, controller) must not import UI components.",
+      "mode": "deep",
+      "roles": [
+        "CONTROLLER",
+        "ROUTE_HANDLER",
+        "SERVER_ACTION",
+        "API_HANDLER",
+        "TRPC_ROUTER"
+      ],
+      "forbidden": [
+        {
+          "source": "(^|\\/)components(\\/|$)",
+          "flags": ""
+        }
+      ],
+      "evidence": {
+        "conforming": 45,
+        "total": 45,
+        "floor": 0.9213
+      }
+    },
+    {
+      "id": "console-isolation",
+      "family": "console-isolation",
+      "statement": "library code must not use console",
+      "mode": "fast",
+      "evidence": {
+        "conforming": 53,
+        "total": 53,
+        "floor": 0.9324
+      }
+    }
+  ]
+}
