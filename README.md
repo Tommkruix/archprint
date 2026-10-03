@@ -317,6 +317,15 @@ comes from nvm or Homebrew. A full path to `npx` alone is not enough, because `n
 
 Starting the editor from a terminal also works, because it then inherits your shell's `PATH`.
 
+**One-line installs.** In Claude Code:
+
+```bash
+claude mcp add archprint -- npx -y archprint mcp
+```
+
+In Cursor, put the JSON above in `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for every project),
+then enable **archprint** under **Settings > MCP**.
+
 **Scanning a public repo by URL.** `archprint mcp --http` runs a remote server instead. It clones the repo shallow
 to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only public
 `github.com`, `gitlab.com`, and `bitbucket.org` URLs; nothing is written or kept). The tools then take a `repo` URL
