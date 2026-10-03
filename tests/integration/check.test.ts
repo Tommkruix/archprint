@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProgram } from '../../src/cli/program.js';
 import { runCheck } from '../../src/cli/check.js';
 import { checkoutBase, renamedPaths } from '../../src/cli/check-git.js';
+import { gitEnv } from '../../src/cli/git-env.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const autoFixture = path.join(here, '..', 'fixtures', 'cli-auto');
@@ -39,7 +40,12 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
   const output = (): string =>
     logSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
   const git = (...args: string[]): string =>
-    execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync('git', args, {
+      cwd: repo,
+      env: gitEnv(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   const commitAll = (message: string): void => {
     git('add', '-A');
     git('commit', '-qm', message);
@@ -84,6 +90,26 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     rmSync(repo, { recursive: true, force: true });
     process.exitCode = 0;
     delete process.env.GITHUB_STEP_SUMMARY;
+  });
+
+  it('checks the repository it runs in when a git hook points GIT_DIR at another one', async () => {
+    const other = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-other-')));
+    try {
+      execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: other, env: gitEnv() });
+      write('app/api/orders/route.ts', directDbRoute);
+      commitAll('query the database in a route');
+      process.env.GIT_DIR = path.join(other, '.git');
+      try {
+        await run(['check', '--base', 'main']);
+      } finally {
+        delete process.env.GIT_DIR;
+      }
+      expect(output()).toContain('app/api/orders/route.ts:1  AP-001 (@prisma/client)');
+      expect(readdirSync(path.join(other, '.git', 'refs', 'heads'))).toEqual([]);
+      expect(existsSync(path.join(other, '.git', 'worktrees'))).toBe(false);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
   });
 
   it('records the adopted rules with the mode they were generated in', () => {

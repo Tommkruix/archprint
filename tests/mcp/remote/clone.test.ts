@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { gitEnv } from '../../../src/cli/git-env.js';
 import { withClonedRepo } from '../../../src/mcp/remote/clone.js';
 import type { RepoSpec } from '../../../src/mcp/remote/repo-url.js';
 
@@ -16,7 +17,7 @@ function makeRepo(withFeatureBranch = false): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'archprint-src-'));
   sources.push(dir);
   const git = (...args: string[]): void =>
-    void execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+    void execFileSync('git', args, { cwd: dir, env: gitEnv(), stdio: 'ignore' });
   git('init', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
   git('config', 'user.name', 'Test');
