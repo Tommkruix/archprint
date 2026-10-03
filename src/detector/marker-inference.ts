@@ -36,6 +36,7 @@ export interface UiSegmentEvidence {
 
 export interface InferredMarkers {
   markers: RegExp[];
+  examples: string[];
   segments: string[];
   evidence: UiSegmentEvidence[];
 }
@@ -98,7 +99,7 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
   const components = files.filter(isUiComponent);
   const componentSet = new Set(components);
   const others = files.filter((file) => !componentSet.has(file));
-  if (components.length < 5) return { markers: [], segments: [], evidence: [] };
+  if (components.length < 5) return { markers: [], examples: [], segments: [], evidence: [] };
 
   const directorySegments = (relativePath: string): string[] => [
     ...new Set(relativePath.split('/').slice(0, -1)),
@@ -135,30 +136,38 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
         !entry.segment.includes('.'),
     )
     .sort((a, b) => b.coverage * b.specificity - a.coverage * a.specificity);
-  if (candidates.length === 0) return { markers: [], segments: [], evidence: [] };
+  if (candidates.length === 0) return { markers: [], examples: [], segments: [], evidence: [] };
 
   const top = candidates[0]!;
   const segments = [top.segment];
   const markers = segments.map((segment) => new RegExp(`(^|/)${escapeRegExp(segment)}(/|$)`));
-  return { markers, segments, evidence: candidates.slice(0, 8) };
+  return {
+    markers,
+    examples: segments.map((segment) => `@/${segment}/example`),
+    segments,
+    evidence: candidates.slice(0, 8),
+  };
 }
 
-export const KNOWN_DB_LIBRARIES: readonly RegExp[] = [
-  /@prisma\/(client|adapter-)/,
-  /drizzle-orm/,
-  /(^|\/)typeorm(\/|$)/,
-  /(^|\/)mongoose(\/|$)/,
-  /(^|\/)sequelize(\/|$)/,
-  /@mikro-orm\//,
-  /(^|\/)kysely(\/|$)/,
-  /(^|\/)mongodb(\/|$)/,
-  /(^|\/)pg(\/|$)/,
-  /(^|\/)postgres(\/|$)/,
-  /(^|\/)mysql2(\/|$)/,
-  /@planetscale\/database/,
-  /@neondatabase\/serverless/,
-  /better-sqlite3/,
+const DB_LIBRARIES: readonly { pattern: RegExp; example: string }[] = [
+  { pattern: /@prisma\/(client|adapter-)/, example: '@prisma/client' },
+  { pattern: /drizzle-orm/, example: 'drizzle-orm' },
+  { pattern: /(^|\/)typeorm(\/|$)/, example: 'typeorm' },
+  { pattern: /(^|\/)mongoose(\/|$)/, example: 'mongoose' },
+  { pattern: /(^|\/)sequelize(\/|$)/, example: 'sequelize' },
+  { pattern: /@mikro-orm\//, example: '@mikro-orm/core' },
+  { pattern: /(^|\/)kysely(\/|$)/, example: 'kysely' },
+  { pattern: /(^|\/)mongodb(\/|$)/, example: 'mongodb' },
+  { pattern: /(^|\/)pg(\/|$)/, example: 'pg' },
+  { pattern: /(^|\/)postgres(\/|$)/, example: 'postgres' },
+  { pattern: /(^|\/)mysql2(\/|$)/, example: 'mysql2' },
+  { pattern: /@planetscale\/database/, example: '@planetscale/database' },
+  { pattern: /@neondatabase\/serverless/, example: '@neondatabase/serverless' },
+  { pattern: /better-sqlite3/, example: 'better-sqlite3' },
 ];
+
+export const KNOWN_DB_LIBRARIES: readonly RegExp[] = DB_LIBRARIES.map((library) => library.pattern);
+export const KNOWN_DB_EXAMPLES: readonly string[] = DB_LIBRARIES.map((library) => library.example);
 
 const DB_CLIENT_CONSTRUCTOR =
   /new PrismaClient\s*\(|\bdrizzle\s*\(|new DataSource\s*\(|new Sequelize\s*\(|new Kysely\s*\(|MikroORM\.init\s*\(|mongoose\.(connect|createConnection)\s*\(/;
@@ -185,6 +194,7 @@ const DB_TOKENS = [
 
 export interface InferredDbMarkers {
   markers: RegExp[];
+  examples: string[];
   libraries: RegExp[];
   wrappers: string[];
 }
@@ -279,6 +289,7 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
 
   return {
     markers: [...KNOWN_DB_LIBRARIES, ...wrapperMarkers],
+    examples: [...[...wrappers].sort(), ...KNOWN_DB_EXAMPLES],
     libraries: [...KNOWN_DB_LIBRARIES],
     wrappers: [...wrappers],
   };

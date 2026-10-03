@@ -12,6 +12,36 @@ export interface RuleArtifacts {
 const asRegexArray = (sources: readonly string[]): string =>
   `[${sources.map((source) => `/${source}/`).join(', ')}]`;
 
+const PASSING_IMPORTS = ['next/server', '@/utils/user'] as const;
+
+const withoutFullStop = (text: string): string => text.replace(/\.$/, '');
+
+const isForbidden = (config: PatternConfig, specifier: string): boolean =>
+  config.forbidden.some((pattern) => pattern.test(specifier));
+
+function forbiddenSpecifier(config: PatternConfig, result: DetectedPattern): string {
+  const candidates = [
+    ...result.violations.map((violation) => violation.specifier),
+    ...(config.examples ?? []),
+  ];
+  const specifier = candidates.find((candidate) => isForbidden(config, candidate));
+  if (specifier === undefined) {
+    throw new Error(
+      `${config.id}: no known import matches its forbidden patterns, so its failing fixture cannot be written.`,
+    );
+  }
+  return specifier;
+}
+
+function assertPassingFixtureAllowed(config: PatternConfig): void {
+  const clash = PASSING_IMPORTS.find((specifier) => isForbidden(config, specifier));
+  if (clash !== undefined) {
+    throw new Error(
+      `${config.id}: its forbidden patterns match "${clash}", so its passing fixture would fail.`,
+    );
+  }
+}
+
 function renderRule(config: PatternConfig, result: DetectedPattern): string {
   const entryPatterns = config.roles
     .flatMap((role) => ROLE_PATTERNS.get(role) ?? [])
@@ -70,8 +100,7 @@ const rule: Rule.RuleModule = {
     },
     schema: [],
     messages: {
-      forbidden:
-        '${config.id}: a request handler must not import the UI components/ layer (imported "{{specifier}}"). Move shared logic into a non-UI module.',
+      forbidden: ${JSON.stringify(`${config.id}: ${withoutFullStop(config.description)} (imported "{{specifier}}").`)},
     },
   },
   create(context) {
@@ -92,7 +121,12 @@ export default rule;
 `;
 }
 
-function renderCard(config: PatternConfig, result: DetectedPattern, provenance: string): string {
+function renderCard(
+  config: PatternConfig,
+  result: DetectedPattern,
+  provenance: string,
+  failingSpecifier: string,
+): string {
   const { roleFileCount, violatingFileCount, ratio, roleConfidence } = result.stats;
   const example = result.violations[0];
   const gate = result.gate.conditions;
@@ -106,9 +140,10 @@ function renderCard(config: PatternConfig, result: DetectedPattern, provenance: 
 
 ${config.description}
 
-**Scope (request handlers):** ${config.roles.join(', ')}. Semantics: **direct import**. A violation
-is a request handler that directly imports the \`components/\` layer. Transitive reach (importing a
-module that itself imports a component) is out of scope.
+**Applies to request handlers:** ${config.roles.join(', ')}. A violation is a request handler that
+directly imports something matching a forbidden pattern:
+${config.forbidden.map((pattern) => `\`/${pattern.source}/\``).join(', ')}. It checks **direct imports** only:
+importing a module that itself imports a forbidden target is out of scope.
 
 ## Evidence (why Archprint generated this)
 
@@ -131,27 +166,28 @@ ${
 This is a lightweight, self-contained ESLint rule. It enforces at the **import-specifier** level, which
 is narrower than the graph-based inference that generated it:
 
-- **Alias/barrel false negative:** an import whose specifier does not contain \`components\` but resolves
-  to the UI layer (e.g. \`@/lib/shared-ui\` aliased to a component) is **not** caught. The detector
-  resolves such imports to their leaf; the rule does not. A future alias-aware or dependency-cruiser
-  emission would close this.
-- **External false positive:** a specifier literally containing \`components\` that resolves inside
-  \`node_modules\` would be flagged. Not relevant to this repo, but disclosed.
+- **Alias/barrel false negative:** an import whose text matches no forbidden pattern but resolves to a
+  forbidden target (through an alias or a re-exporting barrel) is **not** caught. The detector resolves
+  such imports to the file they reach; the rule matches only the import text.
+- **Text-match false positive:** an unrelated import whose text happens to match a forbidden pattern is
+  flagged too.
 - **Request-handler scope:** mirrors the classifier. A file with a \`"use server"\` directive is treated as
   a request handler only when it is otherwise unclassified; named roles (service, repository, worker, db /
   data-access, shared, test) keep their role and are out of scope.
 
 ## Fixtures
 
-- \`fixtures/passing.ts\`: a request handler that does not import the UI layer (rule stays silent).
-- \`fixtures/failing.ts\`: a request handler that imports the UI layer (rule reports).
+- \`fixtures/passing.ts\`: a request handler with no forbidden import (rule stays silent).
+- \`fixtures/failing.ts\`: a request handler that imports \`${failingSpecifier}\` (rule reports).
 `;
 }
 
-function renderPassingFixture(): string {
-  return `// app/api/example/route.ts (PASSING): a route handler with no UI-layer import.
-import { NextResponse } from 'next/server';
-import { getUser } from '@/utils/user';
+function renderPassingFixture(config: PatternConfig): string {
+  assertPassingFixtureAllowed(config);
+  const [server, user] = PASSING_IMPORTS;
+  return `// app/api/example/route.ts (PASSING): a request handler with no import ${config.id} forbids.
+import { NextResponse } from '${server}';
+import { getUser } from '${user}';
 
 export async function GET(): Promise<Response> {
   return NextResponse.json(await getUser());
@@ -159,13 +195,13 @@ export async function GET(): Promise<Response> {
 `;
 }
 
-function renderFailingFixture(): string {
-  return `// app/api/chat/route.ts (FAILING): a route handler importing the components/ (UI) layer.
+function renderFailingFixture(config: PatternConfig, specifier: string): string {
+  return `// app/api/example/route.ts (FAILING): a request handler importing "${specifier}", which ${config.id} forbids.
 import { NextResponse } from 'next/server';
-import { convertToUIMessages } from '@/components/assistant-chat/helpers';
+import * as forbidden from '${specifier}';
 
-export async function POST(): Promise<Response> {
-  return NextResponse.json(convertToUIMessages([]));
+export async function GET(): Promise<Response> {
+  return NextResponse.json(Object.keys(forbidden));
 }
 `;
 }
@@ -175,13 +211,14 @@ export function generateRuleArtifacts(
   result: DetectedPattern,
   provenance = '',
 ): RuleArtifacts {
+  const failingSpecifier = forbiddenSpecifier(config, result);
   return {
     ruleName: config.name,
     files: {
       rule: renderRule(config, result),
-      card: renderCard(config, result, provenance),
-      passingFixture: renderPassingFixture(),
-      failingFixture: renderFailingFixture(),
+      card: renderCard(config, result, provenance, failingSpecifier),
+      passingFixture: renderPassingFixture(config),
+      failingFixture: renderFailingFixture(config, failingSpecifier),
     },
   };
 }

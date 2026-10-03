@@ -66,7 +66,8 @@ function fakePattern(id: string, status: GenerationStatus): ScannedPattern {
       name: `rule-${id}`,
       description: 'd',
       roles: REQUEST_ENTRY_ROLES,
-      forbidden: [/x/],
+      forbidden: [/(^|\/)x(\/|$)/],
+      examples: ['@/x/example'],
     },
     result,
   };
