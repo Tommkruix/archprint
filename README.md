@@ -10,7 +10,7 @@
 **Mine the architecture rules your repo already enforces, with the evidence attached.**
 
 **[Try it in your browser](https://stackblitz.com/github/Tommkruix/archprint-demo)**, nothing to install ·
-[Quick start](#quick-start) · [Use with AI agents](#use-it-with-ai-coding-agents) · [Docs](https://tommkruix.github.io/archprint/)
+[Quick start](#quick-start) · [Use in CI](#use-in-ci) · [Use with AI agents](#use-it-with-ai-coding-agents) · [Docs](https://tommkruix.github.io/archprint/)
 
 ## What it does, in plain words
 
@@ -28,6 +28,8 @@ instead of handing you a rulebook from somewhere else.
 
 - **For developers and tech leads:** inferred, evidence-backed lint rules for ESLint and dependency-cruiser,
   generated with `init`, connected with `wire`, and removed with `eject`.
+- **For reviewers:** `archprint check` flags only the rule breaks a pull request introduces, inline on GitHub,
+  never the existing backlog.
 - **For teams using AI coding agents:** Claude Code, Cursor and other agents can ask Archprint for the project's
   rules, with the evidence, before they write code.
 - **For anyone evaluating a codebase:** a quick, honest picture of how a project is actually structured.
@@ -493,10 +495,11 @@ were inferred from.
 - **Validated at scale:** `scan` and `recommend` ran over a corpus of 92,861 public TypeScript repositories (61,690
   apps) with zero crashes; 91 repos (0.1%) could not be fetched or timed out. The full `init`/`wire`/`eject`
   round-trip ran clean on a 2,000-repo stratified sample.
-- **Production-ready today:** `scan` and `recommend`, and auto-enforcement of the mechanical families, with a
-  self-consistency check at generate time, an `init` scaffolder for fresh repos, and framework coverage across
-  React, Angular, Vue, and Svelte. The engine (twenty detectors, the confidence gate, and emitters for a
-  self-contained ESLint file, dependency-cruiser, ts-arch, and the layer graph) is in place and tested.
+- **Production-ready today:** `scan` and `recommend`, `check` for pull requests, and auto-enforcement of the
+  mechanical families, with a self-consistency check at generate time, an `init` scaffolder for fresh repos, and
+  framework coverage across React, Angular, Vue, and Svelte. The engine (twenty detectors, the confidence gate, and
+  emitters for a self-contained ESLint file, dependency-cruiser, ts-arch, and the layer graph) is in place and
+  tested.
 - **Still ahead:** hardening the structural families toward auto-enforcement (a real per-file role-confidence
   measure, layer cohesion, role-classifier ordering).
 - **Versioning is still 0.x,** so the CLI surface and rule format can refine between minor versions. That is a
