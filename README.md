@@ -263,6 +263,9 @@ a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the form
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are added only with
   `--include-structural`, after you review them.
+- **`.archprint/rules.json`**: the exact definition of each mechanical rule you adopted, with the evidence
+  recorded at adoption and the resolution mode it was generated in. `archprint check` reads it, so a check never
+  re-infers a rule.
 - **`.archprint/config.json`**: what is enforced, followed but only reported, held for review, and worth
   adopting, plus the list of managed outputs `eject` removes.
 - **A managed section in your `README.md`** summarizing what is enforced now, followed but only reported, held for
@@ -281,6 +284,45 @@ the exact snippet to paste. `eject` removes Archprint's files and every wired re
 exactly. `generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
 can confirm before wiring. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
+
+## Use in CI
+
+`archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
+your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
+evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request.
+
+```yaml
+# .github/workflows/archprint.yml
+name: archprint
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx archprint check --base ${{ github.event.pull_request.base.sha }} --format github
+```
+
+- **Warning by default.** Add `--fail-on new` to fail the job on a new violation, then mark the job a required
+  status check in your branch protection so a pull request that adds one can't merge.
+- **Only adopted rules.** `check` reads `.archprint/rules.json`, written by `init` and `generate`, and checks only
+  the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
+  but never counted against it.
+- **Upgrading from 0.8.x or earlier:** run `archprint generate` once to write `rules.json`. Until you do, `check`
+  posts a notice that it did not run and exits 0.
+- **Other CI systems:** `--format json` gives version-keyed output, and the exit code is the contract: `0` ok, `1`
+  new violations with `--fail-on new`, `2` the CI setup is wrong (for example a shallow clone without the base
+  commit). Check out the full history (`fetch-depth: 0` or your CI's equivalent).
+- **Safe on pull requests from forks.** It needs only read access, uses no secrets, and never runs your code.
 
 ## MCP setup
 
@@ -388,6 +430,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo,
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
+- **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
+  with `--base <branch or commit>`. Warning only unless `--fail-on new`. `--format text|json|github`,
+  `--out <dir>`. See [Use in CI](#use-in-ci).
 - **`archprint wire`**: references the generated rules from the enforcement tools your repo uses (flat eslint
   config, `.dependency-cruiser.json`) through a managed, reversible reference. `--out <dir>`, `--dry-run`.
 - **`archprint eject`**: removes Archprint's generated files, its config, the managed README section, and any
@@ -398,8 +443,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `scan`, `recommend`, and `explain` tools. Serves over stdio by default; `--http` runs a remote server that scans
   a public repo by URL.
 
-`scan --json` and `recommend --json` emit stable, version-keyed JSON for scripting. Exit codes are the contract:
-`0` on success, `1` on error.
+`scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting. Exit
+codes are the contract: `0` on success, `1` on error (for `check`: new violations with `--fail-on new`), `2` for a
+`check` that could not run because of the CI setup.
 
 ## Example on a real repo
 

@@ -6,6 +6,8 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 
 const slug = (dir: string): string => dir.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+export const publicApiRuleName = (dir: string): string => `no-deep-import-${slug(dir)}`;
+
 const confidencePct = (group: PublicApiGroup): string =>
   `${(group.gate.conditions.confidence.value * 100).toFixed(0)}%`;
 
@@ -30,7 +32,7 @@ export function toDependencyCruiserPublicApi(
     .map((group) => {
       const dir = escapeRegExp(group.dir);
       return {
-        name: `no-deep-import-${slug(group.dir)}`,
+        name: publicApiRuleName(group.dir),
         comment: `Archprint inferred public API: files outside "${group.dir}" import it through its barrel (${group.consumerCount - group.deepImporterCount}/${group.consumerCount} consumers); deep imports into its internals are forbidden (confidence ${confidencePct(group)}).`,
         severity: 'error' as const,
         from: { pathNot: exemptDepcruiseFrom([TEST_ROLE_REGEX, `^${dir}/`], group.violations) },

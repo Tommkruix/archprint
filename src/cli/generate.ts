@@ -34,6 +34,16 @@ import {
   type NoRestrictedImportsBlock,
 } from '../generator/eslint-scope.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
+import {
+  consoleIsolationRule,
+  forbiddenImportRule,
+  importStyleRule,
+  publicApiRules,
+  testIsolationRule,
+  writeAdoptedRules,
+  type AdoptedRule,
+  type ResolutionMode,
+} from './adopted-rules.js';
 
 export const ESLINT_FILE = 'eslint.mjs';
 export const DEPCRUISE_FILE = 'dependency-cruiser.json';
@@ -80,6 +90,7 @@ export interface CollectedEnforcement {
   boundaries: unknown | null;
   tsArchRules: BoundaryRule[];
   hasGraph: boolean;
+  adopted: AdoptedRule[];
 }
 
 export interface CollectOptions {
@@ -87,6 +98,7 @@ export interface CollectOptions {
   enforcers: InstalledEnforcers;
   only?: string;
   ruleIds?: readonly string[];
+  mode?: ResolutionMode;
 }
 
 const byName = (a: DependencyCruiserRule, b: DependencyCruiserRule): number =>
@@ -105,20 +117,32 @@ export function collectEnforcement(
     emitEslint && pick('forbidden-imports')
       ? filterSpecs(buildForbiddenImportSpecs(scan.patterns), scan, options.ruleIds)
       : [];
+  const adopted: AdoptedRule[] = scan.patterns
+    .filter((pattern) => eslintSpecs.some((spec) => spec.name === pattern.config.name))
+    .map((pattern) => forbiddenImportRule(pattern, options.mode ?? 'deep'));
 
   const eslintBlocks: EslintFamilyBlock[] = [];
   const pushBlock = (family: string, block: unknown | null): void => {
     if (block !== null) eslintBlocks.push({ family, block });
   };
-  if (emitEslint && pick('console'))
-    pushBlock('console', toEslintConsoleIsolation(scan.consoleIsolation));
+  if (emitEslint && pick('console')) {
+    const block = toEslintConsoleIsolation(scan.consoleIsolation);
+    pushBlock('console', block);
+    if (block !== null) adopted.push(consoleIsolationRule(scan));
+  }
   if (structural && emitEslint && pick('env-access'))
     pushBlock('env-access', toEslintEnvAccess(scan.envAccess));
   const noRestricted: (NoRestrictedImportsBlock | null)[] = [];
-  if (emitEslint && pick('import-style'))
-    noRestricted.push(toEslintDeepRelative(scan.deepRelative));
-  if (emitEslint && pick('test-isolation'))
-    noRestricted.push(toEslintTestIsolation(scan.testIsolation));
+  if (emitEslint && pick('import-style')) {
+    const block = toEslintDeepRelative(scan.deepRelative);
+    noRestricted.push(block);
+    if (block !== null) adopted.push(importStyleRule(scan));
+  }
+  if (emitEslint && pick('test-isolation')) {
+    const block = toEslintTestIsolation(scan.testIsolation);
+    noRestricted.push(block);
+    if (block !== null) adopted.push(testIsolationRule(scan));
+  }
   if (structural && emitEslint && pick('workspace-package'))
     noRestricted.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
   pushBlock('no-restricted-imports', mergeNoRestrictedImports(noRestricted));
@@ -134,8 +158,11 @@ export function collectEnforcement(
       'role-layering',
       toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, ['AUTO']).forbidden,
     );
-  if (emitDepcruise && pick('public-api'))
-    pushDc('public-api', toDependencyCruiserPublicApi(scan.publicApi.groups, ['AUTO']).forbidden);
+  if (emitDepcruise && pick('public-api')) {
+    const forbidden = toDependencyCruiserPublicApi(scan.publicApi.groups, ['AUTO']).forbidden;
+    pushDc('public-api', forbidden);
+    if (forbidden.length > 0) adopted.push(...publicApiRules(scan));
+  }
   if (structural && emitDepcruise && pick('feature-slice'))
     pushDc(
       'feature-slice',
@@ -146,8 +173,11 @@ export function collectEnforcement(
       'app-isolation',
       toDependencyCruiserAppIsolation(scan.appIsolation.groups, ['AUTO']).forbidden,
     );
-  if (pick('test-isolation') && !emitEslint && emitDepcruise)
-    pushDc('test-isolation', toDependencyCruiserTestIsolation(scan.testIsolation).forbidden);
+  if (pick('test-isolation') && !emitEslint && emitDepcruise) {
+    const forbidden = toDependencyCruiserTestIsolation(scan.testIsolation).forbidden;
+    pushDc('test-isolation', forbidden);
+    if (forbidden.length > 0) adopted.push(testIsolationRule(scan));
+  }
   if (structural && emitDepcruise && pick('dependency-hygiene'))
     pushDc(
       'dependency-internals',
@@ -184,6 +214,7 @@ export function collectEnforcement(
     boundaries,
     tsArchRules,
     hasGraph: bundles && scan.layerBoundaries.length > 0,
+    adopted,
   };
 }
 
@@ -320,21 +351,23 @@ const writeFile = (file: string, content: string): string => {
 export interface EmitResult {
   eslint: string | null;
   depcruise: string | null;
+  rules: string;
   expanded: string[];
 }
 
 export function emitLayout(
   scan: ScanResult,
   outDir: string,
-  options: CollectOptions & { expand?: boolean; graph?: boolean },
+  options: CollectOptions & { expand?: boolean; graph?: boolean; version: string },
 ): EmitResult {
   const collected = collectEnforcement(scan, options);
   const eslint = writeArchprintEslint(collected, outDir);
   const depcruise = writeArchprintDepcruise(collected, outDir);
+  const rules = writeAdoptedRules(outDir, collected.adopted, options.version);
   const expanded = options.expand
     ? writeExpanded(collected, scan, outDir, options.graph !== false)
     : [];
-  return { eslint, depcruise, expanded };
+  return { eslint, depcruise, rules, expanded };
 }
 
 export function emitOne(pattern: ScannedPattern, appDir: string, outDir: string): string {

@@ -29,6 +29,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
 
   it('emits the eslint test-isolation rule (not depcruise) for an eslint-only repo', () => {
     emitLayout(scanRepo(fixture('test-isolation-auto')), out, {
+      version: '9.9.9',
       enforcers: enforcers({ eslint: true }),
       expand: true,
     });
@@ -38,6 +39,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
 
   it('emits the depcruise test-isolation rule (not eslint) for a dependency-cruiser-only repo', () => {
     emitLayout(scanRepo(fixture('test-isolation-auto')), out, {
+      version: '9.9.9',
       enforcers: enforcers({ dependencyCruiser: true }),
       expand: true,
     });
@@ -47,6 +49,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
 
   it('emits phantom-deps only for dependency-cruiser, not ESLint', () => {
     emitLayout(scanRepo(fixture('phantom-deps-auto')), out, {
+      version: '9.9.9',
       enforcers: enforcers({ dependencyCruiser: true }),
       structural: true,
       expand: true,
@@ -57,6 +60,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
 
   it('does not emit phantom-deps at all on an eslint-only repo (no safe ESLint form)', () => {
     emitLayout(scanRepo(fixture('phantom-deps-auto')), out, {
+      version: '9.9.9',
       enforcers: enforcers({ eslint: true, eslintPluginImport: true }),
       expand: true,
     });
@@ -66,6 +70,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
 
   it('writes no dependency-cruiser file to disk for an eslint-only repo (no orphaned outputs)', () => {
     emitLayout(scanRepo(fixture('dependency-internals-auto')), out, {
+      version: '9.9.9',
       structural: true,
       enforcers: enforcers({ eslint: true }),
       expand: true,
