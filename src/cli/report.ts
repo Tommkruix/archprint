@@ -30,8 +30,9 @@ function patternLines(pattern: ScannedPattern): string[] {
   const observed = stats.ratio >= 1 ? '100%' : `${(stats.ratio * 100).toFixed(1)}%`;
   const lines = [
     `  ${bold(config.id)}  ${config.name.padEnd(32)} confidence ${floor}`,
+    `          ${config.description}`,
     dim(
-      `          Evidence: ${stats.conformingFileCount}/${stats.roleFileCount} role files conform (${observed} observed)`,
+      `          Evidence: ${stats.conformingFileCount} of ${stats.roleFileCount} files it applies to follow it (${observed})`,
     ),
   ];
   if (stats.violatingFileCount > 0) {

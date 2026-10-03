@@ -179,7 +179,7 @@ const sentence = (text: string): string => {
 
 export function findingMessage(rule: AdoptedRule): string {
   const { conforming, total, floor } = rule.evidence;
-  return `${sentence(rule.statement)}. When this rule was adopted, ${conforming} of ${total} files followed it (confidence floor ${Math.round(floor * 100)}%).`;
+  return `${sentence(rule.statement)}. When this rule was adopted, ${conforming} of ${total} files it applies to followed it (confidence ${Math.round(floor * 100)}%).`;
 }
 
 const describeSubject = (finding: Finding): string =>

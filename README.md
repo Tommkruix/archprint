@@ -457,7 +457,8 @@ Workspace aliases: 18 resolved
 
 GENERATED RULES
   AP-002  no-ui-layer-in-server-entry      confidence 97%
-          Evidence: 216/217 role files conform (99.5% observed)
+          A request handler must not import UI components.
+          Evidence: 216 of 217 files it applies to follow it (99.5%)
           Exceptions: 1
 
 LAYER BOUNDARIES (review before enforcing)
