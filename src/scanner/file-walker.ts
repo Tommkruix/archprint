@@ -75,7 +75,10 @@ export function listSourceFiles(rootDir: string): string[] {
   const files: string[] = [];
   const isIgnored = createIgnoreFilter(rootDir);
   const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
+    for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (

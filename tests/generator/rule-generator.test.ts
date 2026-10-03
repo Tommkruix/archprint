@@ -95,6 +95,7 @@ describe('rule generator — artifacts', () => {
       description: 'x',
       roles: ['ROUTE_HANDLER'],
       forbidden: [/(^|\/)x(\/|$)/],
+      examples: ['@/x/thing'],
     };
     const gate = evaluateGate({ roleFileCount: 30, violatingFileCount: 0, roleConfidence: 0.95 });
     const result: DetectedPattern = {

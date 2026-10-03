@@ -4,6 +4,7 @@ import { evaluateGate, type GateResult } from './confidence-gate.js';
 import {
   inferDbClientMarkers,
   inferUiLayerMarkers,
+  KNOWN_DB_EXAMPLES,
   KNOWN_DB_LIBRARIES,
   type InferredDbMarkers,
   type InferredMarkers,
@@ -27,6 +28,7 @@ export interface PatternConfig {
   description: string;
   roles: readonly Role[];
   forbidden: readonly RegExp[];
+  examples?: readonly string[];
 }
 
 export interface Violation {
@@ -183,6 +185,7 @@ export function detectUiLayerInServerEntry(
       'A request handler must not import UI components (found from where components live in this repo).',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: inferredUi.markers,
+    examples: inferredUi.examples,
   });
   if (inferredUi.markers.length === 0) {
     result.gate = { ...result.gate, status: 'REJECT', passes: false };
@@ -201,6 +204,7 @@ export function detectDbClientInRequestEntry(
       'A request handler must not import the database client directly; go through a service or data-access layer.',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: inferredDb.markers,
+    examples: inferredDb.examples,
   });
   return { ...result, inferredDb };
 }
@@ -216,5 +220,6 @@ export function detectNoDbInRequestEntry(
       'Request handlers must not import a database client directly; go through a service or data-access layer.',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: options.dbMarkers ?? DEFAULT_DB_MARKERS,
+    ...(options.dbMarkers === undefined && { examples: KNOWN_DB_EXAMPLES }),
   });
 }
