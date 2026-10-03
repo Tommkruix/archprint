@@ -74,6 +74,16 @@ describe('mcp tools', () => {
   it('scanTool throws when there is no tsconfig and no discoverable app', () => {
     expect(() => scanTool(here)).toThrow(/No tsconfig/);
   });
+
+  it('explains that a repository URL needs the remote server, instead of treating it as a directory', () => {
+    for (const tool of [
+      () => scanTool(' https://github.com/owner/repo'),
+      () => recommendTool('https://github.com/owner/repo'),
+      () => explainTool('AP-002', 'git+https://github.com/owner/repo'),
+    ]) {
+      expect(tool).toThrow(/is a URL.*archprint mcp --http/);
+    }
+  });
 });
 
 describe('mcp runTool dispatch', () => {

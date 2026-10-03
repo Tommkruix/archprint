@@ -11,7 +11,14 @@ import {
 import { buildRecommendations, detectStack, type Recommendations } from '../cli/recommend.js';
 import type { DetectedPattern } from '../detector/pattern-detector.js';
 
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 function resolveAppDirs(input: string): { root: string; dirs: string[] } {
+  if (URL_SCHEME.test(input.trim())) {
+    throw new Error(
+      `"${input}" is a URL, but this server reads directories on the machine it runs on. Clone the repository and pass its directory, or run \`archprint mcp --http\` to scan a public repository by URL.`,
+    );
+  }
   const root = path.resolve(input);
   const dirs = discoverAppDirs(root);
   if (dirs.length === 0) {
