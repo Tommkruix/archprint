@@ -23,6 +23,16 @@ import { removeIgnoreEntry } from './ignore-file.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
 import { LEGACY_DIR, hasLegacyLayout, runMigration } from './migrate.js';
 import { WIRING_TOOLS } from './wiring.js';
+import {
+  checkExitCode,
+  checkJson,
+  githubAnnotations,
+  githubSummary,
+  renderCheckText,
+  runCheck,
+  type FailOn,
+} from './check.js';
+import { CheckSetupError } from './check-git.js';
 
 const LEGACY_ROOT_CONFIG = 'archprint.json';
 
@@ -235,6 +245,7 @@ export function buildProgram(version = readVersion()): Command {
           structural,
           enforcers,
           expand: options.expand,
+          mode: options.fast ? 'fast' : 'deep',
           version,
           recommendations,
           app: displayPath(appDir, cwd),
@@ -407,6 +418,7 @@ export function buildProgram(version = readVersion()): Command {
           expand: options.expand,
           only: options.only,
           ruleIds,
+          mode: options.fast ? 'fast' : 'deep',
           version,
           recommendations,
           app: displayPath(scan.appDir, cwd),
@@ -628,6 +640,56 @@ export function buildProgram(version = readVersion()): Command {
       await startMcpServer(version);
     });
   /* v8 ignore stop */
+
+  program
+    .command('check')
+    .description(
+      'Report the violations of your adopted rules that a change introduces, compared with a base branch or commit. For CI: warning only unless --fail-on new.',
+    )
+    .argument('[path]', 'app directory (defaults to the app recorded in .archprint/config.json)')
+    .option('--base <ref>', 'branch or commit to compare against (default: origin/HEAD)')
+    .option('--fail-on <mode>', 'exit 1 on new violations with "new"; "none" never fails', 'none')
+    .option('--format <format>', 'text, json, or github (annotations and a step summary)', 'text')
+    .option('-o, --out <dir>', 'directory that holds the generated rules', ARCHPRINT_DIR)
+    .action(
+      (
+        input: string | undefined,
+        options: { base?: string; failOn: string; format: string; out: string },
+      ) => {
+        if (options.failOn !== 'none' && options.failOn !== 'new') {
+          throw new Error(`--fail-on must be "none" or "new", not "${options.failOn}".`);
+        }
+        if (!['text', 'json', 'github'].includes(options.format)) {
+          throw new Error(`--format must be text, json, or github, not "${options.format}".`);
+        }
+        const failOn = options.failOn as FailOn;
+        let result;
+        try {
+          result = runCheck({
+            cwd: process.cwd(),
+            out: options.out,
+            path: input,
+            base: options.base,
+          });
+        } catch (error) {
+          if (!(error instanceof CheckSetupError)) throw error;
+          console.error(`archprint check could not run: ${error.message}`);
+          process.exitCode = 2;
+          return;
+        }
+        if (options.format === 'json') {
+          console.log(JSON.stringify(checkJson(result, version), null, 2));
+        } else if (options.format === 'github') {
+          for (const line of githubAnnotations(result, failOn)) console.log(line);
+          const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+          if (summaryFile) writeFileSync(summaryFile, githubSummary(result), { flag: 'a' });
+          console.log(renderCheckText(result));
+        } else {
+          console.log(renderCheckText(result));
+        }
+        process.exitCode = checkExitCode(result, failOn);
+      },
+    );
 
   program
     .command('migrate')

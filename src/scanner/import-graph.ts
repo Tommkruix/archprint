@@ -8,7 +8,7 @@ import {
 import { buildWorkspaceMap } from './workspace-resolver.js';
 import { type AliasEntry, resolveFirstPartyImport } from './resolve-import.js';
 
-const buildAliasEntries = (appDir: string): AliasEntry[] =>
+export const buildAliasEntries = (appDir: string): AliasEntry[] =>
   Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
     prefix: key.replace(/\/?\*$/, ''),
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),

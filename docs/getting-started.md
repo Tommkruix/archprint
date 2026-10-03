@@ -153,8 +153,45 @@ defaults.
 
 ## CI
 
-`scan --json` and `recommend --json` emit stable, version-keyed JSON for scripting. Exit codes are the
-contract: `0` on success, `1` on error.
+`archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
+your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
+evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request.
+
+```yaml
+# .github/workflows/archprint.yml
+name: archprint
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx archprint check --base ${{ github.event.pull_request.base.sha }} --format github
+```
+
+- **Warning by default.** Add `--fail-on new` to fail the job on a new violation, then mark the job a required
+  status check in your branch protection so a pull request that adds one can't merge.
+- **Only adopted rules.** `check` reads `.archprint/rules.json`, written by `init` and `generate`, and checks only
+  the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
+  but never counted against it.
+- **Upgrading from 0.8.x or earlier:** run `archprint generate` once to write `rules.json`. Until you do, `check`
+  posts a notice that it did not run and exits 0.
+- **Other CI systems:** `--format json` gives version-keyed output, and the exit code is the contract: `0` ok, `1`
+  new violations with `--fail-on new`, `2` the CI setup is wrong (for example a shallow clone without the base
+  commit). Check out the full history (`fetch-depth: 0` or your CI's equivalent).
+- **Safe on pull requests from forks.** It needs only read access, uses no secrets, and never runs your code.
+
+`scan --json` and `recommend --json` also emit stable, version-keyed JSON for scripting, with exit code `0` on
+success and `1` on error.
 
 ## Use with AI agents (MCP)
 

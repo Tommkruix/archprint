@@ -73,6 +73,8 @@ are never left with config for a tool you do not have (`--emit all` forces every
   ESLint setup, which already parses your TypeScript), so it can be committed, published, or shared and adopted
   in one line,
 - `.archprint/dependency-cruiser.json`: one `forbidden` ruleset (when dependency-cruiser is present),
+- `.archprint/rules.json`: the exact definition of each adopted mechanical rule, its resolution mode, and the
+  evidence recorded when it was adopted, which `archprint check` uses in CI,
 - `.archprint/config.json`: the system file recording what is enforced, followed but only reported, held for
   review, worth adopting, and the managed outputs `eject` removes,
 - a managed section in your `README.md` explaining what is enforced, followed but only reported, held for review,

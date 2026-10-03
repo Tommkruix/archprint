@@ -190,6 +190,7 @@ export function runMigration(
   const recommendations = buildRecommendations(scan, detectStack(plan.appDir), enforcers);
   const { files } = writeLayout(scan, path.join(cwd, ARCHPRINT_DIR), {
     enforcers,
+    mode: 'deep',
     version,
     recommendations,
     app: path.relative(cwd, plan.appDir) || '.',
