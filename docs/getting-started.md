@@ -191,6 +191,15 @@ path to `npx` alone is not enough, because `npx` itself needs `node` on the `PAT
 
 Starting the editor from a terminal also works, because it then inherits your shell's `PATH`.
 
+**One-line installs.** In Claude Code:
+
+```bash
+claude mcp add archprint -- npx -y archprint mcp
+```
+
+In Cursor, put the JSON above in `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for every project),
+then enable **archprint** under **Settings > MCP**.
+
 That is a local stdio server over the repo you point the client at, and it is the one to use for private code:
 your source never leaves your machine, whichever git host you use.
 
