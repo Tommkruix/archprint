@@ -155,7 +155,26 @@ defaults.
 
 `archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
-evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request.
+evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request
+([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
+
+On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action):
+
+```yaml
+# .github/workflows/archprint.yml
+name: archprint
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Tommkruix/archprint-action@v1
+```
+
+It checks out the pull request itself, so it needs no checkout step. The same check in plain steps, without the
+Action:
 
 ```yaml
 # .github/workflows/archprint.yml
@@ -178,8 +197,9 @@ jobs:
       - run: npx archprint check --base ${{ github.event.pull_request.base.sha }} --format github
 ```
 
-- **Warning by default.** Add `--fail-on new` to fail the job on a new violation, then mark the job a required
-  status check in your branch protection so a pull request that adds one can't merge.
+- **Warning by default.** Add `--fail-on new` (or the Action's `fail-on: new`) to fail the job on a new
+  violation, then mark the job a required status check in your branch protection so a pull request that adds one
+  can't merge.
 - **Only adopted rules.** `check` reads `.archprint/rules.json`, written by `init` and `generate`, and checks only
   the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
   but never counted against it.
