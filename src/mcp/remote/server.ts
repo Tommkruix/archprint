@@ -27,7 +27,7 @@ export const REMOTE_TOOLS = [
     title: 'Scan architecture rules',
     annotations: READ_ONLY_REMOTE,
     description:
-      'Clone a public repository by URL (read-only, ephemeral) and list the architecture rules it already follows, with the evidence: which families are AUTO (clears the confidence gate) or SUGGEST (worth review), how many files conform vs. break each, and the confidence.',
+      'Clone a public repository by URL (read-only, ephemeral) and list the architecture rules it already follows, with the evidence: each rule as AUTO (clears the confidence gate) or SUGGEST (short of it), its adoption ("enforce", "review" or "report-only": whether archprint would enforce it, hold it for review, or only report it), how many files conform vs. break each, and the confidence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,7 +53,7 @@ export const REMOTE_TOOLS = [
     title: 'Explain an architecture rule',
     annotations: READ_ONLY_REMOTE,
     description:
-      'Clone a public repository by URL (read-only, ephemeral) and explain the confidence-gate evidence behind one inferred rule id (e.g. AP-002): its gate status, conformance stats, and the files that violate it.',
+      'Clone a public repository by URL (read-only, ephemeral) and explain the confidence-gate evidence behind one inferred rule id (e.g. AP-002): its gate status, adoption (enforce, review, or report-only), conformance stats, and the files that violate it.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string', description: 'rule id, e.g. AP-002' }, ...repoProperty },
