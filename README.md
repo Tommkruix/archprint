@@ -330,10 +330,11 @@ jobs:
 ## MCP setup
 
 `archprint mcp` runs Archprint as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent can ask
-what architecture rules your repo already follows, with the evidence, before it writes code. It exposes three
-read-only tools: `archprint_scan`, `archprint_recommend`, and `archprint_explain`. Each rule comes back stated in
-plain words, with its evidence and the files that break it, and `archprint_explain` takes any rule label from the
-scan (for example `AP-002` or `env-access`). Point Claude Desktop, Claude Code, Cursor, or any MCP client at it:
+what architecture rules your repo already follows, with the evidence, before it writes code. It exposes four
+read-only tools: `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`. Each rule comes
+back stated in plain words, with its evidence and the files that break it, and `archprint_explain` takes any rule
+label from the scan (for example `AP-002` or `env-access`). `archprint_check` reports the adopted rules the agent's
+current change breaks, uncommitted edits included, so it can fix them before it finishes. Point Claude Desktop, Claude Code, Cursor, or any MCP client at it:
 
 ```json
 {
@@ -443,8 +444,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 - **`archprint migrate`** (alias `upgrade`): moves an older `archprint-rules/` setup to the `.archprint/` layout
   and rewires your configs in place. `--dry-run`.
 - **`archprint mcp`**: runs Archprint as an MCP server so Claude, Cursor, and other agents can call the read-only
-  `scan`, `recommend`, and `explain` tools. Serves over stdio by default; `--http` runs a remote server that scans
-  a public repo by URL.
+  `scan`, `recommend`, `explain`, and `check` tools. Serves over stdio by default; `--http` runs a remote server
+  that scans a public repo by URL (`scan`, `recommend`, and `explain`).
 
 `scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting. Exit
 codes are the contract: `0` on success, `1` on error (for `check`: new violations with `--fail-on new`), `2` for a

@@ -621,7 +621,7 @@ export function buildProgram(version = readVersion()): Command {
   program
     .command('mcp')
     .description(
-      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain. Serves over stdio by default; --http runs a remote server that scans a public repo by URL.',
+      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain, check. Serves over stdio by default; --http runs a remote server that scans a public repo by URL (scan, recommend, explain).',
     )
     .option('--http', 'serve over HTTP (Streamable HTTP) instead of stdio, for remote clients')
     .option('--port <port>', 'port for --http', process.env.PORT ?? '8848')
