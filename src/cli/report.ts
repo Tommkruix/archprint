@@ -554,8 +554,8 @@ const adoptionSection = (
 export function renderAdoptionBody(rec: Recommendations): string {
   return [
     ...adoptionSection(
-      'Enforcing now',
-      'These rules match what your code already follows and are wired into your linter.',
+      'Adopted rules',
+      'These rules match what your code already follows. They are written to `.archprint/` and run in your linter once `archprint wire` connects them.',
       rec.enforceNow,
     ),
     ...adoptionSection(

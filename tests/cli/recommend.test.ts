@@ -83,7 +83,9 @@ describe('renderAdoptionMarkdown', () => {
       '1.0.0',
     );
     expect(md).toContain('# Archprint adoption notes');
-    expect(md).toContain('## Enforcing now');
+    expect(md).toContain('## Adopted rules');
+    expect(md).toContain('run in your linter once `archprint wire` connects them');
+    expect(md).not.toMatch(/wired into your linter/);
     expect(md).toContain('- Console isolation (eslint) (50% of comparable repos)');
     expect(md).toContain('- Layer boundaries (dependency-cruiser)');
     expect(md).toContain('## Report only');

@@ -245,7 +245,7 @@ describe('cli program', () => {
     expect(existsSync(readme)).toBe(true);
     const body = readFileSync(readme, 'utf8');
     expect(body).toContain('<!-- archprint:start -->');
-    expect(body).toContain('### Enforcing now');
+    expect(body).toContain('### Adopted rules');
   });
 
   it('generate manages a .prettierignore entry for the output dir', async () => {
