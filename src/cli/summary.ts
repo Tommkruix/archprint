@@ -1,4 +1,6 @@
 import type { GateResult, GenerationStatus } from '../detector/confidence-gate.js';
+import type { FamilyKey } from '../detector/family-maturity.js';
+import { autoTier, type AutoTier } from './recommend.js';
 import type { ScanResult } from './scan.js';
 import {
   FAMILY_STATEMENTS,
@@ -12,10 +14,11 @@ import {
 export const LISTED_EXCEPTIONS = 10;
 
 export interface RuleSummary {
-  family: string;
+  family: FamilyKey;
   label: string;
   statement: string;
   status: GenerationStatus;
+  adoption: AutoTier;
   observedConformance: number;
   confidenceFloor: number;
   observations: number;
@@ -30,7 +33,7 @@ export interface ScanSummary {
 }
 
 interface GateEntry {
-  family: string;
+  family: FamilyKey;
   label: string;
   statement: string;
   gate: GateResult;
@@ -128,6 +131,7 @@ export function summarizeRules(
       label,
       statement,
       status: gate.status,
+      adoption: gate.status === 'AUTO' ? autoTier(family) : 'review',
       observedConformance: gate.observedConformance,
       confidenceFloor: gate.conditions.confidence.value,
       observations: gate.observations,
