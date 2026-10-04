@@ -184,10 +184,13 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
 
 export function readAdoptedRules(outDir: string): AdoptedRules | null {
   const file = path.join(outDir, RULES_FILE);
-  if (!existsSync(file)) return null;
+  return existsSync(file) ? parseAdoptedRules(readFileSync(file, 'utf8'), file) : null;
+}
+
+export function parseAdoptedRules(text: string, file: string): AdoptedRules {
   let parsed: Partial<AdoptedRules>;
   try {
-    parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<AdoptedRules>;
+    parsed = JSON.parse(text) as Partial<AdoptedRules>;
   } catch {
     throw new InvalidRulesError(`${file} is not valid JSON. Re-run archprint generate.`);
   }

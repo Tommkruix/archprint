@@ -45,6 +45,14 @@ export function mergeBase(root: string, base: string): string {
   }
 }
 
+export function fileAtCommit(root: string, commit: string, relativePath: string): string | null {
+  try {
+    return git(root, ['show', `${commit}:${relativePath}`]);
+  } catch {
+    return null;
+  }
+}
+
 export function renamedPaths(root: string, commit: string): Map<string, string> {
   const renames = new Map<string, string>();
   const output = git(root, ['diff', '--name-status', '-M', '-z', commit]);
