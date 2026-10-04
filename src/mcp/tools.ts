@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers } from '../scanner/enforcers.js';
 import { scanRepo } from '../cli/scan.js';
+import { checkReport, runCheck } from '../cli/check.js';
+import { ARCHPRINT_DIR } from '../cli/generate.js';
 import {
   summarizeRules,
   toScanSummary,
@@ -10,6 +12,7 @@ import {
   type ScanSummary,
 } from '../cli/summary.js';
 import { buildRecommendations, detectStack, type Recommendations } from '../cli/recommend.js';
+import { guidanceFor, type RuleGuidance } from '../cli/rule-guidance.js';
 import type { DetectedPattern } from '../detector/pattern-detector.js';
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -66,6 +69,7 @@ export interface ExplainResult {
   app: string;
   rule: RuleSummary;
   pattern?: DetectedPattern;
+  guidance?: RuleGuidance;
 }
 
 export function explainTool(id: string, input: string): ExplainResult {
@@ -80,11 +84,21 @@ export function explainTool(id: string, input: string): ExplainResult {
       const pattern = scan.patterns.find(
         (candidate) => candidate.config.id.toLowerCase() === wanted,
       );
-      return { app: displayApp(dir, root), rule, ...(pattern && { pattern: pattern.result }) };
+      return {
+        app: displayApp(dir, root),
+        rule,
+        ...(pattern && { pattern: pattern.result, guidance: guidanceFor(pattern.config.name) }),
+      };
     }
     known.push(...rules.map((candidate) => candidate.label));
   }
   throw new Error(
     `No rule "${id}" found under ${path.resolve(input)}. Rules found: ${[...new Set(known)].join(', ') || 'none'}.`,
+  );
+}
+
+export function checkTool(input: string, base?: string): Record<string, unknown> {
+  return checkReport(
+    runCheck({ cwd: path.resolve(localPath(input)), out: ARCHPRINT_DIR, ...(base && { base }) }),
   );
 }

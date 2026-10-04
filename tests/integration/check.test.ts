@@ -20,6 +20,7 @@ import { buildProgram } from '../../src/cli/program.js';
 import { runCheck } from '../../src/cli/check.js';
 import { checkoutBase, renamedPaths } from '../../src/cli/check-git.js';
 import { gitEnv } from '../../src/cli/git-env.js';
+import { callTool } from '../../src/mcp/server.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const autoFixture = path.join(here, '..', 'fixtures', 'cli-auto');
@@ -90,6 +91,24 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     rmSync(repo, { recursive: true, force: true });
     process.exitCode = 0;
     delete process.env.GITHUB_STEP_SUMMARY;
+  });
+
+  it('reports a violation in uncommitted edits through the MCP check tool, with the app it is in', () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    const response = callTool('archprint_check', { path: repo, base: 'main' });
+    expect(response.isError).toBeFalsy();
+    expect(JSON.parse(response.content[0]!.text)).toMatchObject({
+      status: 'checked',
+      app: app,
+      introduced: [{ rule: 'AP-001', file: 'app/api/orders/route.ts', line: 1 }],
+      fixed: [],
+    });
+  });
+
+  it('returns a setup problem from the MCP check tool as an error response', () => {
+    const response = callTool('archprint_check', { path: repo, base: 'no-such-branch' });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]!.text).toMatch(/no-such-branch/);
   });
 
   it('checks the repository it runs in when a git hook points GIT_DIR at another one', async () => {
@@ -217,9 +236,27 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(existsSync(base.root)).toBe(false);
   });
 
+  it("reads the base commit without running the repository's git hooks or touching .git", async () => {
+    const marker = path.join(repo, 'hook-ran');
+    const hook = path.join(repo, '.git', 'hooks', 'post-checkout');
+    writeFileSync(hook, `#!/bin/sh\ntouch "${marker}"\n`, { mode: 0o755 });
+    write('app/api/orders/route.ts', directDbRoute);
+    commitAll('query the database in a route');
+    await run(['check', '--base', 'main']);
+    expect(output()).toContain('app/api/orders/route.ts:1  AP-001 (@prisma/client)');
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(path.join(repo, '.git', 'worktrees'))).toBe(false);
+  });
+
+  it('refuses a base that git would read as an option', () => {
+    const response = callTool('archprint_check', { path: repo, base: '--all' });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]!.text).toContain('"--all" is not a branch or commit name.');
+  });
+
   it('leaves nothing behind when the base snapshot cannot be created', () => {
     const before = readdirSync(tmpdir()).filter((name) => name.startsWith('archprint-check-'));
-    expect(() => checkoutBase(repo, 'no-such-commit', app)).toThrow(/git worktree add/);
+    expect(() => checkoutBase(repo, 'no-such-commit', app)).toThrow(/git read-tree/);
     const after = readdirSync(tmpdir()).filter((name) => name.startsWith('archprint-check-'));
     expect(after.sort()).toEqual(before.sort());
   });

@@ -101,12 +101,12 @@ the config never points at a file that has been deleted.
 
 `archprint mcp` runs Archprint as a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio,
 so an assistant like Claude or Cursor can read a repo's architecture on demand. It exposes the read-only half of
-the CLI as three tools, `archprint_scan`, `archprint_recommend`, and `archprint_explain`, which return the same
-evidence-gated findings as the read commands of the same name (as JSON) and never write to your project. Generating and wiring
+the CLI as four tools, `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`, which
+return the same evidence-gated findings as the commands of the same name (as JSON) and never write to your project. Generating and wiring
 rules stays a deliberate command you run yourself. The stdio server runs on your machine against your local
 checkout, so it suits private code: nothing leaves your machine. `archprint mcp --http` instead runs a remote server
-that scans a public repository by URL: it clones the repo ephemerally, runs the same read-only analysis, and deletes
-the clone.
+that scans a public repository by URL: it clones the repo ephemerally, runs the same read-only analysis (scan,
+recommend, and explain; a clone has no change of yours to check), and deletes the clone.
 See [Use with AI agents](/getting-started#use-with-ai-agents-mcp) for the client configuration.
 
 ## Determinism

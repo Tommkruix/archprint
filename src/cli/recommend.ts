@@ -77,7 +77,7 @@ const gatedStatus = (population: number, status: GenerationStatus): FamilyStatus
 
 const FAMILIES: readonly Family[] = [
   {
-    title: 'Forbidden imports (DB client / UI in server entries)',
+    title: 'Forbidden imports (database client or UI in request handlers)',
     key: 'forbidden-imports',
     status: (s) => groupsStatus(s.patterns.map((p) => p.result)),
   },

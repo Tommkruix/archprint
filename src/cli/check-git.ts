@@ -6,11 +6,11 @@ import { gitEnv } from './git-env.js';
 
 export class CheckSetupError extends Error {}
 
-const git = (cwd: string, args: readonly string[]): string => {
+const git = (cwd: string, args: readonly string[], env = gitEnv()): string => {
   try {
     return execFileSync('git', args, {
       cwd,
-      env: gitEnv(),
+      env,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -33,6 +33,9 @@ export function defaultBase(root: string): string {
 }
 
 export function mergeBase(root: string, base: string): string {
+  if (base.startsWith('-')) {
+    throw new CheckSetupError(`"${base}" is not a branch or commit name.`);
+  }
   try {
     return git(root, ['merge-base', 'HEAD', base]).trim();
   } catch {
@@ -79,22 +82,16 @@ function linkNodeModules(
 
 export function checkoutBase(root: string, commit: string, appRelative: string): BaseTree {
   const parent = mkdtempSync(path.join(tmpdir(), 'archprint-check-'));
-  const worktree = path.join(parent, 'base');
+  const snapshot = path.join(parent, 'base');
+  const dispose = (): void => rmSync(parent, { recursive: true, force: true });
+  const env = { ...gitEnv(), GIT_INDEX_FILE: path.join(parent, 'index') };
   try {
-    git(root, ['worktree', 'add', '--detach', '--quiet', worktree, commit]);
+    git(root, ['read-tree', commit], env);
+    git(root, ['checkout-index', '--all', `--prefix=${snapshot}/`], env);
   } catch (error) {
-    rmSync(parent, { recursive: true, force: true });
+    dispose();
     throw error;
   }
-  linkNodeModules(root, worktree, ['', appRelative]);
-  return {
-    root: worktree,
-    dispose: () => {
-      try {
-        git(root, ['worktree', 'remove', '--force', worktree]);
-      } finally {
-        rmSync(parent, { recursive: true, force: true });
-      }
-    },
-  };
+  linkNodeModules(root, snapshot, ['', appRelative]);
+  return { root: snapshot, dispose };
 }
