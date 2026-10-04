@@ -1,5 +1,20 @@
 # archprint
 
+## 0.9.0
+
+### Minor Changes
+
+- Add `archprint check`, which reports only the violations a change introduces, compared with a base branch or commit, for the rules your team adopted with `init` or `generate`. It works in any CI. On GitHub, `--format github` shows each finding inline on the pull request, with its evidence, plus a step summary that also counts the violations the change fixed. It warns by default; `--fail-on new` fails the job so you can make it a required status check. `--format json` and exit codes (`0` ok, `1` new violations, `2` the CI setup is wrong) cover other CI systems.
+
+  `init` and `generate` now also write `.archprint/rules.json`, the exact definition of each adopted mechanical rule, which `check` uses so it never re-infers a rule. If you set up archprint with 0.8.x or earlier, run `archprint generate` once; until then `check` reports that it did not run.
+
+### Patch Changes
+
+- The same repository now gives the same output on every machine. archprint reads files in name order instead of the order the filesystem returns them, which differs between macOS and Linux, so an example exception or a generated fixture no longer changes between a laptop and CI.
+- `generate --expand` now writes each forbidden-import rule's files from that rule. Before, the database rule (AP-001) got the UI rule's ESLint message, rule card text and fixtures, so its failing fixture imported a UI component that AP-001 never flags. Each rule's message now states the rule, its card lists what it forbids, and its failing fixture imports something the rule really reports: one of the repo's own exceptions when there is one, otherwise the database wrapper or component folder archprint found.
+- The local MCP server now says plainly when it is given a repository URL instead of a directory, and points to `archprint mcp --http` for scanning a public repository by URL. Before, it reported a missing `tsconfig.json` under a path built from the URL. It also reads a `file://` URL as the local directory it names, and ignores spaces around a path.
+- Plainer wording. The database and UI rules (AP-001, AP-002) now say "request handler" instead of "request-entry" or "server-entry" file, in scan output, ESLint messages, rule cards and fix guidance. `scan` prints each of these rules as a sentence followed by "N of M files it applies to follow it".
+
 ## 0.8.3
 
 ### Patch Changes
