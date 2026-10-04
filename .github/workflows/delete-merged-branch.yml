@@ -20,4 +20,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH"
+          REPO: ${{ github.repository }}
+        run: |
+          if ! output=$(gh api -X DELETE "repos/$REPO/git/refs/heads/$BRANCH" 2>&1); then
+            case "$output" in
+              *"Reference does not exist"*) echo "$BRANCH was already deleted." ;;
+              *) echo "$output"; exit 1 ;;
+            esac
+          fi
