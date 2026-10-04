@@ -1,7 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { explainTool, recommendTool, scanTool } from './tools.js';
+import { checkTool, explainTool, recommendTool, scanTool } from './tools.js';
 import { errorResponse, okResponse, type ToolResponse } from './tool-response.js';
 
 const READ_ONLY = {
@@ -53,7 +53,7 @@ export const TOOLS = [
     title: 'Explain an architecture rule',
     annotations: READ_ONLY,
     description:
-      'Explain the confidence-gate evidence behind one rule from archprint_scan, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, conformance stats, and every file that breaks it. Read-only.',
+      'Explain one rule from archprint_scan in depth, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -67,6 +67,27 @@ export const TOOLS = [
         },
       },
       required: ['id'],
+    },
+  },
+  {
+    name: 'archprint_check',
+    title: 'Check a change against adopted rules',
+    annotations: READ_ONLY,
+    description:
+      'Check the current change, including uncommitted edits, against the rules this repo adopted with archprint init or generate, and report only the violations the change introduces (file, line, rule, and the evidence for the rule), plus those it fixed. Use it before finishing a change. Compares with `base` (a branch or commit, default origin/HEAD). Read-only: the files of the base commit are copied to a temporary folder outside the repo and deleted afterwards; it runs no git hooks and changes nothing in the repo. Returns status "skipped" with the reason when the repo has not adopted rules.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description:
+            'repository directory where archprint was set up, on this machine (default ".")',
+        },
+        base: {
+          type: 'string',
+          description: 'branch or commit to compare against (default origin/HEAD)',
+        },
+      },
     },
   },
 ] as const;
@@ -83,6 +104,11 @@ export function runTool(name: string, args: Record<string, unknown>): unknown {
         throw new Error('archprint_explain requires an "id" (for example AP-002).');
       }
       return explainTool(args.id, input);
+    case 'archprint_check':
+      if (args.base !== undefined && typeof args.base !== 'string') {
+        throw new Error('archprint_check "base" must be a branch or commit name.');
+      }
+      return checkTool(input, args.base);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

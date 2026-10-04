@@ -54,6 +54,7 @@ describe('mcp tools', () => {
     expect(result.rule.label).toBe('AP-002');
     expect(result.rule.statement).toBe(result.pattern?.description);
     expect(result.pattern?.gate).toBeDefined();
+    expect(result.guidance?.howToFix).toMatch(/^Move the UI import out of the request handler/);
   });
 
   it('explainTool explains a family rule and names every file that breaks it', () => {
@@ -65,6 +66,7 @@ describe('mcp tools', () => {
     expect(result.rule.statement).toBe('read process.env only in the config layer');
     expect(result.rule.exceptions).toEqual(['lib/flag.ts']);
     expect(result.pattern).toBeUndefined();
+    expect(result.guidance).toBeUndefined();
   });
 
   it('explainTool throws for an unknown rule id and lists the rules it found', () => {
@@ -89,6 +91,21 @@ describe('mcp tools', () => {
     ]) {
       expect(tool).toThrow(/is a URL.*archprint mcp --http/);
     }
+  });
+});
+
+describe('mcp archprint_check', () => {
+  it('reports that it did not run where no rules were adopted, instead of failing', () => {
+    expect(runTool('archprint_check', { path: auto })).toEqual({
+      status: 'skipped',
+      reason: 'no .archprint/config.json. Run archprint init (or generate) first.',
+    });
+  });
+
+  it('rejects a base that is not a branch or commit name', () => {
+    expect(() => runTool('archprint_check', { path: auto, base: 42 })).toThrow(
+      /"base" must be a branch or commit name/,
+    );
   });
 });
 
@@ -142,10 +159,11 @@ describe('mcp server over an in-memory transport', () => {
     return client;
   }
 
-  it('lists the three read-only tools', async () => {
+  it('lists the four read-only tools', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'archprint_check',
       'archprint_explain',
       'archprint_recommend',
       'archprint_scan',

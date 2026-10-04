@@ -173,7 +173,12 @@ describe('summary table safety', () => {
 describe('checkJson', () => {
   it('is version-keyed and lists introduced findings with their line and message', () => {
     const json = checkJson(checked(), '9.9.9') as { introduced: { line: number; rule: string }[] };
-    expect(json).toMatchObject({ archprintVersion: '9.9.9', status: 'checked', base: 'main' });
+    expect(json).toMatchObject({
+      archprintVersion: '9.9.9',
+      status: 'checked',
+      app: '.',
+      base: 'main',
+    });
     expect(json.introduced[0]).toMatchObject({ rule: 'AP-001', line: 2, subject: '@/lib/db' });
   });
 

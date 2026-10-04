@@ -209,8 +209,12 @@ export function renderCheckText(result: CheckResult): string {
 }
 
 export function checkJson(result: CheckResult, version: string): unknown {
+  return { archprintVersion: version, ...checkReport(result) };
+}
+
+export function checkReport(result: CheckResult): Record<string, unknown> {
   if (result.status === 'skipped') {
-    return { archprintVersion: version, status: 'skipped', reason: result.reason };
+    return { status: 'skipped', reason: result.reason };
   }
   const shape = (finding: ReportedFinding) => ({
     rule: finding.rule.id,
@@ -220,8 +224,8 @@ export function checkJson(result: CheckResult, version: string): unknown {
     message: findingMessage(finding.rule),
   });
   return {
-    archprintVersion: version,
     status: 'checked',
+    app: result.appPath || '.',
     base: result.base,
     commit: result.commit,
     introduced: result.introduced.map(shape),

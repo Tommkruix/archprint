@@ -184,7 +184,7 @@ export const ADOPTION_CATALOG: AdoptionCatalog = {
         storybook: 3.7,
       },
     },
-    'Forbidden imports (DB client / UI in server entries)': {
+    'Forbidden imports (database client or UI in request handlers)': {
       overall: 1.2,
       byStack: {
         react: 2.1,
