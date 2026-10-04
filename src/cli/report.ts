@@ -555,7 +555,7 @@ export function renderAdoptionBody(rec: Recommendations): string {
   return [
     ...adoptionSection(
       'Adopted rules',
-      'These rules match what your code already follows. They are written to `.archprint/` and run in your linter once `archprint wire` connects them.',
+      'These rules match what your code already follows. They are written to `.archprint/`. `archprint wire` references them from your linter config, and `archprint eject` removes them.',
       rec.enforceNow,
     ),
     ...adoptionSection(
