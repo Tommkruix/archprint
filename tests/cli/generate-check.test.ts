@@ -38,6 +38,7 @@ describe('runEslintCheck', () => {
   it('flags a repo that drifts from a generated rule after generation', async () => {
     const outDir = path.join(dir, 'out');
     emitLayout(scanRepo(fixture('console-isolation-auto')), outDir, {
+      version: '9.9.9',
       enforcers: eslintOnly,
     });
     const appDir = path.join(dir, 'app');
@@ -54,6 +55,7 @@ describe('runEslintCheck', () => {
   it('reports files that could not be parsed instead of passing them clean', async () => {
     const outDir = path.join(dir, 'out');
     emitLayout(scanRepo(fixture('console-isolation-auto')), outDir, {
+      version: '9.9.9',
       enforcers: eslintOnly,
     });
     const appDir = path.join(dir, 'app');
@@ -67,6 +69,7 @@ describe('runEslintCheck', () => {
   it('does not flag a test file that logs (excluded from the scored population)', async () => {
     const outDir = path.join(dir, 'out');
     emitLayout(scanRepo(fixture('console-isolation-auto')), outDir, {
+      version: '9.9.9',
       enforcers: eslintOnly,
     });
     const appDir = path.join(dir, 'app');

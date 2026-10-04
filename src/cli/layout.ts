@@ -7,6 +7,7 @@ import { injectAdoptionSection } from './adoption-readme.js';
 import { ensureIgnoreEntry } from './ignore-file.js';
 import type { Recommendations } from './recommend.js';
 import type { ScanResult } from './scan.js';
+import type { ResolutionMode } from './adopted-rules.js';
 
 export interface WriteLayoutOptions {
   structural?: boolean;
@@ -15,6 +16,7 @@ export interface WriteLayoutOptions {
   ruleIds?: readonly string[];
   expand?: boolean;
   graph?: boolean;
+  mode: ResolutionMode;
   version: string;
   recommendations: Recommendations;
   app: string;
@@ -56,6 +58,8 @@ export function writeLayout(
     ruleIds: options.ruleIds,
     expand: options.expand,
     graph: options.graph,
+    mode: options.mode,
+    version: options.version,
   });
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
     (file): file is string => file !== null,
@@ -87,7 +91,7 @@ export function writeLayout(
   }
 
   const managed: ManagedOutputs = {
-    files: files.map((file) => path.relative(options.cwd, file)),
+    files: [...files, emitted.rules].map((file) => path.relative(options.cwd, file)),
     readme: readme !== 'off' && readme !== 'skipped' ? true : (prior?.managed.readme ?? false),
     readmeCreated,
     prettierignore,

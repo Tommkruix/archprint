@@ -66,7 +66,8 @@ function fakePattern(id: string, status: GenerationStatus): ScannedPattern {
       name: `rule-${id}`,
       description: 'd',
       roles: REQUEST_ENTRY_ROLES,
-      forbidden: [/x/],
+      forbidden: [/(^|\/)x(\/|$)/],
+      examples: ['@/x/example'],
     },
     result,
   };
@@ -506,6 +507,24 @@ describe('cli scan', () => {
     expect(renderExplain(pattern, fixture)).toContain('nothing to enforce');
   });
 
+  it('states each generated rule in plain words, with how many files it applies to follow it', () => {
+    const pattern = fakePattern('AP-001', 'AUTO');
+    const stated = {
+      ...pattern,
+      config: {
+        ...pattern.config,
+        description: 'A request handler must not import the database client directly.',
+      },
+    };
+    const report = renderReport(emptyScan({ patterns: [stated] }), '1.0.0');
+    expect(report).toContain(
+      '          A request handler must not import the database client directly.\n',
+    );
+    expect(report).toContain(
+      `Evidence: ${pattern.result.stats.conformingFileCount} of 50 files it applies to follow it`,
+    );
+  });
+
   it('separates AUTO into GENERATED and SUGGEST into SUGGESTIONS', () => {
     const scan = emptyScan({
       fileCount: 100,
@@ -813,7 +832,7 @@ describe('cli generate', () => {
     });
     const c = collect(scan, { enforcers: ESLINT, structural: false });
     expect(c.eslintSpecs.map((s) => s.name)).toEqual(['rule-AP-002']);
-    emitLayout(scan, outDir, { enforcers: ESLINT, expand: true });
+    emitLayout(scan, outDir, { version: '9.9.9', enforcers: ESLINT, expand: true });
     expect(existsSync(path.join(outDir, 'rule-AP-002', 'rule-AP-002.ts'))).toBe(true);
     expect(existsSync(path.join(outDir, 'rule-AP-002', 'fixtures', 'failing.ts'))).toBe(true);
   });
@@ -829,7 +848,7 @@ describe('cli generate', () => {
   it('writes a single self-contained eslint file from AUTO forbidden imports, none otherwise', () => {
     rmSync(outDir, { recursive: true, force: true });
     const scan = scanRepo(path.join(here, '..', 'fixtures', 'cli-auto'));
-    const emitted = emitLayout(scan, outDir, { enforcers: ESLINT });
+    const emitted = emitLayout(scan, outDir, { version: '9.9.9', enforcers: ESLINT });
     expect(emitted.eslint).not.toBeNull();
     expect(path.basename(emitted.eslint!)).toBe('eslint.mjs');
     const source = readFileSync(emitted.eslint!, 'utf8');
@@ -838,14 +857,21 @@ describe('cli generate', () => {
     );
     expect(source).toContain("import archprint from './.archprint/eslint.mjs';");
     expect(source).not.toContain('readdirSync');
-    expect(emitLayout(emptyScan(), outDir, { enforcers: ESLINT }).eslint).toBeNull();
+    expect(
+      emitLayout(emptyScan(), outDir, { version: '9.9.9', enforcers: ESLINT }).eslint,
+    ).toBeNull();
   });
 
   it('collects ts-arch boundary rules and expands the test file from AUTO boundaries', () => {
     rmSync(outDir, { recursive: true, force: true });
     const scan = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)] });
     expect(collect(scan).tsArchRules.map((r) => r.name)).toContain('no-utils-to-api');
-    emitLayout(scan, outDir, { enforcers: DEPCRUISE, structural: true, expand: true });
+    emitLayout(scan, outDir, {
+      version: '9.9.9',
+      enforcers: DEPCRUISE,
+      structural: true,
+      expand: true,
+    });
     const source = readFileSync(path.join(outDir, 'architecture.archprint.ts'), 'utf8');
     expect(source).toContain("import { filesOfProject } from 'tsarch';");
     expect(source).toContain('no-utils-to-api');
@@ -960,7 +986,11 @@ describe('cli generate', () => {
       layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
       publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
     });
-    const emitted = emitLayout(scan, outDir, { enforcers: DEPCRUISE, structural: true });
+    const emitted = emitLayout(scan, outDir, {
+      version: '9.9.9',
+      enforcers: DEPCRUISE,
+      structural: true,
+    });
     expect(path.basename(emitted.depcruise!)).toBe('dependency-cruiser.json');
     const config = JSON.parse(readFileSync(emitted.depcruise!, 'utf8')) as {
       forbidden: { name: string }[];
@@ -970,7 +1000,8 @@ describe('cli generate', () => {
       'no-utils-to-api',
     ]);
     expect(
-      emitLayout(emptyScan(), outDir, { enforcers: DEPCRUISE, structural: true }).depcruise,
+      emitLayout(emptyScan(), outDir, { version: '9.9.9', enforcers: DEPCRUISE, structural: true })
+        .depcruise,
     ).toBeNull();
   });
 
@@ -978,7 +1009,12 @@ describe('cli generate', () => {
     rmSync(outDir, { recursive: true, force: true });
     const withBoundaries = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 10)] });
     expect(collect(withBoundaries).hasGraph).toBe(true);
-    emitLayout(withBoundaries, outDir, { enforcers: DEPCRUISE, structural: true, expand: true });
+    emitLayout(withBoundaries, outDir, {
+      version: '9.9.9',
+      enforcers: DEPCRUISE,
+      structural: true,
+      expand: true,
+    });
     const dot = readFileSync(path.join(outDir, 'layer-graph.archprint.dot'), 'utf8');
     expect(dot).toContain('digraph archprint');
     expect(collect(emptyScan()).hasGraph).toBe(false);

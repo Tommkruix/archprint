@@ -21,7 +21,10 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'app or monorepo-root directory (default ".")' },
+        path: {
+          type: 'string',
+          description: 'app or monorepo-root directory on this machine (default "."), not a URL',
+        },
         deep: {
           type: 'boolean',
           description: 'resolve imports through barrels and aliases (slower, more accurate)',
@@ -38,7 +41,10 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'app or monorepo-root directory (default ".")' },
+        path: {
+          type: 'string',
+          description: 'app or monorepo-root directory on this machine (default "."), not a URL',
+        },
       },
     },
   },
@@ -55,7 +61,10 @@ export const TOOLS = [
           type: 'string',
           description: 'rule label from archprint_scan, e.g. AP-002 or env-access',
         },
-        path: { type: 'string', description: 'app or monorepo-root directory (default ".")' },
+        path: {
+          type: 'string',
+          description: 'app or monorepo-root directory on this machine (default "."), not a URL',
+        },
       },
       required: ['id'],
     },

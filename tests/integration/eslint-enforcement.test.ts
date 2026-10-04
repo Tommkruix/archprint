@@ -24,7 +24,7 @@ describe('eslint enforcement (end to end)', () => {
   beforeAll(() => {
     tmp = mkdtempSync(path.join(tmpdir(), 'archprint-e2e-'));
     const outDir = path.join(tmp, '.archprint');
-    emitLayout(scanRepo(fixture), outDir, { enforcers: eslintOnly });
+    emitLayout(scanRepo(fixture), outDir, { version: '9.9.9', enforcers: eslintOnly });
     expect(existsSync(path.join(outDir, 'eslint.mjs'))).toBe(true);
     const configPath = path.join(tmp, 'eslint.config.mjs');
     writeFileSync(
@@ -62,6 +62,7 @@ describe('generated eslint plugin (AP- rules, end to end)', () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'archprint-plugin-e2e-'));
     const outDir = path.join(tmp, '.archprint');
     emitLayout(scanRepo(path.join(here, '..', 'fixtures', 'cli-auto')), outDir, {
+      version: '9.9.9',
       enforcers: eslintOnly,
     });
     expect(existsSync(path.join(outDir, 'eslint.mjs'))).toBe(true);

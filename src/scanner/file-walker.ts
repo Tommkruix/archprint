@@ -75,7 +75,10 @@ export function listSourceFiles(rootDir: string): string[] {
   const files: string[] = [];
   const isIgnored = createIgnoreFilter(rootDir);
   const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
+    for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (
@@ -140,6 +143,7 @@ function nodeHasValueBinding(clause: ts.ImportClause | undefined): boolean {
 interface RawImport {
   specifier: string;
   hasValueBinding: boolean;
+  line: number;
 }
 
 const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
@@ -162,12 +166,15 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
     false,
     scriptKind,
   );
+  const lineOf = (node: ts.Node): number =>
+    sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
   const raw: RawImport[] = [];
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       raw.push({
         specifier: statement.moduleSpecifier.text,
         hasValueBinding: nodeHasValueBinding(statement.importClause),
+        line: lineOf(statement),
       });
     }
   }
@@ -178,7 +185,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
       node.arguments.length > 0 &&
       ts.isStringLiteral(node.arguments[0]!)
     ) {
-      raw.push({ specifier: node.arguments[0].text, hasValueBinding: true });
+      raw.push({ specifier: node.arguments[0].text, hasValueBinding: true, line: lineOf(node) });
     }
     ts.forEachChild(node, visit);
   };
@@ -186,6 +193,15 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   if (fastParseCache.size >= FAST_PARSE_CACHE_CAP) fastParseCache.clear();
   fastParseCache.set(absoluteFilePath, { mtimeMs: stat.mtimeMs, size: stat.size, raw });
   return raw;
+}
+
+export interface ImportLocation {
+  specifier: string;
+  line: number;
+}
+
+export function importLocations(absoluteFilePath: string): ImportLocation[] {
+  return parseFastImports(absoluteFilePath).map(({ specifier, line }) => ({ specifier, line }));
 }
 
 function specifierLevelImports(

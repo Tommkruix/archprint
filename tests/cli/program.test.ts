@@ -522,6 +522,10 @@ describe('init', () => {
     await run(['init', auto]);
     expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(true);
     expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
+    expect(existsSync(path.join(tmp, '.archprint', 'rules.json'))).toBe(true);
+    expect(config().managed).toMatchObject({
+      files: expect.arrayContaining(['.archprint/rules.json']),
+    });
     expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).toContain('<!-- archprint:start -->');
     expect(config().archprintVersion).toBe('9.9.9');
     expect((config().enforced as unknown[]).length).toBeGreaterThan(0);

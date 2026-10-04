@@ -4,3 +4,7 @@ coverage
 tests/fixtures
 docs/.vitepress/dist
 docs/.vitepress/cache
+
+# archprint:start
+.archprint/
+# archprint:end

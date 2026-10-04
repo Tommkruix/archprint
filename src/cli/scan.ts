@@ -115,17 +115,20 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     configs.push({
       id: 'AP-002',
       name: 'no-ui-layer-in-server-entry',
-      description: 'A server-entry file must not import from the UI layer.',
+      description: 'A request handler must not import UI components.',
       roles: REQUEST_ENTRY_ROLES,
       forbidden: ui.markers,
+      examples: ui.examples,
     });
   }
+  const db = inferDbClientMarkers(appDir);
   configs.push({
     id: 'AP-001',
     name: 'no-db-client-in-request-entry',
-    description: 'A request-entry file must not import the database client directly.',
+    description: 'A request handler must not import the database client directly.',
     roles: REQUEST_ENTRY_ROLES,
-    forbidden: inferDbClientMarkers(appDir).markers,
+    forbidden: db.markers,
+    examples: db.examples,
   });
 
   const results = detectForbiddenImports(appDir, configs, { resolve: options.deep ?? false });
