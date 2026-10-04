@@ -201,3 +201,32 @@ describe('checkJson', () => {
     ]);
   });
 });
+
+describe('a change that removes the adopted rules', () => {
+  const removed: CheckResult = {
+    status: 'rules-removed',
+    base: 'main',
+    commit: '97cefaf986aa51f3c7953afecd6fe4fb87beebd1',
+    missingFile: '.archprint/rules.json',
+    removed: [rule],
+  };
+  const message =
+    'This change removes .archprint/rules.json, so the 1 rule(s) adopted on the base commit are no longer checked: AP-001.';
+
+  it('says which rules stop being checked in every format, and never fails the job', () => {
+    expect(renderCheckText(removed)).toBe(`archprint check: ${message}`);
+    expect(githubAnnotations(removed, 'new')).toEqual([
+      `::warning file=.archprint/rules.json,title=archprint rules removed::${message}`,
+    ]);
+    expect(githubSummary(removed)).toContain(message);
+    expect(checkJson(removed, '9.9.9')).toEqual({
+      archprintVersion: '9.9.9',
+      status: 'rules-removed',
+      base: 'main',
+      commit: removed.commit,
+      missingFile: '.archprint/rules.json',
+      removedInChange: ['AP-001'],
+    });
+    expect(checkExitCode(removed, 'new')).toBe(0);
+  });
+});

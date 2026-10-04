@@ -295,7 +295,8 @@ your team adopted with `init` or `generate`. The existing backlog never shows up
 evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
-On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action):
+On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
+[GitHub Marketplace](https://github.com/marketplace/actions/archprint-check)):
 
 ```yaml
 # .github/workflows/archprint.yml
@@ -340,6 +341,17 @@ jobs:
 - **Only adopted rules.** `check` reads `.archprint/rules.json`, written by `init` and `generate`, and checks only
   the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
   but never counted against it.
+- **Removing rules is never silent.** If a pull request deletes `.archprint/rules.json` or
+  `config.json` that the base branch has, `check` warns and lists every rule that stops being checked. It does not
+  fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,
+  add a [CODEOWNERS](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+  entry and turn on "Require review from Code Owners" in branch protection:
+
+  ```text
+  /.archprint/ @your-team
+  /.github/workflows/ @your-team
+  ```
+
 - **Upgrading from 0.8.x or earlier:** run `archprint generate` once to write `rules.json`. Until you do, `check`
   posts a notice that it did not run and exits 0.
 - **Other CI systems:** `--format json` gives version-keyed output, and the exit code is the contract: `0` ok, `1`
