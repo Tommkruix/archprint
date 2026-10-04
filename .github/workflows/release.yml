@@ -64,9 +64,11 @@ jobs:
             echo "npm did not serve archprint@$version within 20 minutes. Wait until it does, then rerun."
             exit 1
           fi
-          if [ "$(npm view "archprint@$version" mcpName 2>/dev/null)" != "$name" ]; then
-            echo "archprint@$version on npm does not declare mcpName $name; nothing to publish to the MCP Registry."
-            exit 0
+          declared=$(curl -sSf --max-time 20 "https://registry.npmjs.org/archprint/$version" \
+            | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).mcpName ?? ''")
+          if [ "$declared" != "$name" ]; then
+            echo "archprint@$version on npm declares mcpName '$declared', not $name; the MCP Registry would reject it."
+            exit 1
           fi
           encoded=$(node -p "encodeURIComponent(process.argv[1])" -- "$name")
           listed=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 --retry 3 --retry-all-errors \
