@@ -1,6 +1,6 @@
 {
   "name": "archprint",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "mcpName": "io.github.Tommkruix/archprint",
   "description": "Mine the architecture rules your TypeScript repo already enforces, with the evidence attached.",
   "keywords": [
