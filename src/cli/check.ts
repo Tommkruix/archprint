@@ -1,9 +1,11 @@
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import * as path from 'node:path';
-import { readConfig } from './archprint-config.js';
+import { CONFIG_FILE, readConfig } from './archprint-config.js';
 import {
   InvalidRulesError,
+  parseAdoptedRules,
   readAdoptedRules,
+  RULES_FILE,
   type AdoptedRule,
   type AdoptedRules,
 } from './adopted-rules.js';
@@ -13,6 +15,7 @@ import {
   CheckSetupError,
   checkoutBase,
   defaultBase,
+  fileAtCommit,
   mergeBase,
   renamedPaths,
   repoRoot,
@@ -41,6 +44,13 @@ export interface AdoptedInChange {
 
 export type CheckResult =
   | { status: 'skipped'; reason: string }
+  | {
+      status: 'rules-removed';
+      base: string;
+      commit: string;
+      missingFile: string;
+      removed: AdoptedRule[];
+    }
   | {
       status: 'checked';
       base: string;
@@ -74,6 +84,9 @@ function readBaseRules(baseOutDir: string): AdoptedRules | null {
   }
 }
 
+const outsideRepo = (relative: string): boolean =>
+  relative.startsWith('..') || path.isAbsolute(relative);
+
 function insideRepo(root: string, target: string, label: string): string {
   const real = (value: string): string => {
     try {
@@ -83,7 +96,7 @@ function insideRepo(root: string, target: string, label: string): string {
     }
   };
   const relative = path.relative(real(root), real(target));
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (outsideRepo(relative)) {
     throw new CheckSetupError(`the ${label} (${target}) is outside the repository at ${root}.`);
   }
   return toPosix(relative);
@@ -98,22 +111,47 @@ function loadRules(outDir: string): AdoptedRules | null {
   }
 }
 
+function rulesRemovedInChange(options: CheckOptions, missing: string): CheckResult | null {
+  if (existsSync(path.resolve(options.cwd, options.out, missing))) return null;
+  try {
+    const root = realpathSync(repoRoot(options.cwd));
+    const relative = path.relative(root, path.resolve(realpathSync(options.cwd), options.out));
+    if (outsideRepo(relative)) return null;
+    const setupDir = toPosix(relative);
+    const base = options.base ?? defaultBase(root);
+    const commit = mergeBase(root, base);
+    const text = fileAtCommit(root, commit, path.posix.join(setupDir, RULES_FILE));
+    if (text === null) return null;
+    const removed = parseAdoptedRules(text, RULES_FILE).rules;
+    if (removed.length === 0) return null;
+    const missingFile = path.posix.join(setupDir, missing);
+    return { status: 'rules-removed', base, commit, missingFile, removed };
+  } catch (error) {
+    if (error instanceof CheckSetupError || error instanceof InvalidRulesError) return null;
+    throw error;
+  }
+}
+
 export function runCheck(options: CheckOptions): CheckResult {
   const outDir = path.resolve(options.cwd, options.out);
   const shown = toPosix(path.relative(options.cwd, outDir) || '.');
   const config = readConfig(outDir);
   if (config === null && options.path === undefined) {
-    return {
-      status: 'skipped',
-      reason: `no ${shown}/config.json. Run archprint init (or generate) first.`,
-    };
+    return (
+      rulesRemovedInChange(options, CONFIG_FILE) ?? {
+        status: 'skipped',
+        reason: `no ${shown}/config.json. Run archprint init (or generate) first.`,
+      }
+    );
   }
   const adopted = loadRules(outDir);
   if (adopted === null) {
-    return {
-      status: 'skipped',
-      reason: `no ${shown}/rules.json. Re-run archprint generate once; setups made before 0.9.0 do not have it.`,
-    };
+    return (
+      rulesRemovedInChange(options, RULES_FILE) ?? {
+        status: 'skipped',
+        reason: `no ${shown}/rules.json. Re-run archprint generate once; setups made before 0.9.0 do not have it.`,
+      }
+    );
   }
   const appDir = path.resolve(options.cwd, options.path ?? config!.app);
   const root = repoRoot(options.cwd);
@@ -185,8 +223,14 @@ export function findingMessage(rule: AdoptedRule): string {
 const describeSubject = (finding: Finding): string =>
   finding.kind === 'file' ? '' : ` (${finding.subject})`;
 
+const ruleIds = (rules: readonly AdoptedRule[]): string => rules.map((rule) => rule.id).join(', ');
+
+const rulesRemovedMessage = (result: Extract<CheckResult, { status: 'rules-removed' }>): string =>
+  `This change removes ${result.missingFile}, so the ${result.removed.length} rule(s) adopted on the base commit are no longer checked: ${ruleIds(result.removed)}.`;
+
 export function renderCheckText(result: CheckResult): string {
   if (result.status === 'skipped') return `archprint check did not run: ${result.reason}`;
+  if (result.status === 'rules-removed') return `archprint check: ${rulesRemovedMessage(result)}`;
   const lines = [
     `archprint check against ${result.base} (${result.commit.slice(0, 12)}): ${result.rules.length} adopted rule(s)`,
   ];
@@ -215,6 +259,15 @@ export function checkJson(result: CheckResult, version: string): unknown {
 export function checkReport(result: CheckResult): Record<string, unknown> {
   if (result.status === 'skipped') {
     return { status: 'skipped', reason: result.reason };
+  }
+  if (result.status === 'rules-removed') {
+    return {
+      status: 'rules-removed',
+      base: result.base,
+      commit: result.commit,
+      missingFile: result.missingFile,
+      removedInChange: result.removed.map((rule) => rule.id),
+    };
   }
   const shape = (finding: ReportedFinding) => ({
     rule: finding.rule.id,
@@ -253,6 +306,11 @@ export function githubAnnotations(result: CheckResult, failOn: FailOn): string[]
       `::notice title=${escapeProperty('archprint check did not run')}::${escapeData(result.reason)}`,
     ];
   }
+  if (result.status === 'rules-removed') {
+    return [
+      `::warning file=${escapeProperty(result.missingFile)},title=${escapeProperty('archprint rules removed')}::${escapeData(rulesRemovedMessage(result))}`,
+    ];
+  }
   const level = failOn === 'new' ? 'error' : 'warning';
   return result.introduced.map((finding) => {
     const file = toPosix(path.posix.join(result.appPath, finding.file));
@@ -266,6 +324,9 @@ export function githubAnnotations(result: CheckResult, failOn: FailOn): string[]
 export function githubSummary(result: CheckResult): string {
   if (result.status === 'skipped') {
     return `### archprint check did not run\n\n${result.reason}\n`;
+  }
+  if (result.status === 'rules-removed') {
+    return `### archprint check: rules removed\n\n${rulesRemovedMessage(result)}\n`;
   }
   const lines = [
     '### archprint check',

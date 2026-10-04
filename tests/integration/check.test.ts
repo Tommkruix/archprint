@@ -323,8 +323,15 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(output()).toContain('Rule AP-001 was removed in this change');
   });
 
+  const baseWithout = (relative: string): void => {
+    git('checkout', '-q', 'main');
+    git('rm', '-rq', relative);
+    commitAll(`drop ${relative}`);
+    git('checkout', '-q', '-B', 'feature');
+  };
+
   it('does not run, visibly, where archprint was never set up', async () => {
-    rmSync(path.join(repo, '.archprint', 'config.json'));
+    baseWithout('.archprint');
     await run(['check', '--base', 'main']);
     expect(output()).toContain('archprint check did not run: no .archprint/config.json');
     expect(process.exitCode).toBe(0);
@@ -343,10 +350,45 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
   });
 
   it('does not run, visibly, where no rules were generated', async () => {
-    rmSync(path.join(repo, '.archprint', 'rules.json'));
+    baseWithout('.archprint/rules.json');
     await run(['check', '--base', 'main', '--format', 'github']);
     expect(output()).toContain('::notice title=archprint check did not run::');
     expect(process.exitCode).toBe(0);
+  });
+
+  const adoptedIds = (): string =>
+    JSON.parse(readFileSync(path.join(repo, '.archprint', 'rules.json'), 'utf8'))
+      .rules.map((rule: { id: string }) => rule.id)
+      .join(', ');
+
+  it('reports every adopted rule a change stops checking when it deletes rules.json', async () => {
+    const ids = adoptedIds();
+    git('rm', '-q', '.archprint/rules.json');
+    commitAll('stop checking');
+    await run(['check', '--base', 'main', '--format', 'github', '--fail-on', 'new']);
+    expect(output()).toContain(
+      `::warning file=.archprint/rules.json,title=archprint rules removed::This change removes .archprint/rules.json, so the ${ids.split(', ').length} rule(s) adopted on the base commit are no longer checked: ${ids}.`,
+    );
+    expect(process.exitCode).toBe(0);
+  });
+
+  it('does not call a broken config file removed', async () => {
+    writeFileSync(path.join(repo, '.archprint', 'config.json'), '{ not json');
+    commitAll('break the config');
+    await run(['check', '--base', 'main']);
+    expect(output()).toContain('archprint check did not run: no .archprint/config.json');
+  });
+
+  it('reports the rules as removed when a change deletes the whole archprint setup', async () => {
+    const ids = adoptedIds();
+    git('rm', '-rq', '.archprint');
+    commitAll('remove archprint');
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      status: 'rules-removed',
+      missingFile: '.archprint/config.json',
+      removedInChange: ids.split(', '),
+    });
   });
 
   it('rejects unknown options before touching git', async () => {
