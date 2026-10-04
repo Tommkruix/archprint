@@ -17,7 +17,7 @@ export const TOOLS = [
     title: 'Scan architecture rules',
     annotations: READ_ONLY,
     description:
-      'List the architecture rules this TypeScript repo already follows, with the evidence: each rule stated in plain words, whether it is AUTO (clears the confidence gate) or SUGGEST (short of it, worth review), how many files conform vs. break it, the files that break it, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
+      'List the architecture rules this TypeScript repo already follows, with the evidence: each rule stated in plain words, whether it is AUTO (clears the confidence gate) or SUGGEST (short of it), its adoption ("enforce": archprint init or generate writes a rule for it, which archprint wire connects to the linter, and public-API rules need dependency-cruiser; "review": held for a human to review, not enforced by default; "report-only": the code follows it but archprint writes no rule for it), how many files conform vs. break it, the files that break it, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,7 +53,7 @@ export const TOOLS = [
     title: 'Explain an architecture rule',
     annotations: READ_ONLY,
     description:
-      'Explain one rule from archprint_scan in depth, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. Read-only.',
+      'Explain one rule from archprint_scan in depth, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, adoption (enforce, review, or report-only, as in archprint_scan), observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {

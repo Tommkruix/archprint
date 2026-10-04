@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
+import { summarizeRules } from '../../src/cli/summary.js';
 import type {
   AppIsolationAnalysis,
   ConsoleIsolationAnalysis,
@@ -522,6 +523,18 @@ describe('cli scan', () => {
     );
     expect(report).toContain(
       `Evidence: ${pattern.result.stats.conformingFileCount} of 50 files it applies to follow it`,
+    );
+  });
+
+  it('holds a rule short of the confidence gate for review, whatever its family', () => {
+    const rules = summarizeRules(
+      emptyScan({ patterns: [fakePattern('AP-001', 'SUGGEST'), fakePattern('AP-002', 'AUTO')] }),
+    );
+    expect(rules.map((rule) => [rule.label, rule.adoption])).toEqual(
+      expect.arrayContaining([
+        ['AP-001', 'review'],
+        ['AP-002', 'enforce'],
+      ]),
     );
   });
 

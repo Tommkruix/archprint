@@ -49,6 +49,18 @@ describe('mcp tools', () => {
     expect(Array.isArray(apps[0]!.adopt)).toBe(true);
   });
 
+  it('says whether archprint enforces each rule, holds it for review, or only reports it', () => {
+    const adoption = Object.fromEntries(
+      scanTool(auto)[0]!.rules.map((rule) => [rule.label, [rule.status, rule.adoption]]),
+    );
+    expect(adoption).toMatchObject({
+      'AP-001': ['AUTO', 'enforce'],
+      'console-isolation': ['AUTO', 'enforce'],
+      cycles: ['AUTO', 'report-only'],
+      'entry-purity': ['AUTO', 'review'],
+    });
+  });
+
   it('explainTool returns the gate evidence for a known rule', () => {
     const result = explainTool('AP-002', auto);
     expect(result.rule.label).toBe('AP-002');
