@@ -1,4 +1,6 @@
 import * as path from 'node:path';
+import { allowedFilesByRule, readAllowed } from './allowed-exceptions.js';
+import { exemptionPaths } from '../generator/eslint-scope.js';
 import { writeOwnedFile } from '../generator/owned-paths.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
@@ -99,7 +101,12 @@ export interface CollectOptions {
   only?: string;
   ruleIds?: readonly string[];
   mode?: ResolutionMode;
+  allowed?: ReadonlyMap<string, readonly string[]>;
+  appPath?: string;
 }
+
+const withIgnored = (ignored: readonly string[], extra: readonly string[]): string[] =>
+  [...new Set([...ignored, ...extra])].sort();
 
 const byName = (a: DependencyCruiserRule, b: DependencyCruiserRule): number =>
   a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
@@ -112,10 +119,34 @@ export function collectEnforcement(
   const emitDepcruise = options.enforcers.dependencyCruiser;
   const emitEslint = options.enforcers.eslint || !options.enforcers.dependencyCruiser;
   const pick = (family: string): boolean => !options.only || options.only === family;
+  const allowedFor = (ruleId: string): readonly string[] => options.allowed?.get(ruleId) ?? [];
+  const appPath = options.appPath ?? '.';
+  const allowing = <T extends { ignores?: string[] }>(block: T | null, ruleId: string): T | null =>
+    block === null
+      ? block
+      : {
+          ...block,
+          ignores: withIgnored(
+            [...(block.ignores ?? []), ...allowedFor(ruleId)].flatMap((entry) =>
+              exemptionPaths(entry, appPath),
+            ),
+            [],
+          ),
+        };
+  const idByName = new Map(
+    scan.patterns.map((pattern) => [pattern.config.name, pattern.config.id]),
+  );
 
   const eslintSpecs =
     emitEslint && pick('forbidden-imports')
-      ? filterSpecs(buildForbiddenImportSpecs(scan.patterns), scan, options.ruleIds)
+      ? filterSpecs(buildForbiddenImportSpecs(scan.patterns), scan, options.ruleIds).map(
+          (spec) => ({
+            ...spec,
+            ignore: withIgnored(spec.ignore, allowedFor(idByName.get(spec.name) ?? '')).map(
+              (file) => exemptionPaths(file, appPath)[0]!,
+            ),
+          }),
+        )
       : [];
   const adopted: AdoptedRule[] = scan.patterns
     .filter((pattern) => eslintSpecs.some((spec) => spec.name === pattern.config.name))
@@ -126,7 +157,7 @@ export function collectEnforcement(
     if (block !== null) eslintBlocks.push({ family, block });
   };
   if (emitEslint && pick('console')) {
-    const block = toEslintConsoleIsolation(scan.consoleIsolation);
+    const block = allowing(toEslintConsoleIsolation(scan.consoleIsolation), 'console-isolation');
     pushBlock('console', block);
     if (block !== null) adopted.push(consoleIsolationRule(scan));
   }
@@ -134,18 +165,23 @@ export function collectEnforcement(
     pushBlock('env-access', toEslintEnvAccess(scan.envAccess));
   const noRestricted: (NoRestrictedImportsBlock | null)[] = [];
   if (emitEslint && pick('import-style')) {
-    const block = toEslintDeepRelative(scan.deepRelative);
+    const block = allowing(toEslintDeepRelative(scan.deepRelative), 'import-style');
     noRestricted.push(block);
     if (block !== null) adopted.push(importStyleRule(scan));
   }
   if (emitEslint && pick('test-isolation')) {
-    const block = toEslintTestIsolation(scan.testIsolation);
+    const block = allowing(toEslintTestIsolation(scan.testIsolation), 'test-isolation');
     noRestricted.push(block);
     if (block !== null) adopted.push(testIsolationRule(scan));
   }
   if (structural && emitEslint && pick('workspace-package'))
     noRestricted.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
-  pushBlock('no-restricted-imports', mergeNoRestrictedImports(noRestricted));
+  mergeNoRestrictedImports(noRestricted).forEach((block, index) =>
+    pushBlock(
+      index === 0 ? 'no-restricted-imports' : `no-restricted-imports-exceptions-${index}`,
+      block,
+    ),
+  );
 
   const depcruise: DependencyCruiserFamily[] = [];
   const pushDc = (family: string, forbidden: DependencyCruiserRule[]): void => {
@@ -365,7 +401,10 @@ export function emitLayout(
   outDir: string,
   options: CollectOptions & { expand?: boolean; graph?: boolean; version: string },
 ): EmitResult {
-  const collected = collectEnforcement(scan, options);
+  const collected = collectEnforcement(scan, {
+    ...options,
+    allowed: allowedFilesByRule(readAllowed(outDir)),
+  });
   const eslint = writeArchprintEslint(collected, outDir);
   const depcruise = writeArchprintDepcruise(collected, outDir);
   const rules = writeAdoptedRules(outDir, collected.adopted, options.version);
