@@ -15,18 +15,20 @@ the tools you already use.
 
 ![archprint init and wire adding the rules to ESLint, lint catching a route that imports the database, and eject restoring the config exactly](/demo/enforce.gif)
 
-**Or just ask your agent.** Claude Code calls archprint over MCP on its own:
+**Or just ask your agent.** Claude Code lists the rules with what is enforced and what is held for review, then
+adds a route and checks its own change with archprint before it reports back:
 
-![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](/demo/claude-code.gif)
+![Claude Code calling archprint to list the enforced and held-for-review rules, then adding a route and checking the change with archprint](/demo/claude-code.gif)
 
 **Cursor works the same way, with Grok 4.7 rather than Claude.** In the desktop app's chat, its agent called
 archprint's scan tool on its own; this screenshot shows the tool result and the answer:
 
 ![Cursor's desktop chat, running Grok 4.7, answering from archprint's scan result: the rules and lib/db.ts as the one exception](/demo/cursor-app.png)
 
-In the terminal (`cursor-agent`), it asks once before running the tool, then answers from it:
+In the terminal (`cursor-agent`), it does the same: lists the rules, then adds the route and checks it with
+`archprint_check`:
 
-![Cursor's terminal agent, running Grok 4.7, approving archprint_scan once and answering with the rules and lib/db.ts as the one exception](/demo/cursor.gif)
+![Cursor's terminal agent, running Grok 4.7, listing the enforced, held-for-review and report-only rules, then adding a route and checking it with archprint_check](/demo/cursor.gif)
 
 **Measured, with and without archprint.** The same question in Claude Code (Opus 5.5) on the demo app (70
 files), five runs each, median [range]:

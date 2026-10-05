@@ -68,18 +68,20 @@ AI coding agents can ask Archprint for a project's rules through
 words; the agent calls Archprint on its own and answers with the evidence. Archprint only reports. Enforcement
 still runs in your linter.
 
-**Claude Code** calls Archprint by itself when you ask about the architecture:
+**Claude Code** lists the rules with what is enforced and what is held for review, then adds a route and checks
+its own change with archprint before it reports back:
 
-![Claude Code answering "What architecture rules does this repo already follow?" by calling archprint](docs/public/demo/claude-code.gif)
+![Claude Code calling archprint to list the enforced and held-for-review rules, then adding a route and checking the change with archprint](docs/public/demo/claude-code.gif)
 
 **Cursor works the same way.** In these recordings Cursor was set to Grok 4.7, not Claude. In the desktop app's
 chat, its agent called Archprint's scan tool on its own; this screenshot shows the tool result and the answer:
 
 ![Cursor's desktop chat, running Grok 4.7, answering from archprint's scan result: the rules and lib/db.ts as the one exception](docs/public/demo/cursor-app.png)
 
-In the terminal (`cursor-agent`), it asks once before running the tool, then answers from it:
+In the terminal (`cursor-agent`), it does the same: lists the rules, then adds the route and checks it with
+`archprint_check`:
 
-![Cursor's terminal agent, running Grok 4.7, approving archprint_scan once and answering with the rules and lib/db.ts as the one exception](docs/public/demo/cursor.gif)
+![Cursor's terminal agent, running Grok 4.7, listing the enforced, held-for-review and report-only rules, then adding a route and checking it with archprint_check](docs/public/demo/cursor.gif)
 
 ### Measured: the same question with and without Archprint
 
