@@ -8,6 +8,8 @@ import { renderAdoptionBody } from './report.js';
 import { writeLayout } from './layout.js';
 import { ARCHPRINT_DIR, DEPCRUISE_FILE, ESLINT_FILE, collectEnforcement } from './generate.js';
 import { CONFIG_FILE } from './archprint-config.js';
+import { ownedPath, staysInsideItsFolder } from '../generator/owned-paths.js';
+import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
 import {
   MANAGED_START,
   WIRING_TOOLS,
@@ -28,6 +30,7 @@ interface ConfigEdit {
 
 export interface MigratePlan {
   legacy: string[];
+  legacyDir: string;
   appDir: string;
   eslintEdit: ConfigEdit | null;
   depcruiseEdit: ConfigEdit | null;
@@ -39,7 +42,8 @@ function legacyOut(cwd: string): string {
   if (existsSync(configPath)) {
     try {
       const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as { rulesDir?: string };
-      if (typeof parsed.rulesDir === 'string') return path.resolve(cwd, parsed.rulesDir);
+      const recorded = typeof parsed.rulesDir === 'string' ? ownedPath(cwd, parsed.rulesDir) : null;
+      if (recorded !== null) return recorded;
     } catch {
       /* fall through to the default legacy dir */
     }
@@ -48,7 +52,13 @@ function legacyOut(cwd: string): string {
 }
 
 function legacyArtifacts(cwd: string): string[] {
-  return [path.join(cwd, LEGACY_CONFIG), legacyOut(cwd)].filter((target) => existsSync(target));
+  const out = legacyOut(cwd);
+  const outputs = readOutputs(out).map((relative) => ownedPath(out, relative));
+  return [
+    path.join(cwd, LEGACY_CONFIG),
+    ...outputs.filter((target): target is string => target !== null),
+    ownedPath(out, OUTPUTS_MANIFEST_FILE),
+  ].filter((target): target is string => target !== null && existsSync(target));
 }
 
 function resolveAppDir(cwd: string): string {
@@ -140,6 +150,7 @@ export function planMigration(cwd: string): MigratePlan | null {
   const depcruise = planDepcruiseEdit(cwd);
   return {
     legacy,
+    legacyDir: legacyOut(cwd),
     appDir: resolveAppDir(cwd),
     eslintEdit: eslint.edit,
     depcruiseEdit: depcruise.edit,
@@ -197,8 +208,10 @@ export function runMigration(
     cwd,
     readmeBody: renderAdoptionBody(recommendations),
   });
-  for (const edit of edits) writeFileSync(edit.path, edit.content);
+  for (const edit of edits)
+    if (staysInsideItsFolder(edit.path)) writeFileSync(edit.path, edit.content);
   for (const target of plan.legacy) rmSync(target, { recursive: true, force: true });
+  removeIfEmpty(plan.legacyDir);
   return {
     status: 'migrated',
     written: files.map((file) => path.relative(cwd, file)),

@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { writeOwnedFile } from '../generator/owned-paths.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
 import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
@@ -251,8 +251,8 @@ function collectTsArchRules(scan: ScanResult): BoundaryRule[] {
   ];
 }
 
-const writeJson = (file: string, config: unknown): string => {
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+const writeJson = (outDir: string, file: string, config: unknown): string => {
+  writeOwnedFile(outDir, file, `${JSON.stringify(config, null, 2)}\n`);
   return file;
 };
 
@@ -261,10 +261,9 @@ export function writeArchprintEslint(
   outDir: string,
 ): string | null {
   if (collected.eslintSpecs.length === 0 && collected.eslintBlocks.length === 0) return null;
-  mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, ESLINT_FILE);
   const blocks = collected.eslintBlocks.map((entry) => entry.block);
-  writeFileSync(file, renderEslintPreset(collected.eslintSpecs, blocks));
+  writeOwnedFile(outDir, file, renderEslintPreset(collected.eslintSpecs, blocks));
   return file;
 }
 
@@ -274,8 +273,7 @@ export function writeArchprintDepcruise(
 ): string | null {
   const forbidden = collected.depcruise.flatMap((entry) => entry.forbidden).sort(byName);
   if (forbidden.length === 0) return null;
-  mkdirSync(outDir, { recursive: true });
-  return writeJson(path.join(outDir, DEPCRUISE_FILE), { forbidden });
+  return writeJson(outDir, path.join(outDir, DEPCRUISE_FILE), { forbidden });
 }
 
 function writeExpanded(
@@ -284,7 +282,6 @@ function writeExpanded(
   outDir: string,
   graph: boolean,
 ): string[] {
-  mkdirSync(outDir, { recursive: true });
   const written: string[] = [];
   if (collected.eslintSpecs.length > 0) {
     for (const spec of scan.patterns) {
@@ -296,6 +293,7 @@ function writeExpanded(
     }
     written.push(
       writeFile(
+        outDir,
         path.join(outDir, 'eslint-plugin.archprint.mjs'),
         renderEslintPluginSource(collected.eslintSpecs),
       ),
@@ -303,24 +301,29 @@ function writeExpanded(
   }
   for (const entry of collected.eslintBlocks) {
     written.push(
-      writeJson(path.join(outDir, `eslint.${entry.family}.archprint.json`), entry.block),
+      writeJson(outDir, path.join(outDir, `eslint.${entry.family}.archprint.json`), entry.block),
     );
   }
   for (const entry of collected.depcruise) {
     written.push(
-      writeJson(path.join(outDir, `dependency-cruiser.${entry.family}.archprint.json`), {
+      writeJson(outDir, path.join(outDir, `dependency-cruiser.${entry.family}.archprint.json`), {
         forbidden: entry.forbidden,
       }),
     );
   }
   if (collected.boundaries !== null) {
     written.push(
-      writeJson(path.join(outDir, 'eslint-boundaries.archprint.json'), collected.boundaries),
+      writeJson(
+        outDir,
+        path.join(outDir, 'eslint-boundaries.archprint.json'),
+        collected.boundaries,
+      ),
     );
   }
   if (collected.tsArchRules.length > 0) {
     written.push(
       writeFile(
+        outDir,
         path.join(outDir, 'architecture.archprint.ts'),
         renderTsArchTests(collected.tsArchRules),
       ),
@@ -329,12 +332,14 @@ function writeExpanded(
   if (graph && collected.hasGraph) {
     written.push(
       writeFile(
+        outDir,
         path.join(outDir, 'layer-graph.archprint.mmd'),
         `${toMermaid(scan.layerBoundaries)}\n`,
       ),
     );
     written.push(
       writeFile(
+        outDir,
         path.join(outDir, 'layer-graph.archprint.dot'),
         `${toGraphviz(scan.layerBoundaries)}\n`,
       ),
@@ -343,8 +348,8 @@ function writeExpanded(
   return written;
 }
 
-const writeFile = (file: string, content: string): string => {
-  writeFileSync(file, content);
+const writeFile = (outDir: string, file: string, content: string): string => {
+  writeOwnedFile(outDir, file, content);
   return file;
 };
 

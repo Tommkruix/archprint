@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -600,6 +601,111 @@ describe('init', () => {
     expect(output()).toContain('Ejected');
   });
 
+  it('generate and eject never delete a path that config.json or the outputs manifest point outside .archprint', async () => {
+    mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    writeFileSync(path.join(tmp, 'src', 'keep.ts'), 'export const keep = 1;\n');
+    const outside = mkdtempSync(path.join(tmpdir(), 'archprint-outside-'));
+    writeFileSync(path.join(outside, 'victim.txt'), 'mine\n');
+    const tamper = (): void => {
+      const current = config() as { managed: { files: string[] } };
+      current.managed.files = [...current.managed.files, 'src', outside];
+      writeFileSync(path.join(tmp, '.archprint', 'config.json'), JSON.stringify(current));
+    };
+    try {
+      await run(['init', auto]);
+      tamper();
+      await run(['generate', auto]);
+      expect(existsSync(path.join(tmp, 'src', 'keep.ts'))).toBe(true);
+      expect(existsSync(path.join(outside, 'victim.txt'))).toBe(true);
+      tamper();
+      writeFileSync(
+        path.join(tmp, '.archprint', '.archprint-outputs.json'),
+        JSON.stringify({ archprintVersion: '9.9.9', outputs: ['../src', outside] }),
+      );
+      await run(['eject']);
+      expect(existsSync(path.join(tmp, 'src', 'keep.ts'))).toBe(true);
+      expect(existsSync(path.join(outside, 'victim.txt'))).toBe(true);
+      expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to write or delete through an .archprint folder that is a symlink', async () => {
+    mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    writeFileSync(path.join(tmp, 'src', 'keep.ts'), 'export const keep = 1;\n');
+    symlinkSync(tmp, path.join(tmp, '.archprint'), 'dir');
+    writeFileSync(
+      path.join(tmp, '.archprint-outputs.json'),
+      JSON.stringify({ archprintVersion: '9.9.9', outputs: ['src'] }),
+    );
+    await expect(run(['generate', auto])).rejects.toThrow(/symbolic link/);
+    await expect(run(['eject'])).rejects.toThrow(/symbolic link/);
+    expect(existsSync(path.join(tmp, 'src', 'keep.ts'))).toBe(true);
+  });
+
+  it('never edits a README or ignore file that links outside the repository', async () => {
+    const outside = mkdtempSync(path.join(tmpdir(), 'archprint-outside-'));
+    try {
+      for (const name of ['README.md', '.prettierignore']) {
+        writeFileSync(path.join(outside, name), 'mine\n');
+        symlinkSync(path.join(outside, name), path.join(tmp, name));
+      }
+      const untouched = (): void => {
+        for (const name of ['README.md', '.prettierignore']) {
+          expect(readFileSync(path.join(outside, name), 'utf8')).toBe('mine\n');
+        }
+      };
+      await run(['init', auto]);
+      untouched();
+      await run(['eject']);
+      untouched();
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('does not overwrite an outside file that .archprint/config.json links to', async () => {
+    const outside = mkdtempSync(path.join(tmpdir(), 'archprint-outside-'));
+    try {
+      writeFileSync(path.join(outside, 'victim.json'), 'mine\n');
+      mkdirSync(path.join(tmp, '.archprint'));
+      symlinkSync(path.join(outside, 'victim.json'), path.join(tmp, '.archprint', 'config.json'));
+      await run(['init', auto]);
+      expect(readFileSync(path.join(outside, 'victim.json'), 'utf8')).toBe('mine\n');
+      expect(config()).toHaveProperty('managed');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('still updates a README that links to another file inside the repository', async () => {
+    mkdirSync(path.join(tmp, 'docs'));
+    writeFileSync(path.join(tmp, 'docs', 'README.md'), '# App\n');
+    symlinkSync(path.join('docs', 'README.md'), path.join(tmp, 'README.md'));
+    await run(['init', auto]);
+    expect(readFileSync(path.join(tmp, 'docs', 'README.md'), 'utf8')).toContain('archprint:start');
+  });
+
+  it('refuses an --out inside the repository that a committed symlink redirects elsewhere', async () => {
+    const outside = mkdtempSync(path.join(tmpdir(), 'archprint-outside-'));
+    try {
+      symlinkSync(outside, path.join(tmp, 'rules'), 'dir');
+      await expect(run(['init', auto, '--out', 'rules/.archprint'])).rejects.toThrow(
+        /symbolic link/,
+      );
+      expect(existsSync(path.join(outside, '.archprint'))).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses eject --out pointing at the repository itself', async () => {
+    writeFileSync(path.join(tmp, 'config.json'), '{}\n');
+    await expect(run(['eject', '--out', '.'])).rejects.toThrow(/--out must be a folder inside/);
+    expect(existsSync(path.join(tmp, 'config.json'))).toBe(true);
+  });
+
   it('eject --dry-run lists targets without deleting', async () => {
     await run(['init', auto]);
     await run(['eject', '--dry-run']);
@@ -693,6 +799,10 @@ describe('migrate command', () => {
     writeFileSync(
       path.join(tmp, 'archprint-rules', 'eslint.archprint.mjs'),
       'export default [];\n',
+    );
+    writeFileSync(
+      path.join(tmp, 'archprint-rules', '.archprint-outputs.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', outputs: ['eslint.archprint.mjs'] }),
     );
     writeFileSync(
       path.join(tmp, 'archprint.json'),
