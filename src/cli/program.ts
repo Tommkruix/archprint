@@ -18,6 +18,7 @@ import { toScanSummary } from './summary.js';
 import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
 import { writeLayout } from './layout.js';
 import { CONFIG_FILE, readConfig, recordManagedFiles } from './archprint-config.js';
+import { assertRealDirectory, ownedPath, staysInsideItsFolder } from '../generator/owned-paths.js';
 import { stripAdoptionSection } from './adoption-readme.js';
 import { removeIgnoreEntry } from './ignore-file.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
@@ -376,6 +377,7 @@ export function buildProgram(version = readVersion()): Command {
         if (options.rule !== undefined) {
           const cwd = process.cwd();
           const outDir = path.resolve(options.out);
+          assertRealDirectory(outDir);
           const { appDir, pattern } = findPattern(input, options.rule, !options.fast);
           const dir = emitOne(pattern, appDir, outDir);
           recordManagedFiles(outDir, cwd, version, [dir]);
@@ -551,6 +553,12 @@ export function buildProgram(version = readVersion()): Command {
           );
           continue;
         }
+        if (!staysInsideItsFolder(configPath)) {
+          console.log(
+            `[${tool.name}] ${displayPath(configPath)} links outside the repository, so archprint leaves it alone.`,
+          );
+          continue;
+        }
         writeFileSync(configPath, result.content!);
         console.log(
           `[${tool.name}] wired ${displayPath(configPath)} -> ${displayPath(aggregate)}.`,
@@ -567,21 +575,28 @@ export function buildProgram(version = readVersion()): Command {
     .action((options: { out: string; dryRun?: boolean }) => {
       const cwd = process.cwd();
       const outDir = path.resolve(options.out);
+      assertRealDirectory(outDir);
+      if (!ownedPath(cwd, outDir)) {
+        throw new Error(
+          `--out must be a folder inside ${cwd}, not the folder itself or outside it.`,
+        );
+      }
       const config = readConfig(outDir);
       const targets: string[] = [];
-      const add = (file: string): void => {
-        if (existsSync(file) && !targets.includes(file)) targets.push(file);
+      const add = (file: string | null): void => {
+        if (file !== null && existsSync(file) && !targets.includes(file)) targets.push(file);
       };
-      if (config) for (const relative of config.managed.files) add(path.resolve(cwd, relative));
-      for (const relative of readOutputs(outDir)) add(path.join(outDir, relative));
-      add(path.join(outDir, OUTPUTS_MANIFEST_FILE));
-      add(path.join(outDir, CONFIG_FILE));
+      if (config)
+        for (const relative of config.managed.files)
+          add(ownedPath(outDir, path.resolve(cwd, relative)));
+      for (const relative of readOutputs(outDir)) add(ownedPath(outDir, relative));
+      add(ownedPath(outDir, OUTPUTS_MANIFEST_FILE));
+      add(ownedPath(outDir, CONFIG_FILE));
       add(path.resolve(cwd, LEGACY_ROOT_CONFIG));
       const legacyDir = path.resolve(cwd, LEGACY_DIR);
       if (legacyDir !== outDir) {
-        for (const relative of readOutputs(legacyDir)) add(path.join(legacyDir, relative));
-        add(path.join(legacyDir, OUTPUTS_MANIFEST_FILE));
-        add(legacyDir);
+        for (const relative of readOutputs(legacyDir)) add(ownedPath(legacyDir, relative));
+        add(ownedPath(legacyDir, OUTPUTS_MANIFEST_FILE));
       }
       const wired = WIRING_TOOLS.map((tool) => ({ tool, configPath: tool.findConfig(cwd) })).filter(
         (entry) =>
@@ -601,9 +616,11 @@ export function buildProgram(version = readVersion()): Command {
         return;
       }
       for (const { tool, configPath } of wired)
-        writeFileSync(configPath!, tool.remove(readFileSync(configPath!, 'utf8')));
+        if (staysInsideItsFolder(configPath!))
+          writeFileSync(configPath!, tool.remove(readFileSync(configPath!, 'utf8')));
       for (const target of targets) rmSync(target, { recursive: true, force: true });
       removeIfEmpty(outDir);
+      if (legacyDir !== outDir) removeIfEmpty(legacyDir);
       if (stripReadme) stripAdoptionSection(readmePath, config!.managed.readmeCreated);
       if (config?.managed.prettierignore)
         removeIgnoreEntry(path.join(cwd, '.prettierignore'), {

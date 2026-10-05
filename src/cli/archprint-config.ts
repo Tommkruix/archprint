@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { writeOwnedFile } from '../generator/owned-paths.js';
 import type { Recommendation, Recommendations } from './recommend.js';
 
 export const CONFIG_FILE = 'config.json';
@@ -62,9 +63,8 @@ export function buildConfig(
 }
 
 export function writeConfig(outDir: string, config: ArchprintConfig): string {
-  mkdirSync(outDir, { recursive: true });
   const file = configPath(outDir);
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  writeOwnedFile(outDir, file, `${JSON.stringify(config, null, 2)}\n`);
   return file;
 }
 

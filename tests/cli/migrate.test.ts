@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,6 +34,11 @@ beforeEach(() => {
   mkdirSync(path.join(tmp, 'archprint-rules'), { recursive: true });
   writeFileSync(path.join(tmp, 'archprint-rules', 'eslint.archprint.mjs'), 'export default [];\n');
   writeFileSync(
+    path.join(tmp, 'archprint-rules', '.archprint-outputs.json'),
+    JSON.stringify({ archprintVersion: '0.5.0', outputs: ['eslint.archprint.mjs'] }),
+  );
+
+  writeFileSync(
     path.join(tmp, 'archprint.json'),
     JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: 'archprint-rules' }),
   );
@@ -42,6 +48,62 @@ afterEach(() => {
 });
 
 describe('runMigration', () => {
+  it('deletes only the legacy files archprint listed, never a folder the legacy config points at', () => {
+    mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    writeFileSync(path.join(tmp, 'src', 'keep.ts'), 'export const keep = 1;\n');
+    writeFileSync(path.join(tmp, 'archprint-rules', 'notes.md'), 'mine\n');
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: '../outside' }),
+    );
+    expect(runMigration(tmp, '0.6.0').status).toBe('migrated');
+    expect(existsSync(path.join(tmp, 'archprint-rules', 'eslint.archprint.mjs'))).toBe(false);
+    expect(readFileSync(path.join(tmp, 'archprint-rules', 'notes.md'), 'utf8')).toBe('mine\n');
+    expect(existsSync(path.join(tmp, 'src', 'keep.ts'))).toBe(true);
+  });
+
+  it('deletes nothing through a legacy folder that is a symlink', () => {
+    mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    writeFileSync(path.join(tmp, 'src', 'keep.ts'), 'export const keep = 1;\n');
+    writeFileSync(
+      path.join(tmp, '.archprint-outputs.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', outputs: ['src'] }),
+    );
+    symlinkSync(tmp, path.join(tmp, 'linked-rules'), 'dir');
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: 'linked-rules' }),
+    );
+    runMigration(tmp, '0.6.0');
+    expect(existsSync(path.join(tmp, 'src', 'keep.ts'))).toBe(true);
+  });
+
+  it('removes a custom legacy folder once the files archprint listed in it are gone', () => {
+    mkdirSync(path.join(tmp, 'old-rules'), { recursive: true });
+    writeFileSync(path.join(tmp, 'old-rules', 'eslint.archprint.mjs'), 'export default [];\n');
+    writeFileSync(
+      path.join(tmp, 'old-rules', '.archprint-outputs.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', outputs: ['eslint.archprint.mjs'] }),
+    );
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: 'old-rules' }),
+    );
+    expect(runMigration(tmp, '0.6.0').status).toBe('migrated');
+    expect(existsSync(path.join(tmp, 'old-rules'))).toBe(false);
+  });
+
+  it('never deletes a folder outside the legacy output, even when the legacy config names one', () => {
+    mkdirSync(path.join(tmp, 'lib'), { recursive: true });
+    writeFileSync(path.join(tmp, 'lib', 'keep.ts'), 'export const keep = 1;\n');
+    writeFileSync(
+      path.join(tmp, 'archprint.json'),
+      JSON.stringify({ archprintVersion: '0.5.0', app: '.', rulesDir: 'lib' }),
+    );
+    runMigration(tmp, '0.6.0');
+    expect(existsSync(path.join(tmp, 'lib', 'keep.ts'))).toBe(true);
+  });
+
   it('rewrites a wired config, writes the new layout, and removes the old artifacts', () => {
     writeFileSync(path.join(tmp, 'eslint.config.mjs'), WIRED_CONFIG);
     const result = runMigration(tmp, '0.6.0');

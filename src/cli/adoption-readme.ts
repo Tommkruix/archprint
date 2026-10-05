@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { staysInsideItsFolder } from '../generator/owned-paths.js';
 
 const START = '<!-- archprint:start -->';
 const END = '<!-- archprint:end -->';
@@ -30,6 +31,11 @@ function block(body: string, eol: string): string {
 
 export function injectAdoptionSection(readmePath: string, body: string): ReadmeResult {
   try {
+    if (!staysInsideItsFolder(readmePath))
+      return {
+        status: 'skipped',
+        reason: 'README.md links outside the repository, so archprint leaves it alone',
+      };
     if (!existsSync(readmePath)) {
       writeFileSync(readmePath, `${block(body, '\n')}\n`);
       return { status: 'created' };
@@ -65,6 +71,11 @@ export function stripAdoptionSection(
 ): ReadmeResult {
   try {
     if (!existsSync(readmePath)) return { status: 'skipped', reason: 'no README' };
+    if (!staysInsideItsFolder(readmePath))
+      return {
+        status: 'skipped',
+        reason: 'README.md links outside the repository, so archprint leaves it alone',
+      };
     const raw = readFileSync(readmePath, 'utf8');
     const { eol, bom } = detectLayout(raw);
     const content = (bom ? raw.slice(bom.length) : raw).replace(/\r\n/g, '\n');
