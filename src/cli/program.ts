@@ -1,5 +1,9 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { AllowError, runAllow } from './allow.js';
+import { ALLOW_FILE, InvalidAllowError } from './allowed-exceptions.js';
+import { adoptedAllowances, excludeAllowed } from './allowed-evidence.js';
+import { InvalidRulesError } from './adopted-rules.js';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
@@ -227,7 +231,10 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const scan = scanRepo(appDir, { deep: !options.fast });
+        const scan = excludeAllowed(
+          scanRepo(appDir, { deep: !options.fast }),
+          adoptedAllowances(outDir),
+        );
         const issues = checkSelfConsistency(scan);
         /* v8 ignore start -- defensive guardrail: fires only if a detector regresses into inconsistency */
         if (issues.length > 0) {
@@ -389,7 +396,10 @@ export function buildProgram(version = readVersion()): Command {
           }
           return;
         }
-        const scan = scanRepo(resolveApp(input), { deep: !options.fast });
+        const scan = excludeAllowed(
+          scanRepo(resolveApp(input), { deep: !options.fast }),
+          adoptedAllowances(path.resolve(options.out)),
+        );
         const issues = checkSelfConsistency(scan);
         /* v8 ignore start -- defensive guardrail: fires only if a detector regresses into inconsistency */
         if (issues.length > 0) {
@@ -592,6 +602,7 @@ export function buildProgram(version = readVersion()): Command {
       for (const relative of readOutputs(outDir)) add(ownedPath(outDir, relative));
       add(ownedPath(outDir, OUTPUTS_MANIFEST_FILE));
       add(ownedPath(outDir, CONFIG_FILE));
+      add(ownedPath(outDir, ALLOW_FILE));
       add(path.resolve(cwd, LEGACY_ROOT_CONFIG));
       const legacyDir = path.resolve(cwd, LEGACY_DIR);
       if (legacyDir !== outDir) {
@@ -705,6 +716,33 @@ export function buildProgram(version = readVersion()): Command {
           console.log(renderCheckText(result));
         }
         process.exitCode = checkExitCode(result, failOn);
+      },
+    );
+
+  program
+    .command('allow')
+    .description(
+      'Allow one adopted rule to be broken in one file, with a reason. archprint check accepts it, lists it in the pull request, and archprint generate stops ESLint flagging it.',
+    )
+    .argument('<rule>', 'adopted rule id, e.g. AP-001 or console-isolation')
+    .argument('<file>', 'file the rule reports, relative to the current directory')
+    .option('--reason <text>', 'why this file is an exception (required)')
+    .option('--remove', 'remove the exception instead')
+    .option('-o, --out <dir>', 'directory that holds the adopted rules', ARCHPRINT_DIR)
+    .action(
+      (rule: string, file: string, options: { reason?: string; remove?: boolean; out: string }) => {
+        try {
+          console.log(runAllow({ cwd: process.cwd(), rule, file, ...options }));
+        } catch (error) {
+          if (
+            !(error instanceof AllowError) &&
+            !(error instanceof InvalidAllowError) &&
+            !(error instanceof InvalidRulesError)
+          )
+            throw error;
+          console.error(`archprint allow: ${error.message}`);
+          process.exitCode = 1;
+        }
       },
     );
 

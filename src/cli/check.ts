@@ -9,6 +9,7 @@ import {
   type AdoptedRule,
   type AdoptedRules,
 } from './adopted-rules.js';
+import { allowKey, readAllowed, type AllowedException } from './allowed-exceptions.js';
 import { diffFindings, partitionRules, type RuleChange } from './check-diff.js';
 import { evaluateRules, type Finding } from './check-evaluate.js';
 import {
@@ -61,6 +62,8 @@ export type CheckResult =
       fixed: ReportedFinding[];
       adoptedInChange: AdoptedInChange[];
       removedInChange: AdoptedRule[];
+      allowedInChange: AllowedException[];
+      unusedAllows: AllowedException[];
     };
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
@@ -75,6 +78,30 @@ function appRelativeRenames(renames: Map<string, string>, appPrefix: string): Ma
   }
   return mapped;
 }
+
+function readBaseAllowed(baseOutDir: string): AllowedException[] {
+  try {
+    return readAllowed(baseOutDir);
+  } catch {
+    return [];
+  }
+}
+
+function loadAllowed(outDir: string): AllowedException[] {
+  try {
+    return readAllowed(outDir);
+  } catch (error) {
+    throw new CheckSetupError(`cannot read the allowed exceptions: ${(error as Error).message}`);
+  }
+}
+
+const withoutAllowed = (
+  findings: readonly Finding[],
+  allowed: readonly AllowedException[],
+): Finding[] => {
+  const keys = new Set(allowed.map((entry) => allowKey(entry.rule, entry.file)));
+  return findings.filter((finding) => !keys.has(allowKey(finding.ruleId, finding.file)));
+};
 
 function readBaseRules(baseOutDir: string): AdoptedRules | null {
   try {
@@ -145,6 +172,7 @@ export function runCheck(options: CheckOptions): CheckResult {
     );
   }
   const adopted = loadRules(outDir);
+  const allowed = adopted === null ? [] : loadAllowed(outDir);
   if (adopted === null) {
     return (
       rulesRemovedInChange(options, RULES_FILE) ?? {
@@ -172,11 +200,26 @@ export function runCheck(options: CheckOptions): CheckResult {
     const baseApp = path.join(baseTree.root, appPrefix);
     const baseFindings = existsSync(baseApp) ? evaluateRules(baseApp, partition.comparable) : [];
     const headFindings = evaluateRules(appDir, partition.comparable);
-    const { introduced, fixed } = diffFindings(baseFindings, headFindings, renames);
+    const { introduced } = diffFindings(
+      baseFindings,
+      withoutAllowed(headFindings, allowed),
+      renames,
+    );
+    const { fixed } = diffFindings(baseFindings, headFindings, renames);
     const locate = createLineLocator(appDir);
     const adoptedFindings = evaluateRules(
       appDir,
       partition.adoptedInChange.map((entry) => entry.rule),
+    );
+    const baseAllowKeys = new Set(
+      readBaseAllowed(path.join(baseTree.root, outPrefix)).map((entry) =>
+        allowKey(entry.rule, renames.get(entry.file) ?? entry.file),
+      ),
+    );
+    const matchedKeys = new Set(
+      [...headFindings, ...adoptedFindings].map((finding) =>
+        allowKey(finding.ruleId, finding.file),
+      ),
     );
     return {
       status: 'checked',
@@ -200,6 +243,12 @@ export function runCheck(options: CheckOptions): CheckResult {
         count: adoptedFindings.filter((finding) => finding.ruleId === rule.id).length,
       })),
       removedInChange: partition.removedInChange,
+      allowedInChange: allowed.filter(
+        (entry) =>
+          !baseAllowKeys.has(allowKey(entry.rule, entry.file)) &&
+          matchedKeys.has(allowKey(entry.rule, entry.file)),
+      ),
+      unusedAllows: allowed.filter((entry) => !matchedKeys.has(allowKey(entry.rule, entry.file))),
     };
   } finally {
     baseTree.dispose();
@@ -249,6 +298,14 @@ export function renderCheckText(result: CheckResult): string {
   for (const rule of result.removedInChange) {
     lines.push(`Rule ${rule.id} was removed in this change, so it is no longer checked.`);
   }
+  for (const entry of result.allowedInChange) {
+    lines.push(`Allowed in this change: ${entry.rule} in ${entry.file}. Reason: ${entry.reason}`);
+  }
+  for (const entry of result.unusedAllows) {
+    lines.push(
+      `Allowed exception no longer needed: ${entry.rule} reports nothing in ${entry.file}. Remove it with archprint allow --remove.`,
+    );
+  }
   return lines.join('\n');
 }
 
@@ -289,6 +346,8 @@ export function checkReport(result: CheckResult): Record<string, unknown> {
       existingViolations: entry.count,
     })),
     removedInChange: result.removedInChange.map((rule) => rule.id),
+    allowedInChange: result.allowedInChange,
+    unusedAllows: result.unusedAllows.map(({ rule, file }) => ({ rule, file })),
   };
 }
 
@@ -312,13 +371,20 @@ export function githubAnnotations(result: CheckResult, failOn: FailOn): string[]
     ];
   }
   const level = failOn === 'new' ? 'error' : 'warning';
-  return result.introduced.map((finding) => {
-    const file = toPosix(path.posix.join(result.appPath, finding.file));
-    const properties = [`file=${escapeProperty(file)}`];
-    if (finding.line !== null) properties.push(`line=${finding.line}`);
-    properties.push(`title=${escapeProperty(`archprint: ${finding.rule.id}`)}`);
-    return `::${level} ${properties.join(',')}::${escapeData(findingMessage(finding.rule))}`;
-  });
+  const allowed = result.allowedInChange.map(
+    (entry) =>
+      `::notice file=${escapeProperty(toPosix(path.posix.join(result.appPath, entry.file)))},title=${escapeProperty(`archprint: ${entry.rule} allowed`)}::${escapeData(`Allowed with a reason: ${entry.reason}`)}`,
+  );
+  return [
+    ...allowed,
+    ...result.introduced.map((finding) => {
+      const file = toPosix(path.posix.join(result.appPath, finding.file));
+      const properties = [`file=${escapeProperty(file)}`];
+      if (finding.line !== null) properties.push(`line=${finding.line}`);
+      properties.push(`title=${escapeProperty(`archprint: ${finding.rule.id}`)}`);
+      return `::${level} ${properties.join(',')}::${escapeData(findingMessage(finding.rule))}`;
+    }),
+  ];
 }
 
 export function githubSummary(result: CheckResult): string {
@@ -359,6 +425,25 @@ export function githubSummary(result: CheckResult): string {
     lines.push(
       '',
       `Rule \`${rule.id}\` was **removed** in this change, so it is no longer checked.`,
+    );
+  }
+  if (result.allowedInChange.length > 0) {
+    lines.push(
+      '',
+      `**Allowed with a reason in this change (${result.allowedInChange.length}):**`,
+      '',
+    );
+    lines.push('| File | Rule | Reason |', '| --- | --- | --- |');
+    for (const entry of result.allowedInChange) {
+      lines.push(
+        `| \`${tableCell(entry.file)}\` | ${tableCell(entry.rule)} | ${tableCell(entry.reason)} |`,
+      );
+    }
+  }
+  for (const entry of result.unusedAllows) {
+    lines.push(
+      '',
+      `Allowed exception no longer needed: \`${entry.rule}\` reports nothing in \`${entry.file}\`.`,
     );
   }
   return `${lines.join('\n')}\n`;

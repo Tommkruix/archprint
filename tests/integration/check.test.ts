@@ -396,6 +396,161 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     await expect(run(['check', '--format', 'xml'])).rejects.toThrow(/--format/);
   });
 
+  const orders = `${app}/app/api/orders/route.ts`;
+  const reasonText = 'The health probe needs a raw query.';
+
+  it('accepts a new rule break allowed with a reason and shows it in the pull request', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    expect(output()).toContain('Allowed AP-001 in app/api/orders/route.ts');
+    commitAll('allow a direct query');
+    logSpy.mockClear();
+    const summary = path.join(repo, 'summary.md');
+    process.env.GITHUB_STEP_SUMMARY = summary;
+    await run(['check', '--base', 'main', '--format', 'github', '--fail-on', 'new']);
+    expect(output()).toContain(
+      `::notice file=${orders},title=archprint%3A AP-001 allowed::Allowed with a reason: ${reasonText}`,
+    );
+    expect(output()).not.toContain('::error');
+    expect(readFileSync(summary, 'utf8')).toContain(
+      '**Allowed with a reason in this change (1):**',
+    );
+    expect(process.exitCode).toBe(0);
+  });
+
+  it('refuses to allow without a reason, an unknown rule, or a file the rule does not report', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders]);
+    await run(['allow', 'AP-999', orders, '--reason', reasonText]);
+    await run(['allow', 'AP-001', `${app}/lib/util.ts`, '--reason', reasonText]);
+    const errors = errSpy.mock.calls.flat().join('\n');
+    expect(errors).toContain('Give the reason');
+    expect(errors).toContain('No adopted rule "AP-999"');
+    expect(errors).toContain('AP-001 reports nothing in lib/util.ts');
+    expect(existsSync(path.join(repo, '.archprint', 'allow.json'))).toBe(false);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('lists an existing violation allowed in the change as allowed, not fixed', async () => {
+    git('checkout', '-q', 'main');
+    await adoptWithOneException();
+    commitAll('adopt with one known exception');
+    git('checkout', '-q', '-b', 'allow-legacy');
+    await run(['allow', 'AP-001', `${app}/app/api/legacy/route.ts`, '--reason', reasonText]);
+    commitAll('allow the legacy route');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      introduced: [],
+      fixed: [],
+      allowedInChange: [{ rule: 'AP-001', file: 'app/api/legacy/route.ts', reason: reasonText }],
+    });
+  });
+
+  it('does not list an exception again once the base branch already allows it', async () => {
+    git('checkout', '-q', 'main');
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    commitAll('allow on main');
+    git('checkout', '-q', '-B', 'feature');
+    write('lib/extra.ts', 'export const extra = 2;\n');
+    commitAll('unrelated change');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({ introduced: [], allowedInChange: [] });
+  });
+
+  it('treats a broken allow.json on the base branch as allowing nothing, so every exception shows', async () => {
+    git('checkout', '-q', 'main');
+    writeFileSync(path.join(repo, '.archprint', 'allow.json'), '{ broken');
+    commitAll('a broken allow list on main');
+    git('checkout', '-q', '-B', 'feature');
+    write('app/api/orders/route.ts', directDbRoute);
+    writeFileSync(
+      path.join(repo, '.archprint', 'allow.json'),
+      JSON.stringify({ format: 1, entries: [] }),
+    );
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    commitAll('fix the list and allow one');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output()).allowedInChange).toEqual([
+      { rule: 'AP-001', file: 'app/api/orders/route.ts', reason: reasonText },
+    ]);
+  });
+
+  it('reports an allowed exception the code no longer needs', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    write(
+      'app/api/orders/route.ts',
+      "export async function GET() { return new Response('ok'); }\n",
+    );
+    commitAll('allow, then fix it anyway');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      allowedInChange: [],
+      unusedAllows: [{ rule: 'AP-001', file: 'app/api/orders/route.ts' }],
+    });
+  });
+
+  it('exits 2 when allow.json is broken, rather than ignoring it', async () => {
+    writeFileSync(
+      path.join(repo, '.archprint', 'allow.json'),
+      JSON.stringify({ format: 1, entries: [{ rule: 'AP-001', file: 'a.ts' }] }),
+    );
+    await run(['check', '--base', 'main']);
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('cannot read the allowed exceptions');
+    expect(process.exitCode).toBe(2);
+  });
+
+  it('keeps the rule adopted when regenerating after allowing the exception that would have dropped it', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    await run(['generate', app]);
+    const rules = JSON.parse(readFileSync(path.join(repo, '.archprint', 'rules.json'), 'utf8'));
+    expect(rules.rules.map((rule: { id: string }) => rule.id)).toContain('AP-001');
+    commitAll('allow and regenerate');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      introduced: [],
+      removedInChange: [],
+      allowedInChange: [{ rule: 'AP-001', file: 'app/api/orders/route.ts' }],
+    });
+  });
+
+  it('never lets an allowance promote a rule that is not adopted', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    const rulesFile = path.join(repo, '.archprint', 'rules.json');
+    const rules = JSON.parse(readFileSync(rulesFile, 'utf8'));
+    rules.rules = rules.rules.filter((rule: { id: string }) => rule.id !== 'AP-001');
+    writeFileSync(rulesFile, JSON.stringify(rules));
+    await run(['generate', app]);
+    const regenerated = JSON.parse(readFileSync(rulesFile, 'utf8'));
+    expect(regenerated.rules.map((rule: { id: string }) => rule.id)).not.toContain('AP-001');
+  });
+
+  it('accepts the file path as check prints it, relative to the app', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', 'app/api/orders/route.ts', '--reason', reasonText]);
+    expect(output()).toContain('Allowed AP-001 in app/api/orders/route.ts');
+  });
+
+  it('removes an exception with --remove, and eject removes allow.json', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    await run(['allow', 'AP-001', orders, '--remove']);
+    expect(
+      JSON.parse(readFileSync(path.join(repo, '.archprint', 'allow.json'), 'utf8')).entries,
+    ).toEqual([]);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    await run(['eject']);
+    expect(existsSync(path.join(repo, '.archprint', 'allow.json'))).toBe(false);
+  });
+
   it('reads renames with their new path from git', () => {
     git('mv', `${app}/lib/util.ts`, `${app}/lib/utils.ts`);
     commitAll('rename');

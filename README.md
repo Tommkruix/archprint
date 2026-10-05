@@ -343,6 +343,12 @@ jobs:
 - **Only adopted rules.** `check` reads `.archprint/rules.json`, written by `init` and `generate`, and checks only
   the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
   but never counted against it.
+- **A justified exception needs a reason.** When a file has a real reason to break a rule, record it:
+  `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`. It
+  goes in `.archprint/allow.json`, `check` stops counting it and lists it with its reason in the pull request, and
+  the next `archprint generate` stops ESLint flagging it. An entry without a reason is rejected, and an entry the
+  code no longer needs is pointed out. Rules enforced through dependency-cruiser (public API) are not covered on
+  that side yet.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/rules.json` or
   `config.json` that the base branch has, `check` warns and lists every rule that stops being checked. It does not
   fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,
@@ -473,6 +479,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
   with `--base <branch or commit>`. Warning only unless `--fail-on new`. `--format text|json|github`,
   `--out <dir>`. See [Use in CI](#use-in-ci).
+- **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule being broken in one file, with a
+  reason, recorded in `.archprint/allow.json`. `check` stops counting it and lists it in the pull request;
+  `generate` stops ESLint flagging it. `--remove` takes it back out.
 - **`archprint wire`**: references the generated rules from the enforcement tools your repo uses (flat eslint
   config, `.dependency-cruiser.json`) through a managed, reversible reference. `--out <dir>`, `--dry-run`.
 - **`archprint eject`**: removes Archprint's generated files, its config, the managed README section, and any
