@@ -43,6 +43,8 @@ const checked = (
   fixed: [],
   adoptedInChange: [],
   removedInChange: [],
+  allowedInChange: [],
+  unusedAllows: [],
   ...overrides,
 });
 
@@ -228,5 +230,38 @@ describe('a change that removes the adopted rules', () => {
       removedInChange: ['AP-001'],
     });
     expect(checkExitCode(removed, 'new')).toBe(0);
+  });
+});
+
+describe('allowed exceptions in the output', () => {
+  const allowed = {
+    rule: 'AP-001',
+    file: 'app/api/legacy/route.ts',
+    reason: 'Health | probe\nraw query',
+  };
+
+  it('lists exceptions added in the change, with their reason, in every format', () => {
+    const result = checked({ introduced: [], allowedInChange: [allowed], appPath: 'apps/web' });
+    expect(renderCheckText(result)).toContain(
+      `Allowed in this change: AP-001 in app/api/legacy/route.ts. Reason: ${allowed.reason}`,
+    );
+    expect(githubSummary(result)).toContain(
+      '| `app/api/legacy/route.ts` | AP-001 | Health \\| probe raw query |',
+    );
+    expect(githubAnnotations(result, 'new')).toEqual([
+      '::notice file=apps/web/app/api/legacy/route.ts,title=archprint%3A AP-001 allowed::Allowed with a reason: Health | probe%0Araw query',
+    ]);
+    expect(checkJson(result, '9.9.9')).toMatchObject({ allowedInChange: [allowed] });
+  });
+
+  it('points out an exception the code no longer needs', () => {
+    const result = checked({ introduced: [], unusedAllows: [allowed] });
+    expect(renderCheckText(result)).toContain(
+      'Allowed exception no longer needed: AP-001 reports nothing in app/api/legacy/route.ts.',
+    );
+    expect(githubSummary(result)).toContain('Allowed exception no longer needed');
+    expect(checkJson(result, '9.9.9')).toMatchObject({
+      unusedAllows: [{ rule: 'AP-001', file: 'app/api/legacy/route.ts' }],
+    });
   });
 });

@@ -54,6 +54,7 @@ export function writeLayout(
   assertRealDirectory(outDir);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
+    appPath: options.app,
     structural: options.structural,
     enforcers: options.enforcers,
     only: options.only,
