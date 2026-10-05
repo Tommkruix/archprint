@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { writeOwnedFile } from './owned-paths.js';
 import { ROLE_PATTERNS } from '../scanner/role-classifier.js';
 import type { DetectedPattern } from '../detector/pattern-detector.js';
 import type { PatternConfig } from '../detector/pattern-detector.js';
@@ -231,10 +231,17 @@ export function emitRuleArtifacts(
 ): string {
   const artifacts = generateRuleArtifacts(config, result, provenance);
   const ruleDir = path.join(outDir, artifacts.ruleName);
-  mkdirSync(path.join(ruleDir, 'fixtures'), { recursive: true });
-  writeFileSync(path.join(ruleDir, `${artifacts.ruleName}.ts`), artifacts.files.rule);
-  writeFileSync(path.join(ruleDir, `${artifacts.ruleName}.md`), artifacts.files.card);
-  writeFileSync(path.join(ruleDir, 'fixtures', 'passing.ts'), artifacts.files.passingFixture);
-  writeFileSync(path.join(ruleDir, 'fixtures', 'failing.ts'), artifacts.files.failingFixture);
+  writeOwnedFile(outDir, path.join(ruleDir, `${artifacts.ruleName}.ts`), artifacts.files.rule);
+  writeOwnedFile(outDir, path.join(ruleDir, `${artifacts.ruleName}.md`), artifacts.files.card);
+  writeOwnedFile(
+    outDir,
+    path.join(ruleDir, 'fixtures', 'passing.ts'),
+    artifacts.files.passingFixture,
+  );
+  writeOwnedFile(
+    outDir,
+    path.join(ruleDir, 'fixtures', 'failing.ts'),
+    artifacts.files.failingFixture,
+  );
   return ruleDir;
 }

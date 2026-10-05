@@ -1,5 +1,6 @@
 import { existsSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
+import { assertRealDirectory, ownedPath } from '../generator/owned-paths.js';
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { ARCHPRINT_DIR, emitLayout } from './generate.js';
 import { buildConfig, readConfig, writeConfig, type ManagedOutputs } from './archprint-config.js';
@@ -36,8 +37,8 @@ function cleanPrior(outDir: string, cwd: string): string[] {
   if (!prior) return [];
   const removed: string[] = [];
   for (const relative of prior.managed.files) {
-    const target = path.resolve(cwd, relative);
-    if (existsSync(target)) {
+    const target = ownedPath(outDir, path.resolve(cwd, relative));
+    if (target !== null && existsSync(target)) {
       rmSync(target, { recursive: true, force: true });
       removed.push(relative);
     }
@@ -50,6 +51,7 @@ export function writeLayout(
   outDir: string,
   options: WriteLayoutOptions,
 ): WriteLayoutResult {
+  assertRealDirectory(outDir);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
     structural: options.structural,

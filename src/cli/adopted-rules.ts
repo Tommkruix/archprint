@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { writeOwnedFile } from '../generator/owned-paths.js';
 import type { GateResult } from '../detector/confidence-gate.js';
 import type { Role } from '../scanner/role-classifier.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
@@ -117,11 +118,10 @@ export function writeAdoptedRules(
   rules: readonly AdoptedRule[],
   archprintVersion: string,
 ): string {
-  mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, RULES_FILE);
   const sorted = [...rules].sort((a, b) => a.id.localeCompare(b.id));
   const content: AdoptedRules = { format: RULES_FORMAT, archprintVersion, rules: sorted };
-  writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`);
+  writeOwnedFile(outDir, file, `${JSON.stringify(content, null, 2)}\n`);
   return file;
 }
 

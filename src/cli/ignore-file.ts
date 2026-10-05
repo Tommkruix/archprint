@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { staysInsideItsFolder } from '../generator/owned-paths.js';
 
 const START = '# archprint:start';
 const END = '# archprint:end';
@@ -14,6 +15,7 @@ export function ensureIgnoreEntry(
   entry: string,
   options: { create?: boolean } = {},
 ): IgnoreResult {
+  if (!staysInsideItsFolder(filePath)) return 'skipped';
   const block = markerBlock(entry);
   if (!existsSync(filePath)) {
     if (options.create === false) return 'skipped';
@@ -30,7 +32,7 @@ export function removeIgnoreEntry(
   filePath: string,
   options: { deleteIfEmpty?: boolean } = {},
 ): boolean {
-  if (!existsSync(filePath)) return false;
+  if (!existsSync(filePath) || !staysInsideItsFolder(filePath)) return false;
   const content = readFileSync(filePath, 'utf8');
   const start = content.indexOf(START);
   const end = content.indexOf(END);
