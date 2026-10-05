@@ -4,18 +4,20 @@ Set Height 760
 Set TypingSpeed 35ms
 
 Hide
-Type `cd "$DEMO_DIR" && export PS1='$ ' && clear && cursor-agent --model grok-4.7-high --approve-mcps --trust`
+Type `cd "$DEMO_DIR" && sh "$DEMO_ASSETS/agent-setup.sh" && export PS1='$ ' && clear && cursor-agent --model grok-4.7-high --approve-mcps --trust --force`
 Enter
-Sleep 8s
+Sleep 10s
 Show
 
 Type "What architecture rules does this repo already follow? Keep it short."
 Sleep 500ms
 Enter
-Wait+Screen@90s /Run this MCP tool/
-Sleep 1500ms
-Type "y"
-Sleep 20s
+Sleep 30s
+
+Type "Add a GET /api/users/count route that returns how many users there are. Then check your change against the repo's architecture rules."
+Sleep 500ms
+Enter
+Sleep 60s
 
 Hide
 Ctrl+C
