@@ -2,7 +2,7 @@
 set -eu
 
 DEMO_REPO=https://github.com/Tommkruix/archprint-demo.git
-DEMO_COMMIT=d550db56a3d994d2e8e54c33bc7a78bcb8ffb5df
+DEMO_COMMIT=d6d50679fa3200b1fd916a1b9bdbebfa7cfbb88e
 
 DEMO_ASSETS=$(cd "$(dirname -- "$0")" && pwd)
 root=$(cd "$DEMO_ASSETS/../.." && pwd)
