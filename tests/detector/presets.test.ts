@@ -30,6 +30,15 @@ describe('detector presets', () => {
     expect(result.stats.roleFileCount).toBe(0);
   });
 
+  it('detectDbClientInRequestEntry still reports a request handler that builds its own client', () => {
+    const result = detectDbClientInRequestEntry(fixture('db-self-client'));
+    expect(result.violations.map((violation) => violation.file).sort()).toEqual([
+      'src/app/actions.ts',
+      'src/app/api/orders/route.ts',
+      'src/app/api/users/route.ts',
+    ]);
+  });
+
   it('detectNoDbInRequestEntry classifies the request-entry files with the default markers', () => {
     const result = detectNoDbInRequestEntry(fixture('cli-auto'));
     expect(result.name).toBe('no-direct-db-in-request-entry');
