@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { staysInsideItsFolder } from '../generator/owned-paths.js';
+import { lineBreakAt, lineBreakBefore, lineBreakOf } from './line-breaks.js';
 
 const START = '<!-- archprint:start -->';
 const END = '<!-- archprint:end -->';
@@ -7,17 +8,6 @@ const END = '<!-- archprint:end -->';
 export interface ReadmeResult {
   status: 'created' | 'updated' | 'skipped';
   reason?: string;
-}
-
-interface Layout {
-  eol: string;
-  bom: string;
-}
-
-function detectLayout(content: string): Layout {
-  const bom = content.startsWith('﻿') ? '﻿' : '';
-  const eol = /\r\n/.test(content) ? '\r\n' : '\n';
-  return { eol, bom };
 }
 
 function block(body: string, eol: string): string {
@@ -40,25 +30,20 @@ export function injectAdoptionSection(readmePath: string, body: string): ReadmeR
       writeFileSync(readmePath, `${block(body, '\n')}\n`);
       return { status: 'created' };
     }
-    const raw = readFileSync(readmePath, 'utf8');
-    const { eol, bom } = detectLayout(raw);
-    const content = bom ? raw.slice(bom.length) : raw;
+    const content = readFileSync(readmePath, 'utf8');
     const start = content.indexOf(START);
     const end = content.indexOf(END);
     if ((start !== -1) !== (end !== -1) || (start !== -1 && end < start)) {
       return { status: 'skipped', reason: 'unpaired archprint markers in README; left untouched' };
     }
-    const normalized = content.replace(/\r\n/g, '\n');
-    const fresh = block(body, '\n');
-    let next: string;
-    if (start !== -1) {
-      const s = normalized.indexOf(START);
-      const e = normalized.indexOf(END) + END.length;
-      next = normalized.slice(0, s) + fresh + normalized.slice(e);
-    } else {
-      next = `${normalized.replace(/\n+$/, '')}\n\n${fresh}\n`;
-    }
-    writeFileSync(readmePath, bom + (eol === '\r\n' ? next.replace(/\n/g, '\r\n') : next));
+    const eol = lineBreakOf(content);
+    const fresh = block(body, eol);
+    writeFileSync(
+      readmePath,
+      start !== -1
+        ? content.slice(0, start) + fresh + content.slice(end + END.length)
+        : `${content}${eol}${fresh}${eol}`,
+    );
     return { status: 'updated' };
   } catch (error) {
     return { status: 'skipped', reason: `could not write README (${(error as Error).message})` };
@@ -76,23 +61,21 @@ export function stripAdoptionSection(
         status: 'skipped',
         reason: 'README.md links outside the repository, so archprint leaves it alone',
       };
-    const raw = readFileSync(readmePath, 'utf8');
-    const { eol, bom } = detectLayout(raw);
-    const content = (bom ? raw.slice(bom.length) : raw).replace(/\r\n/g, '\n');
+    const content = readFileSync(readmePath, 'utf8');
     const start = content.indexOf(START);
     const end = content.indexOf(END);
     if (start === -1 || end === -1 || end < start) {
       return { status: 'skipped', reason: 'no archprint section' };
     }
-    const head = content.slice(0, start).replace(/\n+$/, '');
-    const tail = content.slice(end + END.length).replace(/^\n+/, '');
-    const without = head === '' ? tail : tail === '' ? head : `${head}\n\n${tail}`;
+    const blockEnd = end + END.length;
+    const without =
+      content.slice(0, start - lineBreakBefore(content, start)) +
+      content.slice(blockEnd + lineBreakAt(content, blockEnd));
     if (createdByArchprint && without.trim() === '') {
       rmSync(readmePath, { force: true });
       return { status: 'updated', reason: 'removed archprint-created README' };
     }
-    const out = without.trim() === '' ? '' : `${without.replace(/\n+$/, '')}\n`;
-    writeFileSync(readmePath, bom + (eol === '\r\n' ? out.replace(/\n/g, '\r\n') : out));
+    writeFileSync(readmePath, without);
     return { status: 'updated' };
   } catch (error) {
     return { status: 'skipped', reason: `could not update README (${(error as Error).message})` };
