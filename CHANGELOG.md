@@ -1,5 +1,11 @@
 # archprint
 
+## 0.12.2
+
+### Patch Changes
+
+- `archprint eject` now restores `README.md`, `.prettierignore` and `.npmignore` byte for byte. Before, a file without a final newline, with several trailing newlines, or with mixed line endings came back slightly different after archprint added and then removed its section.
+
 ## 0.12.1
 
 ### Patch Changes
