@@ -1,14 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { writeOwnedFile } from '../generator/owned-paths.js';
 import type { GateResult } from '../detector/confidence-gate.js';
 import type { Role } from '../scanner/role-classifier.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
+import { configPath, configSection, readConfigSection } from './archprint-config.js';
 import { FAMILY_STATEMENTS } from './rule-statements.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
-export const RULES_FILE = 'rules.json';
-export const RULES_FORMAT = 1;
+/** Where 0.9.0 to 0.11.x kept the adopted rules, before they moved into config.json. */
+export const LEGACY_RULES_FILE = 'rules.json';
+const LEGACY_RULES_FORMAT = 1;
 
 export type ResolutionMode = 'deep' | 'fast';
 
@@ -41,12 +42,6 @@ export interface SingleFamilyRule extends RuleBase {
 }
 
 export type AdoptedRule = ForbiddenImportRule | PublicApiRule | SingleFamilyRule;
-
-export interface AdoptedRules {
-  format: typeof RULES_FORMAT;
-  archprintVersion: string;
-  rules: AdoptedRule[];
-}
 
 const evidenceOf = (gate: GateResult, total: number, violating: number): AdoptionEvidence => ({
   conforming: total - violating,
@@ -113,17 +108,7 @@ export function publicApiRules(scan: ScanResult): AdoptedRule[] {
     }));
 }
 
-export function writeAdoptedRules(
-  outDir: string,
-  rules: readonly AdoptedRule[],
-  archprintVersion: string,
-): string {
-  const file = path.join(outDir, RULES_FILE);
-  const sorted = [...rules].sort((a, b) => a.id.localeCompare(b.id));
-  const content: AdoptedRules = { format: RULES_FORMAT, archprintVersion, rules: sorted };
-  writeOwnedFile(outDir, file, `${JSON.stringify(content, null, 2)}\n`);
-  return file;
-}
+export const byRuleId = (a: AdoptedRule, b: AdoptedRule): number => a.id.localeCompare(b.id);
 
 export class InvalidRulesError extends Error {}
 
@@ -182,28 +167,38 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
   return rule as AdoptedRule;
 }
 
-export function readAdoptedRules(outDir: string): AdoptedRules | null {
-  const file = path.join(outDir, RULES_FILE);
-  return existsSync(file) ? parseAdoptedRules(readFileSync(file, 'utf8'), file) : null;
-}
-
-export function parseAdoptedRules(text: string, file: string): AdoptedRules {
-  let parsed: Partial<AdoptedRules>;
-  try {
-    parsed = JSON.parse(text) as Partial<AdoptedRules>;
-  } catch {
-    throw new InvalidRulesError(`${file} is not valid JSON. Re-run archprint generate.`);
-  }
-  if (parsed.format !== RULES_FORMAT || !Array.isArray(parsed.rules)) {
+function parseRuleList(rules: unknown, file: string): AdoptedRule[] {
+  if (!Array.isArray(rules)) {
     throw new InvalidRulesError(
       `${file} was written by a different archprint version. Re-run archprint generate.`,
     );
   }
-  return {
-    format: RULES_FORMAT,
-    archprintVersion: String(parsed.archprintVersion),
-    rules: parsed.rules.map((rule) => validateRule(rule, file)),
-  };
+  return rules.map((rule) => validateRule(rule, file));
+}
+
+/** The rules of a legacy rules.json. */
+export function parseLegacyRules(text: string, file: string): AdoptedRule[] {
+  let parsed: { format?: unknown; rules?: unknown };
+  try {
+    parsed = JSON.parse(text) as { format?: unknown; rules?: unknown };
+  } catch {
+    throw new InvalidRulesError(`${file} is not valid JSON. Re-run archprint generate.`);
+  }
+  return parseRuleList(parsed.format === LEGACY_RULES_FORMAT ? parsed.rules : undefined, file);
+}
+
+/** The rules section of config.json text, or null when it has none. */
+export function parseConfigRules(text: string, file: string): AdoptedRule[] | null {
+  const rules = configSection(text, 'rules');
+  return rules === undefined ? null : parseRuleList(rules, file);
+}
+
+/** The adopted rules: config.json's rules section, else a legacy rules.json, else null. */
+export function readAdoptedRules(outDir: string): AdoptedRule[] | null {
+  const rules = readConfigSection(outDir, 'rules');
+  if (rules !== undefined) return parseRuleList(rules, configPath(outDir));
+  const legacy = path.join(outDir, LEGACY_RULES_FILE);
+  return existsSync(legacy) ? parseLegacyRules(readFileSync(legacy, 'utf8'), legacy) : null;
 }
 
 export function ruleDefinitionKey(rule: AdoptedRule): string {

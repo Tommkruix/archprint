@@ -1,4 +1,5 @@
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -10,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ownedPath, writeOwnedFile } from '../../src/generator/owned-paths.js';
+import { ownedPath, removeOwnedFile, writeOwnedFile } from '../../src/generator/owned-paths.js';
 
 describe('ownedPath', () => {
   let root: string;
@@ -59,5 +60,22 @@ describe('ownedPath', () => {
       writeOwnedFile(root, path.join(root, 'rule', 'fixtures', 'failing.ts'), 'x'),
     ).toThrow(/refuses to write/);
     expect(() => readFileSync(path.join(outside, 'fixtures', 'failing.ts'))).toThrow();
+  });
+
+  it('removes a regular file inside the folder and leaves a folder, a symlink or an outside file alone', () => {
+    writeFileSync(path.join(root, 'rules.json'), '{}');
+    expect(removeOwnedFile(root, path.join(root, 'rules.json'))).toBe(true);
+    expect(existsSync(path.join(root, 'rules.json'))).toBe(false);
+    expect(removeOwnedFile(root, path.join(root, 'rules.json'))).toBe(false);
+
+    mkdirSync(path.join(root, 'allow.json'));
+    expect(removeOwnedFile(root, path.join(root, 'allow.json'))).toBe(false);
+    expect(lstatSync(path.join(root, 'allow.json')).isDirectory()).toBe(true);
+
+    writeFileSync(path.join(outside, 'victim.txt'), 'mine\n');
+    symlinkSync(path.join(outside, 'victim.txt'), path.join(root, 'link.json'));
+    expect(removeOwnedFile(root, path.join(root, 'link.json'))).toBe(false);
+    expect(removeOwnedFile(root, path.join(outside, 'victim.txt'))).toBe(false);
+    expect(readFileSync(path.join(outside, 'victim.txt'), 'utf8')).toBe('mine\n');
   });
 });
