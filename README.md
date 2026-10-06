@@ -6,6 +6,7 @@
 [![license](https://img.shields.io/npm/l/archprint.svg)](./LICENSE)
 [![docs](https://img.shields.io/badge/docs-live-blue)](https://tommkruix.github.io/archprint/)
 [![Glama MCP server score](https://glama.ai/mcp/servers/Tommkruix/archprint/badges/score.svg)](https://glama.ai/mcp/servers/Tommkruix/archprint)
+[![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/tommkruix/archprint)
 
 **Mine the architecture rules your repo already enforces, with the evidence attached.**
 
