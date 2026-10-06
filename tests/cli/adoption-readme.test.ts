@@ -77,6 +77,30 @@ describe('stripAdoptionSection', () => {
     expect(readFileSync(readme, 'utf8')).toContain('# Title');
   });
 
+  it.each([
+    ['no newline at the end', '# Title\n\nSome text'],
+    ['one newline at the end', '# Title\n\nSome text\n'],
+    ['several newlines at the end', '# Title\n\nSome text\n\n\n'],
+    ['Windows line endings', '# Title\r\n\r\nSome text\r\n'],
+    ['mixed line endings', '# Title\r\nSome text\nMore\n'],
+    ['a byte order mark', '\uFEFF# Title\n\nSome text\n'],
+  ])('restores a README with %s byte for byte', (_label, original) => {
+    writeFileSync(readme, original);
+    injectAdoptionSection(readme, 'FIRST');
+    injectAdoptionSection(readme, 'SECOND');
+    stripAdoptionSection(readme, false);
+    expect(readFileSync(readme, 'utf8')).toBe(original);
+  });
+
+  it('removes a section an older version appended after a blank line, keeping one final newline', () => {
+    writeFileSync(
+      readme,
+      '# Title\n\n<!-- archprint:start -->\n## Architecture rules\n\nBODY\n<!-- archprint:end -->\n',
+    );
+    stripAdoptionSection(readme, false);
+    expect(readFileSync(readme, 'utf8')).toBe('# Title\n');
+  });
+
   it('is a no-op when there is no section', () => {
     writeFileSync(readme, '# Title\n');
     expect(stripAdoptionSection(readme, false).status).toBe('skipped');
