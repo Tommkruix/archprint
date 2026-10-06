@@ -60,6 +60,23 @@ describe('inferDbClientMarkers', () => {
     expect(inferred.wrappers).toContain('@acme/db');
   });
 
+  it('never turns a request handler that builds its own client into a forbidden import', () => {
+    const inferred = inferDbClientMarkers(fixtureFor('db-self-client'));
+    expect(inferred.wrappers).toEqual(['@/server/db']);
+    for (const handler of ['@/app/api/orders/route', 'src/app/api/orders/route', '@/app/actions']) {
+      expect(inferred.markers.some((marker) => marker.test(handler))).toBe(false);
+    }
+  });
+
+  it('never turns a sibling app whose request handler builds its own client into a forbidden package', () => {
+    const inferred = inferDbClientMarkers(fixtureFor('monorepo-db-sibling/apps/web'));
+    expect(inferred.wrappers).toEqual(['@acme/db']);
+    expect(inferred.markers.some((marker) => marker.test('@acme/admin'))).toBe(false);
+    expect(inferred.markers.some((marker) => marker.test('apps/admin/app/api/report/route'))).toBe(
+      false,
+    );
+  });
+
   it('does not treat a type-only db re-export as a wrapper', () => {
     const inferred = inferDbClientMarkers(fixtureFor('db-type-reexport'));
     expect(inferred.wrappers).toHaveLength(0);

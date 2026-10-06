@@ -18,6 +18,10 @@
     "ai-coding-agents",
     "mcp",
     "model-context-protocol",
+    "mcp-server",
+    "dependency-cruiser",
+    "architecture",
+    "architecture-rules",
     "developer-tools",
     "node"
   ],

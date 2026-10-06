@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { ts } from 'ts-morph';
-import { listSourceFiles, walkRepo, type WalkedFile } from '../scanner/file-walker.js';
+import { walkRepo, type WalkedFile } from '../scanner/file-walker.js';
+import { REQUEST_ENTRY_ROLES, type Role } from '../scanner/role-classifier.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 
@@ -227,7 +228,14 @@ function importableSpecifier(
   return best ? best.spec : null;
 }
 
-export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
+/**
+ * A client module is never one of the files the rule applies to: a request handler that builds its own client
+ * breaks the rule, it does not become something the rule forbids importing.
+ */
+export function inferDbClientMarkers(
+  appDir: string,
+  subjectRoles: readonly Role[] = REQUEST_ENTRY_ROLES,
+): InferredDbMarkers {
   const appRoot = normalize(path.resolve(appDir));
   const repoRoot = normalize(path.resolve(findWorkspaceRoot(appDir)));
   const aliases = Object.entries(buildWorkspaceMap(appDir));
@@ -238,14 +246,18 @@ export function inferDbClientMarkers(appDir: string): InferredDbMarkers {
     ...packages.map(([, dir]) => normalize(path.resolve(dir))).filter((dir) => dir !== appRoot),
   ];
   const scanned = new Set<string>();
+  const subjects = new Set<string>();
   for (const root of scanRoots) {
     try {
-      for (const file of listSourceFiles(root)) scanned.add(file);
+      for (const file of walkRepo(root)) {
+        (subjectRoles.includes(file.role) ? subjects : scanned).add(file.absolutePath);
+      }
     } catch {}
   }
 
   const wrapperFiles: string[] = [];
   for (const file of scanned) {
+    if (subjects.has(file)) continue;
     let text: string;
     try {
       text = readFileSync(file, 'utf8');

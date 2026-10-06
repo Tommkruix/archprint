@@ -145,6 +145,14 @@ export const ROLE_PATTERNS: ReadonlyMap<Role, readonly RegExp[]> = ROLE_RULES.re
   new Map<Role, RegExp[]>(),
 );
 
+export const REQUEST_ENTRY_ROLES: readonly Role[] = [
+  'CONTROLLER',
+  'ROUTE_HANDLER',
+  'SERVER_ACTION',
+  'API_HANDLER',
+  'TRPC_ROUTER',
+];
+
 export function classifyFile(relativePath: string): RoleClassification {
   const normalizedPath = relativePath.replace(/\\/g, '/');
   for (const rule of ROLE_RULES) {
