@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { writeAllowed } from '../../src/cli/allowed-exceptions.js';
 import { emitLayout } from '../../src/cli/generate.js';
 import { scanRepo } from '../../src/cli/scan.js';
 import { exemptionPaths, mergeNoRestrictedImports } from '../../src/generator/eslint-scope.js';
@@ -70,10 +69,12 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
     const direct =
       "import { PrismaClient } from '@prisma/client';\nexport const db = new PrismaClient();\n";
     const outDir = path.join(tmp, '.archprint');
-    writeAllowed(outDir, [
-      { rule: 'AP-001', file: 'app/api/legacy/route.ts', reason: 'Legacy health check.' },
-    ]);
-    emitLayout(scanRepo(tmp), outDir, { version: '9.9.9', enforcers: eslintOnly });
+    mkdirSync(outDir);
+    emitLayout(scanRepo(tmp), outDir, {
+      version: '9.9.9',
+      enforcers: eslintOnly,
+      allowed: new Map([['AP-001', ['app/api/legacy/route.ts']]]),
+    });
     for (const file of ['app/api/legacy/route.ts', 'app/api/orders/route.ts']) {
       mkdirSync(path.dirname(path.join(tmp, file)), { recursive: true });
       writeFileSync(path.join(tmp, file), direct);

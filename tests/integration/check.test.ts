@@ -56,6 +56,34 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, content);
   };
+  const configFile = (): string => path.join(repo, '.archprint', 'config.json');
+  const readConfigJson = () => JSON.parse(readFileSync(configFile(), 'utf8'));
+  const editConfig = (edit: (config: Record<string, unknown>) => void): void => {
+    const config = readConfigJson();
+    edit(config);
+    writeFileSync(configFile(), JSON.stringify(config));
+  };
+  const adoptedRuleIds = (): string[] =>
+    readConfigJson().rules.map((rule: { id: string }) => rule.id);
+  /** Rewrites the setup the way 0.9.0 to 0.11.x laid it out: rules and exceptions in their own files. */
+  const toLegacyLayout = (): void => {
+    const config = readConfigJson();
+    const dir = path.join(repo, '.archprint');
+    writeFileSync(
+      path.join(dir, 'rules.json'),
+      JSON.stringify({ format: 1, archprintVersion: '0.11.0', rules: config.rules }),
+    );
+    if (config.allowed.length > 0) {
+      writeFileSync(
+        path.join(dir, 'allow.json'),
+        JSON.stringify({ format: 1, entries: config.allowed }),
+      );
+    }
+    delete config.rules;
+    delete config.allowed;
+    config.managed.files.push('.archprint/rules.json');
+    writeFileSync(configFile(), JSON.stringify(config));
+  };
   const adoptWithOneException = async (): Promise<void> => {
     for (let index = 0; index < 40; index++) {
       write(
@@ -65,8 +93,7 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     }
     write('app/api/legacy/route.ts', directDbRoute);
     await run(['init', app, '--force']);
-    const rules = JSON.parse(readFileSync(path.join(repo, '.archprint', 'rules.json'), 'utf8'));
-    const ap001 = rules.rules.find((rule: { id: string }) => rule.id === 'AP-001');
+    const ap001 = readConfigJson().rules.find((rule: { id: string }) => rule.id === 'AP-001');
     expect(ap001.evidence.conforming).toBe(ap001.evidence.total - 1);
   };
 
@@ -131,11 +158,16 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     }
   });
 
-  it('records the adopted rules with the mode they were generated in', () => {
-    const rules = JSON.parse(readFileSync(path.join(repo, '.archprint', 'rules.json'), 'utf8'));
-    expect(rules.archprintVersion).toBe('9.9.9');
-    const ap001 = rules.rules.find((rule: { id: string }) => rule.id === 'AP-001');
+  it('records the adopted rules in config.json with the mode they were generated in', () => {
+    const config = readConfigJson();
+    expect(config.archprintVersion).toBe('9.9.9');
+    const ap001 = config.rules.find((rule: { id: string }) => rule.id === 'AP-001');
     expect(ap001).toMatchObject({ family: 'forbidden-imports', mode: 'deep' });
+    expect(config.allowed).toEqual([]);
+    expect(readdirSync(path.join(repo, '.archprint')).sort()).toEqual([
+      'config.json',
+      'eslint.mjs',
+    ]);
   });
 
   it('reports the one violation a change introduces, on its line, warning only by default', async () => {
@@ -208,14 +240,15 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(process.exitCode).toBe(0);
   });
 
-  it('treats an unreadable rules file on the base as no adopted rules', () => {
+  it('treats unreadable rules on the base as no adopted rules', () => {
     git('checkout', '-q', 'main');
-    const rulesFile = path.join(repo, '.archprint', 'rules.json');
-    const current = readFileSync(rulesFile, 'utf8');
-    writeFileSync(rulesFile, '{"format":0}\n');
-    commitAll('rules file from another version');
+    const current = readFileSync(configFile(), 'utf8');
+    editConfig((config) => {
+      config.rules = 7;
+    });
+    commitAll('rules from another version');
     git('checkout', '-q', '-b', 'regenerated');
-    writeFileSync(rulesFile, current);
+    writeFileSync(configFile(), current);
     commitAll('regenerate');
     const result = runCheck({ cwd: repo, out: '.archprint', base: 'main' });
     expect(result.status).toBe('checked');
@@ -294,7 +327,8 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(process.exitCode).toBe(2);
   });
 
-  it('exits 2 when the rules file cannot be read', async () => {
+  it('exits 2 when a legacy rules file cannot be read', async () => {
+    toLegacyLayout();
     const rulesFile = path.join(repo, '.archprint', 'rules.json');
     rmSync(rulesFile);
     mkdirSync(rulesFile);
@@ -303,21 +337,22 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(process.exitCode).toBe(2);
   });
 
-  it('exits 2 when the rules file has been tampered with', async () => {
-    writeFileSync(
-      path.join(repo, '.archprint', 'rules.json'),
-      '{"format":1,"rules":[{"id":"x","family":"layer"}]}',
-    );
+  it('exits 2 when the rules have been tampered with', async () => {
+    editConfig((config) => {
+      config.rules = [{ id: 'x', family: 'layer' }];
+    });
     await run(['check', '--base', 'main']);
     expect(errSpy.mock.calls.flat().join(' ')).toContain('no valid id or family');
     expect(process.exitCode).toBe(2);
   });
 
+  const dropRule = (id: string): void =>
+    editConfig((config) => {
+      config.rules = (config.rules as { id: string }[]).filter((rule) => rule.id !== id);
+    });
+
   it('makes removing a rule in the change visible', async () => {
-    const rulesFile = path.join(repo, '.archprint', 'rules.json');
-    const rules = JSON.parse(readFileSync(rulesFile, 'utf8'));
-    rules.rules = rules.rules.filter((rule: { id: string }) => rule.id !== 'AP-001');
-    writeFileSync(rulesFile, JSON.stringify(rules));
+    dropRule('AP-001');
     commitAll('drop AP-001');
     await run(['check', '--base', 'main']);
     expect(output()).toContain('Rule AP-001 was removed in this change');
@@ -350,26 +385,90 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
   });
 
   it('does not run, visibly, where no rules were generated', async () => {
-    baseWithout('.archprint/rules.json');
+    git('checkout', '-q', 'main');
+    editConfig((config) => {
+      delete config.rules;
+    });
+    commitAll('a setup from before 0.9.0');
+    git('checkout', '-q', '-B', 'feature');
     await run(['check', '--base', 'main', '--format', 'github']);
     expect(output()).toContain('::notice title=archprint check did not run::');
     expect(process.exitCode).toBe(0);
   });
 
-  const adoptedIds = (): string =>
-    JSON.parse(readFileSync(path.join(repo, '.archprint', 'rules.json'), 'utf8'))
-      .rules.map((rule: { id: string }) => rule.id)
-      .join(', ');
+  const adoptedIds = (): string => adoptedRuleIds().join(', ');
 
-  it('reports every adopted rule a change stops checking when it deletes rules.json', async () => {
+  it('reports every adopted rule a change stops checking when it deletes the rules from config.json', async () => {
     const ids = adoptedIds();
-    git('rm', '-q', '.archprint/rules.json');
+    editConfig((config) => {
+      delete config.rules;
+    });
     commitAll('stop checking');
     await run(['check', '--base', 'main', '--format', 'github', '--fail-on', 'new']);
     expect(output()).toContain(
-      `::warning file=.archprint/rules.json,title=archprint rules removed::This change removes .archprint/rules.json, so the ${ids.split(', ').length} rule(s) adopted on the base commit are no longer checked: ${ids}.`,
+      `::warning file=.archprint/config.json,title=archprint rules removed::This change removes the adopted rules in .archprint/config.json, so the ${ids.split(', ').length} rule(s) adopted on the base commit are no longer checked: ${ids}.`,
     );
     expect(process.exitCode).toBe(0);
+  });
+
+  it('reports the rules as removed when a change deletes a legacy rules.json', async () => {
+    const ids = adoptedIds();
+    git('checkout', '-q', 'main');
+    toLegacyLayout();
+    commitAll('a 0.11 setup');
+    git('checkout', '-q', '-B', 'feature');
+    git('rm', '-q', '.archprint/rules.json');
+    commitAll('stop checking');
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      status: 'rules-removed',
+      missingFile: '.archprint/rules.json',
+      removedInChange: ids.split(', '),
+    });
+  });
+
+  it('compares with a base commit that still has the legacy layout, counting no rule or exception as new', async () => {
+    git('checkout', '-q', 'main');
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    await run(['generate', app]);
+    toLegacyLayout();
+    commitAll('a 0.11 setup with one exception');
+    git('checkout', '-q', '-B', 'feature');
+    await run(['generate', app]);
+    commitAll('regenerate into two files');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      status: 'checked',
+      introduced: [],
+      adoptedInChange: [],
+      removedInChange: [],
+      allowedInChange: [],
+    });
+  });
+
+  it('folds a legacy rules.json and allow.json into config.json on generate, and deletes them', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    const ids = adoptedRuleIds();
+    toLegacyLayout();
+    logSpy.mockClear();
+    await run(['generate', app]);
+    expect(output()).toContain(
+      'Moved .archprint/rules.json and .archprint/allow.json into .archprint/config.json.',
+    );
+    expect(output()).toContain('removed 1 stale archprint output(s)');
+    expect(readdirSync(path.join(repo, '.archprint')).sort()).toEqual([
+      'config.json',
+      'eslint.mjs',
+    ]);
+    const config = readConfigJson();
+    expect(config.rules.map((rule: { id: string }) => rule.id)).toEqual(ids);
+    expect(config.allowed).toEqual([
+      { rule: 'AP-001', file: 'app/api/orders/route.ts', reason: reasonText },
+    ]);
+    expect(config.managed.files).not.toContain('.archprint/rules.json');
   });
 
   it('does not call a broken config file removed', async () => {
@@ -427,7 +526,7 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(errors).toContain('Give the reason');
     expect(errors).toContain('No adopted rule "AP-999"');
     expect(errors).toContain('AP-001 reports nothing in lib/util.ts');
-    expect(existsSync(path.join(repo, '.archprint', 'allow.json'))).toBe(false);
+    expect(readConfigJson().allowed).toEqual([]);
     expect(process.exitCode).toBe(1);
   });
 
@@ -460,16 +559,17 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(JSON.parse(output())).toMatchObject({ introduced: [], allowedInChange: [] });
   });
 
-  it('treats a broken allow.json on the base branch as allowing nothing, so every exception shows', async () => {
+  it('treats a broken allowed list on the base branch as allowing nothing, so every exception shows', async () => {
     git('checkout', '-q', 'main');
-    writeFileSync(path.join(repo, '.archprint', 'allow.json'), '{ broken');
+    editConfig((config) => {
+      config.allowed = [{ rule: 'AP-001' }];
+    });
     commitAll('a broken allow list on main');
     git('checkout', '-q', '-B', 'feature');
     write('app/api/orders/route.ts', directDbRoute);
-    writeFileSync(
-      path.join(repo, '.archprint', 'allow.json'),
-      JSON.stringify({ format: 1, entries: [] }),
-    );
+    editConfig((config) => {
+      config.allowed = [];
+    });
     await run(['allow', 'AP-001', orders, '--reason', reasonText]);
     commitAll('fix the list and allow one');
     logSpy.mockClear();
@@ -495,11 +595,10 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     });
   });
 
-  it('exits 2 when allow.json is broken, rather than ignoring it', async () => {
-    writeFileSync(
-      path.join(repo, '.archprint', 'allow.json'),
-      JSON.stringify({ format: 1, entries: [{ rule: 'AP-001', file: 'a.ts' }] }),
-    );
+  it('exits 2 when the allowed list is broken, rather than ignoring it', async () => {
+    editConfig((config) => {
+      config.allowed = [{ rule: 'AP-001', file: 'a.ts' }];
+    });
     await run(['check', '--base', 'main']);
     expect(errSpy.mock.calls.flat().join(' ')).toContain('cannot read the allowed exceptions');
     expect(process.exitCode).toBe(2);
@@ -509,8 +608,11 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     write('app/api/orders/route.ts', directDbRoute);
     await run(['allow', 'AP-001', orders, '--reason', reasonText]);
     await run(['generate', app]);
-    const rules = JSON.parse(readFileSync(path.join(repo, '.archprint', 'rules.json'), 'utf8'));
-    expect(rules.rules.map((rule: { id: string }) => rule.id)).toContain('AP-001');
+    expect(adoptedRuleIds()).toContain('AP-001');
+    expect(readConfigJson().allowed).toHaveLength(1);
+    expect(readFileSync(path.join(repo, '.archprint', 'eslint.mjs'), 'utf8')).toContain(
+      `${app}/app/api/orders/route.ts`,
+    );
     commitAll('allow and regenerate');
     logSpy.mockClear();
     await run(['check', '--base', 'main', '--format', 'json']);
@@ -524,13 +626,9 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
   it('never lets an allowance promote a rule that is not adopted', async () => {
     write('app/api/orders/route.ts', directDbRoute);
     await run(['allow', 'AP-001', orders, '--reason', reasonText]);
-    const rulesFile = path.join(repo, '.archprint', 'rules.json');
-    const rules = JSON.parse(readFileSync(rulesFile, 'utf8'));
-    rules.rules = rules.rules.filter((rule: { id: string }) => rule.id !== 'AP-001');
-    writeFileSync(rulesFile, JSON.stringify(rules));
+    dropRule('AP-001');
     await run(['generate', app]);
-    const regenerated = JSON.parse(readFileSync(rulesFile, 'utf8'));
-    expect(regenerated.rules.map((rule: { id: string }) => rule.id)).not.toContain('AP-001');
+    expect(adoptedRuleIds()).not.toContain('AP-001');
   });
 
   it('accepts the file path as check prints it, relative to the app', async () => {
@@ -539,16 +637,54 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(output()).toContain('Allowed AP-001 in app/api/orders/route.ts');
   });
 
-  it('removes an exception with --remove, and eject removes allow.json', async () => {
+  it('removes an exception with --remove', async () => {
     write('app/api/orders/route.ts', directDbRoute);
     await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    expect(readConfigJson().allowed).toHaveLength(1);
     await run(['allow', 'AP-001', orders, '--remove']);
-    expect(
-      JSON.parse(readFileSync(path.join(repo, '.archprint', 'allow.json'), 'utf8')).entries,
-    ).toEqual([]);
+    expect(readConfigJson().allowed).toEqual([]);
+  });
+
+  it('moves a legacy allow.json into config.json on the next allow', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
     await run(['allow', 'AP-001', orders, '--reason', reasonText]);
-    await run(['eject']);
+    toLegacyLayout();
+    await run(['allow', 'AP-001', orders, '--remove']);
     expect(existsSync(path.join(repo, '.archprint', 'allow.json'))).toBe(false);
+    expect(readConfigJson().allowed).toEqual([]);
+  });
+
+  it('regenerates past a leftover rules.json that is a folder, leaving it in place', async () => {
+    mkdirSync(path.join(repo, '.archprint', 'rules.json'));
+    await run(['generate', app]);
+    expect(process.exitCode).toBe(0);
+    expect(adoptedRuleIds()).toContain('AP-001');
+    expect(lstatSync(path.join(repo, '.archprint', 'rules.json')).isDirectory()).toBe(true);
+  });
+
+  it('ejects a legacy layout completely, rules.json and allow.json included', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    toLegacyLayout();
+    expect(existsSync(path.join(repo, '.archprint', 'allow.json'))).toBe(true);
+    await run(['eject']);
+    expect(existsSync(path.join(repo, '.archprint'))).toBe(false);
+  });
+
+  it('keeps the rules and allowed exceptions when generate --rule records another output', async () => {
+    write('app/api/orders/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', orders, '--reason', reasonText]);
+    const ids = adoptedRuleIds();
+    editConfig((config) => {
+      config.team = { owner: 'platform' };
+    });
+    await run(['generate', app, '--rule', 'AP-001']);
+    expect(readConfigJson().team).toEqual({ owner: 'platform' });
+    expect(output()).toContain('generated .archprint/');
+    expect(adoptedRuleIds()).toEqual(ids);
+    expect(readConfigJson().allowed).toEqual([
+      { rule: 'AP-001', file: 'app/api/orders/route.ts', reason: reasonText },
+    ]);
   });
 
   it('reads renames with their new path from git', () => {

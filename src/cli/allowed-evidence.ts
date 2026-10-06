@@ -34,7 +34,7 @@ const regate = (population: number, violating: number, roleConfidence = 1, appli
 export function adoptedAllowances(outDir: string): AllowedByRule {
   let adopted: ReadonlySet<string>;
   try {
-    adopted = new Set((readAdoptedRules(outDir)?.rules ?? []).map((rule) => rule.id));
+    adopted = new Set((readAdoptedRules(outDir) ?? []).map((rule) => rule.id));
   } catch {
     adopted = new Set();
   }

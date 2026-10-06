@@ -1,13 +1,13 @@
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import * as path from 'node:path';
-import { CONFIG_FILE, readConfig } from './archprint-config.js';
+import { CONFIG_FILE, configPath, readConfig } from './archprint-config.js';
 import {
   InvalidRulesError,
-  parseAdoptedRules,
+  LEGACY_RULES_FILE,
+  parseConfigRules,
+  parseLegacyRules,
   readAdoptedRules,
-  RULES_FILE,
   type AdoptedRule,
-  type AdoptedRules,
 } from './adopted-rules.js';
 import { allowKey, readAllowed, type AllowedException } from './allowed-exceptions.js';
 import { diffFindings, partitionRules, type RuleChange } from './check-diff.js';
@@ -103,7 +103,7 @@ const withoutAllowed = (
   return findings.filter((finding) => !keys.has(allowKey(finding.ruleId, finding.file)));
 };
 
-function readBaseRules(baseOutDir: string): AdoptedRules | null {
+function readBaseRules(baseOutDir: string): AdoptedRule[] | null {
   try {
     return readAdoptedRules(baseOutDir);
   } catch {
@@ -129,7 +129,7 @@ function insideRepo(root: string, target: string, label: string): string {
   return toPosix(relative);
 }
 
-function loadRules(outDir: string): AdoptedRules | null {
+function loadRules(outDir: string): AdoptedRule[] | null {
   try {
     return readAdoptedRules(outDir);
   } catch (error) {
@@ -138,21 +138,37 @@ function loadRules(outDir: string): AdoptedRules | null {
   }
 }
 
-function rulesRemovedInChange(options: CheckOptions, missing: string): CheckResult | null {
-  if (existsSync(path.resolve(options.cwd, options.out, missing))) return null;
+/** The rules adopted on a commit, from its config.json or, for older setups, its rules.json. */
+function rulesAtCommit(
+  root: string,
+  commit: string,
+  setupDir: string,
+): { file: string; rules: AdoptedRule[] } | null {
+  const config = path.posix.join(setupDir, CONFIG_FILE);
+  const configText = fileAtCommit(root, commit, config);
+  const rules = configText === null ? null : parseConfigRules(configText, config);
+  if (rules !== null) return { file: config, rules };
+  const legacy = path.posix.join(setupDir, LEGACY_RULES_FILE);
+  const legacyText = fileAtCommit(root, commit, legacy);
+  return legacyText === null ? null : { file: legacy, rules: parseLegacyRules(legacyText, legacy) };
+}
+
+function rulesRemovedInChange(options: CheckOptions): CheckResult | null {
   try {
     const root = realpathSync(repoRoot(options.cwd));
     const relative = path.relative(root, path.resolve(realpathSync(options.cwd), options.out));
     if (outsideRepo(relative)) return null;
-    const setupDir = toPosix(relative);
     const base = options.base ?? defaultBase(root);
     const commit = mergeBase(root, base);
-    const text = fileAtCommit(root, commit, path.posix.join(setupDir, RULES_FILE));
-    if (text === null) return null;
-    const removed = parseAdoptedRules(text, RULES_FILE).rules;
-    if (removed.length === 0) return null;
-    const missingFile = path.posix.join(setupDir, missing);
-    return { status: 'rules-removed', base, commit, missingFile, removed };
+    const onBase = rulesAtCommit(root, commit, toPosix(relative));
+    if (onBase === null || onBase.rules.length === 0) return null;
+    return {
+      status: 'rules-removed',
+      base,
+      commit,
+      missingFile: onBase.file,
+      removed: onBase.rules,
+    };
   } catch (error) {
     if (error instanceof CheckSetupError || error instanceof InvalidRulesError) return null;
     throw error;
@@ -164,23 +180,22 @@ export function runCheck(options: CheckOptions): CheckResult {
   const shown = toPosix(path.relative(options.cwd, outDir) || '.');
   const config = readConfig(outDir);
   if (config === null && options.path === undefined) {
-    return (
-      rulesRemovedInChange(options, CONFIG_FILE) ?? {
-        status: 'skipped',
-        reason: `no ${shown}/config.json. Run archprint init (or generate) first.`,
-      }
-    );
+    const skipped: CheckResult = {
+      status: 'skipped',
+      reason: `no ${shown}/config.json. Run archprint init (or generate) first.`,
+    };
+    return existsSync(configPath(outDir)) ? skipped : (rulesRemovedInChange(options) ?? skipped);
   }
   const adopted = loadRules(outDir);
-  const allowed = adopted === null ? [] : loadAllowed(outDir);
   if (adopted === null) {
     return (
-      rulesRemovedInChange(options, RULES_FILE) ?? {
+      rulesRemovedInChange(options) ?? {
         status: 'skipped',
-        reason: `no ${shown}/rules.json. Re-run archprint generate once; setups made before 0.9.0 do not have it.`,
+        reason: `no adopted rules in ${shown}/config.json. Re-run archprint generate once; setups made before 0.9.0 do not have them.`,
       }
     );
   }
+  const allowed = loadAllowed(outDir);
   const appDir = path.resolve(options.cwd, options.path ?? config!.app);
   const root = repoRoot(options.cwd);
   const outPrefix = insideRepo(root, outDir, 'rules directory');
@@ -191,12 +206,12 @@ export function runCheck(options: CheckOptions): CheckResult {
     throw new CheckSetupError(`the app directory (${appDir}) is not a directory.`);
   }
   const renames = appRelativeRenames(renamedPaths(root, commit), appPrefix);
-  const ruleById = new Map(adopted.rules.map((rule) => [rule.id, rule]));
+  const ruleById = new Map(adopted.map((rule) => [rule.id, rule]));
 
   const baseTree = checkoutBase(root, commit, appPrefix);
   try {
     const baseRules = readBaseRules(path.join(baseTree.root, outPrefix));
-    const partition = partitionRules(adopted.rules, baseRules?.rules ?? null);
+    const partition = partitionRules(adopted, baseRules);
     const baseApp = path.join(baseTree.root, appPrefix);
     const baseFindings = existsSync(baseApp) ? evaluateRules(baseApp, partition.comparable) : [];
     const headFindings = evaluateRules(appDir, partition.comparable);
@@ -226,7 +241,7 @@ export function runCheck(options: CheckOptions): CheckResult {
       base,
       commit,
       appPath: appPrefix,
-      rules: adopted.rules,
+      rules: adopted,
       introduced: introduced.map((finding) => ({
         ...finding,
         line: locate(finding),
@@ -275,7 +290,7 @@ const describeSubject = (finding: Finding): string =>
 const ruleIds = (rules: readonly AdoptedRule[]): string => rules.map((rule) => rule.id).join(', ');
 
 const rulesRemovedMessage = (result: Extract<CheckResult, { status: 'rules-removed' }>): string =>
-  `This change removes ${result.missingFile}, so the ${result.removed.length} rule(s) adopted on the base commit are no longer checked: ${ruleIds(result.removed)}.`;
+  `This change removes the adopted rules in ${result.missingFile}, so the ${result.removed.length} rule(s) adopted on the base commit are no longer checked: ${ruleIds(result.removed)}.`;
 
 export function renderCheckText(result: CheckResult): string {
   if (result.status === 'skipped') return `archprint check did not run: ${result.reason}`;

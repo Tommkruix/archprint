@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -523,10 +524,10 @@ describe('init', () => {
     await run(['init', auto]);
     expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(true);
     expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
-    expect(existsSync(path.join(tmp, '.archprint', 'rules.json'))).toBe(true);
-    expect(config().managed).toMatchObject({
-      files: expect.arrayContaining(['.archprint/rules.json']),
-    });
+    expect(readdirSync(path.join(tmp, '.archprint')).sort()).toEqual(['config.json', 'eslint.mjs']);
+    expect(config().managed).toMatchObject({ files: ['.archprint/eslint.mjs'] });
+    expect((config().rules as unknown[]).length).toBeGreaterThan(0);
+    expect(config().allowed).toEqual([]);
     expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).toContain('<!-- archprint:start -->');
     expect(config().archprintVersion).toBe('9.9.9');
     expect((config().enforced as unknown[]).length).toBeGreaterThan(0);

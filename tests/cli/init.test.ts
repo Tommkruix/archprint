@@ -27,6 +27,7 @@ describe('buildConfig', () => {
       recommendations,
       '1.2.3',
       { app: '.', rulesDir: '.archprint' },
+      { rules: [], allowed: [] },
       managed,
     );
     expect(config).toEqual({
@@ -34,6 +35,8 @@ describe('buildConfig', () => {
       app: '.',
       stack: ['next', 'react'],
       rulesDir: '.archprint',
+      rules: [],
+      allowed: [],
       enforced: [{ title: 'Console isolation', rate: 22.2, enforcer: 'eslint' }],
       reportOnly: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
       review: [{ title: 'Entry purity', rate: 2.7, enforcer: 'dependency-cruiser' }],

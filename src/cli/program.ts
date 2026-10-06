@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { AllowError, runAllow } from './allow.js';
-import { ALLOW_FILE, InvalidAllowError } from './allowed-exceptions.js';
+import { InvalidAllowError, LEGACY_ALLOW_FILE } from './allowed-exceptions.js';
 import { adoptedAllowances, excludeAllowed } from './allowed-evidence.js';
-import { InvalidRulesError } from './adopted-rules.js';
+import { InvalidRulesError, LEGACY_RULES_FILE } from './adopted-rules.js';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
@@ -161,6 +161,10 @@ function resolveApp(input: string): string {
   );
 }
 
+function reportFolded(folded: readonly string[], configPath: string): void {
+  if (folded.length > 0) console.log(`Moved ${folded.join(' and ')} into ${configPath}.`);
+}
+
 function displayPath(target: string, cwd: string = process.cwd()): string {
   const relative = path.relative(cwd, target);
   return relative === '' ? '.' : relative.startsWith('..') ? target : relative;
@@ -249,7 +253,7 @@ export function buildProgram(version = readVersion()): Command {
         const structural = options.includeStructural ?? false;
         const enforcers = detectEnforcers(scan.appDir);
         const recommendations = buildRecommendations(scan, detectStack(appDir), enforcers);
-        const { files } = writeLayout(scan, outDir, {
+        const { files, folded, configPath } = writeLayout(scan, outDir, {
           structural,
           enforcers,
           expand: options.expand,
@@ -264,6 +268,7 @@ export function buildProgram(version = readVersion()): Command {
         /* v8 ignore next -- writeLayout always writes a readable config */
         if (config === null) return;
         console.log(renderInit(config, files.length, structural, version));
+        reportFolded(folded, displayPath(configPath, cwd));
         if (options.fast) {
           console.log(
             '\nWarning: rules came from a fast specifier-level scan; re-run without --fast before enforcing.',
@@ -423,7 +428,7 @@ export function buildProgram(version = readVersion()): Command {
               .map((id) => id.trim())
               .filter(Boolean)
           : undefined;
-        const { files, removed } = writeLayout(scan, outDir, {
+        const { files, removed, folded, configPath } = writeLayout(scan, outDir, {
           structural,
           enforcers,
           graph: options.graph,
@@ -442,6 +447,7 @@ export function buildProgram(version = readVersion()): Command {
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
           );
         }
+        reportFolded(folded, displayPath(configPath, cwd));
         if (files.length === 0) {
           if (heldStructuralAuto > 0) {
             console.log(
@@ -602,7 +608,8 @@ export function buildProgram(version = readVersion()): Command {
       for (const relative of readOutputs(outDir)) add(ownedPath(outDir, relative));
       add(ownedPath(outDir, OUTPUTS_MANIFEST_FILE));
       add(ownedPath(outDir, CONFIG_FILE));
-      add(ownedPath(outDir, ALLOW_FILE));
+      add(ownedPath(outDir, LEGACY_RULES_FILE));
+      add(ownedPath(outDir, LEGACY_ALLOW_FILE));
       add(path.resolve(cwd, LEGACY_ROOT_CONFIG));
       const legacyDir = path.resolve(cwd, LEGACY_DIR);
       if (legacyDir !== outDir) {

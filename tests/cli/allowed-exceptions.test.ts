@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   allowedFilesByRule,
-  parseAllowed,
+  parseLegacyAllowed,
   readAllowed,
   writeAllowed,
 } from '../../src/cli/allowed-exceptions.js';
@@ -18,18 +18,18 @@ const entry = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe('parseAllowed', () => {
+describe('parseLegacyAllowed', () => {
   it('reads valid entries and trims the reason', () => {
-    expect(parseAllowed(json([entry({ reason: '  kept  ' })]), 'allow.json')).toEqual([
+    expect(parseLegacyAllowed(json([entry({ reason: '  kept  ' })]), 'allow.json')).toEqual([
       { rule: 'AP-001', file: 'app/api/legacy/route.ts', reason: 'kept' },
     ]);
   });
 
   it('refuses an entry without a reason, so no exception counts unexplained', () => {
-    expect(() => parseAllowed(json([entry({ reason: ' ' })]), 'allow.json')).toThrow(
+    expect(() => parseLegacyAllowed(json([entry({ reason: ' ' })]), 'allow.json')).toThrow(
       /needs a reason/,
     );
-    expect(() => parseAllowed(json([entry({ reason: undefined })]), 'allow.json')).toThrow(
+    expect(() => parseLegacyAllowed(json([entry({ reason: undefined })]), 'allow.json')).toThrow(
       /needs a reason/,
     );
   });
@@ -46,44 +46,91 @@ describe('parseAllowed', () => {
       'a?.ts',
       'src/[ab].ts',
     ]) {
-      expect(() => parseAllowed(json([entry({ file })]), 'allow.json')).toThrow(
+      expect(() => parseLegacyAllowed(json([entry({ file })]), 'allow.json')).toThrow(
         /relative to the app/,
       );
     }
   });
 
   it('refuses a missing rule, a duplicate entry, the wrong format and broken JSON', () => {
-    expect(() => parseAllowed(json([entry({ rule: '' })]), 'a')).toThrow(/rule id/);
-    expect(() => parseAllowed(json([entry(), entry()]), 'a')).toThrow(/twice/);
-    expect(() => parseAllowed(json([entry()], 2), 'a')).toThrow(/different archprint version/);
-    expect(() => parseAllowed('{', 'a')).toThrow(/not valid JSON/);
-    expect(() => parseAllowed(json([entry({ reason: 'x'.repeat(501) })]), 'a')).toThrow(/over 500/);
+    expect(() => parseLegacyAllowed(json([entry({ rule: '' })]), 'a')).toThrow(/rule id/);
+    expect(() => parseLegacyAllowed(json([entry(), entry()]), 'a')).toThrow(/twice/);
+    expect(() => parseLegacyAllowed(json([entry()], 2), 'a')).toThrow(
+      /different archprint version/,
+    );
+    expect(() => parseLegacyAllowed('{', 'a')).toThrow(/not valid JSON/);
+    expect(() => parseLegacyAllowed(json([entry({ reason: 'x'.repeat(501) })]), 'a')).toThrow(
+      /over 500/,
+    );
   });
 });
 
-describe('reading and writing allow.json', () => {
+describe('reading and writing the allowed exceptions', () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(path.join(tmpdir(), 'archprint-allow-'));
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('reads nothing when there is no file, and writes entries sorted by rule then file', () => {
+  const configFile = (): string => path.join(dir, 'config.json');
+  const legacyFile = (): string => path.join(dir, 'allow.json');
+  const writeConfig = (content: Record<string, unknown>): void =>
+    writeFileSync(configFile(), JSON.stringify({ archprintVersion: '9.9.9', ...content }));
+  const readConfigJson = () => JSON.parse(readFileSync(configFile(), 'utf8'));
+
+  it('reads nothing when there is no config or legacy file', () => {
     expect(readAllowed(dir)).toEqual([]);
+  });
+
+  it('writes entries into config.json sorted by rule then file, keeping its other sections', () => {
+    writeConfig({ rules: ['kept'] });
     writeAllowed(dir, [
       entry({ rule: 'AP-002', file: 'b.ts' }),
       entry({ file: 'z.ts' }),
       entry({ file: 'a.ts' }),
     ]);
-    const written = JSON.parse(readFileSync(path.join(dir, 'allow.json'), 'utf8'));
+    const written = readConfigJson();
     expect(
-      written.entries.map((e: { rule: string; file: string }) => `${e.rule} ${e.file}`),
+      written.allowed.map((e: { rule: string; file: string }) => `${e.rule} ${e.file}`),
     ).toEqual(['AP-001 a.ts', 'AP-001 z.ts', 'AP-002 b.ts']);
+    expect(written.rules).toEqual(['kept']);
     expect(readAllowed(dir)).toHaveLength(3);
   });
 
-  it('surfaces a broken file instead of silently ignoring it', () => {
-    writeFileSync(path.join(dir, 'allow.json'), json([entry({ reason: '' })]));
+  it('reads a legacy allow.json until config.json has an allowed section, then deletes it on write', () => {
+    writeConfig({});
+    writeFileSync(legacyFile(), json([entry()]));
+    expect(readAllowed(dir)).toEqual([entry()]);
+    writeAllowed(dir, readAllowed(dir));
+    expect(existsSync(legacyFile())).toBe(false);
+    expect(readConfigJson().allowed).toEqual([entry()]);
+  });
+
+  it('prefers config.json over a leftover allow.json, even when it allows nothing', () => {
+    writeConfig({ allowed: [] });
+    writeFileSync(legacyFile(), json([entry()]));
+    expect(readAllowed(dir)).toEqual([]);
+  });
+
+  it('keeps keys it does not know when it records the entries', () => {
+    writeConfig({ team: { owner: 'platform' } });
+    writeAllowed(dir, [entry()]);
+    expect(readConfigJson().team).toEqual({ owner: 'platform' });
+  });
+
+  it('refuses to write without a config.json', () => {
+    expect(() => writeAllowed(dir, [entry()])).toThrow(/config\.json is missing/);
+  });
+
+  it('surfaces a broken section or file instead of silently ignoring it', () => {
+    writeConfig({ allowed: [entry({ reason: '' })] });
+    expect(() => readAllowed(dir)).toThrow(/needs a reason/);
+    writeConfig({ allowed: [entry(), entry()] });
+    expect(() => readAllowed(dir)).toThrow(/twice/);
+    writeConfig({ allowed: {} });
+    expect(() => readAllowed(dir)).toThrow(/different archprint version/);
+    writeConfig({});
+    writeFileSync(legacyFile(), json([entry({ reason: '' })]));
     expect(() => readAllowed(dir)).toThrow(/needs a reason/);
   });
 
