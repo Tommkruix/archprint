@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { staysInsideItsFolder } from '../generator/owned-paths.js';
+import { lineBreakAt, lineBreakBefore, lineBreakOf } from './line-breaks.js';
 
 const START = '# archprint:start';
 const END = '# archprint:end';
 
-function markerBlock(entry: string): string {
-  return [START, entry, END].join('\n');
+function markerBlock(entry: string, eol: string): string {
+  return [START, entry, END].join(eol);
 }
 
 export type IgnoreResult = 'created' | 'appended' | 'present' | 'skipped';
@@ -16,15 +17,15 @@ export function ensureIgnoreEntry(
   options: { create?: boolean } = {},
 ): IgnoreResult {
   if (!staysInsideItsFolder(filePath)) return 'skipped';
-  const block = markerBlock(entry);
   if (!existsSync(filePath)) {
     if (options.create === false) return 'skipped';
-    writeFileSync(filePath, `${block}\n`);
+    writeFileSync(filePath, `${markerBlock(entry, '\n')}\n`);
     return 'created';
   }
   const content = readFileSync(filePath, 'utf8');
   if (content.includes(START) || content.includes(END)) return 'present';
-  writeFileSync(filePath, `${content.replace(/\n+$/, '')}\n\n${block}\n`);
+  const eol = lineBreakOf(content);
+  writeFileSync(filePath, `${content}${eol}${markerBlock(entry, eol)}${eol}`);
   return 'appended';
 }
 
@@ -37,11 +38,14 @@ export function removeIgnoreEntry(
   const start = content.indexOf(START);
   const end = content.indexOf(END);
   if (start === -1 || end === -1 || end < start) return false;
-  const remaining = (content.slice(0, start) + content.slice(end + END.length)).trim();
-  if (remaining === '' && options.deleteIfEmpty) {
+  const blockEnd = end + END.length;
+  const remaining =
+    content.slice(0, start - lineBreakBefore(content, start)) +
+    content.slice(blockEnd + lineBreakAt(content, blockEnd));
+  if (remaining.trim() === '' && options.deleteIfEmpty) {
     rmSync(filePath, { force: true });
     return true;
   }
-  writeFileSync(filePath, remaining === '' ? '' : `${remaining}\n`);
+  writeFileSync(filePath, remaining);
   return true;
 }
