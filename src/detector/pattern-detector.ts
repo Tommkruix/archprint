@@ -1,5 +1,5 @@
 import { createImportAnalyzer, type ResolvedImport, walkRepo } from '../scanner/file-walker.js';
-import type { Role } from '../scanner/role-classifier.js';
+import { REQUEST_ENTRY_ROLES, type Role } from '../scanner/role-classifier.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 import {
   inferDbClientMarkers,
@@ -10,13 +10,7 @@ import {
   type InferredMarkers,
 } from './marker-inference.js';
 
-export const REQUEST_ENTRY_ROLES: readonly Role[] = [
-  'CONTROLLER',
-  'ROUTE_HANDLER',
-  'SERVER_ACTION',
-  'API_HANDLER',
-  'TRPC_ROUTER',
-];
+export { REQUEST_ENTRY_ROLES };
 
 export const DEFAULT_DB_MARKERS: readonly RegExp[] = KNOWN_DB_LIBRARIES;
 
