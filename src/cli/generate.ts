@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { allowedFilesByRule, readAllowed } from './allowed-exceptions.js';
 import { exemptionPaths } from '../generator/eslint-scope.js';
 import { writeOwnedFile } from '../generator/owned-paths.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
@@ -41,8 +40,8 @@ import {
   forbiddenImportRule,
   importStyleRule,
   publicApiRules,
+  byRuleId,
   testIsolationRule,
-  writeAdoptedRules,
   type AdoptedRule,
   type ResolutionMode,
 } from './adopted-rules.js';
@@ -392,7 +391,7 @@ const writeFile = (outDir: string, file: string, content: string): string => {
 export interface EmitResult {
   eslint: string | null;
   depcruise: string | null;
-  rules: string;
+  rules: AdoptedRule[];
   expanded: string[];
 }
 
@@ -401,13 +400,10 @@ export function emitLayout(
   outDir: string,
   options: CollectOptions & { expand?: boolean; graph?: boolean; version: string },
 ): EmitResult {
-  const collected = collectEnforcement(scan, {
-    ...options,
-    allowed: allowedFilesByRule(readAllowed(outDir)),
-  });
+  const collected = collectEnforcement(scan, options);
   const eslint = writeArchprintEslint(collected, outDir);
   const depcruise = writeArchprintDepcruise(collected, outDir);
-  const rules = writeAdoptedRules(outDir, collected.adopted, options.version);
+  const rules = [...collected.adopted].sort(byRuleId);
   const expanded = options.expand
     ? writeExpanded(collected, scan, outDir, options.graph !== false)
     : [];

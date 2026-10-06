@@ -74,7 +74,7 @@ export const TOOLS = [
     title: 'Check a change against adopted rules',
     annotations: READ_ONLY,
     description:
-      'Check the current change, including uncommitted edits, against the rules this repo adopted with archprint init or generate, and report only the violations the change introduces (file, line, rule, and the evidence for the rule), plus those it fixed and any exceptions allowed with a reason in .archprint/allow.json. Use it before finishing a change. Compares with `base` (a branch or commit, default origin/HEAD). Read-only: the files of the base commit are copied to a temporary folder outside the repo and deleted afterwards; it runs no git hooks and changes nothing in the repo. Returns status "skipped" with the reason when the repo has not adopted rules.',
+      'Check the current change, including uncommitted edits, against the rules this repo adopted with archprint init or generate, and report only the violations the change introduces (file, line, rule, and the evidence for the rule), plus those it fixed and any exceptions allowed with a reason in .archprint/config.json. Use it before finishing a change. Compares with `base` (a branch or commit, default origin/HEAD). Read-only: the files of the base commit are copied to a temporary folder outside the repo and deleted afterwards; it runs no git hooks and changes nothing in the repo. Returns status "skipped" with the reason when the repo has not adopted rules.',
     inputSchema: {
       type: 'object',
       properties: {

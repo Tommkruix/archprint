@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
-import { assertRealDirectory, ownedPath } from '../generator/owned-paths.js';
+import { assertRealDirectory, ownedPath, removeOwnedFile } from '../generator/owned-paths.js';
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { ARCHPRINT_DIR, emitLayout } from './generate.js';
 import { buildConfig, readConfig, writeConfig, type ManagedOutputs } from './archprint-config.js';
@@ -8,7 +8,13 @@ import { injectAdoptionSection } from './adoption-readme.js';
 import { ensureIgnoreEntry } from './ignore-file.js';
 import type { Recommendations } from './recommend.js';
 import type { ScanResult } from './scan.js';
-import type { ResolutionMode } from './adopted-rules.js';
+import { LEGACY_RULES_FILE, type ResolutionMode } from './adopted-rules.js';
+import {
+  allowedFilesByRule,
+  LEGACY_ALLOW_FILE,
+  readAllowed,
+  sortAllowed,
+} from './allowed-exceptions.js';
 
 export interface WriteLayoutOptions {
   structural?: boolean;
@@ -28,9 +34,12 @@ export interface WriteLayoutOptions {
 export interface WriteLayoutResult {
   files: string[];
   removed: string[];
+  folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
 }
+
+const LEGACY_FILES: readonly string[] = [LEGACY_RULES_FILE, LEGACY_ALLOW_FILE];
 
 function cleanPrior(outDir: string, cwd: string): string[] {
   const prior = readConfig(outDir);
@@ -38,12 +47,22 @@ function cleanPrior(outDir: string, cwd: string): string[] {
   const removed: string[] = [];
   for (const relative of prior.managed.files) {
     const target = ownedPath(outDir, path.resolve(cwd, relative));
-    if (target !== null && existsSync(target)) {
+    if (target !== null && existsSync(target) && !LEGACY_FILES.includes(path.basename(target))) {
       rmSync(target, { recursive: true, force: true });
       removed.push(relative);
     }
   }
   return removed;
+}
+
+/** Deletes the files whose content config.json now holds. */
+function removeFoldedFiles(outDir: string, cwd: string): string[] {
+  const folded: string[] = [];
+  for (const name of LEGACY_FILES) {
+    const target = path.join(outDir, name);
+    if (removeOwnedFile(outDir, target)) folded.push(path.relative(cwd, target));
+  }
+  return folded;
 }
 
 export function writeLayout(
@@ -52,8 +71,10 @@ export function writeLayout(
   options: WriteLayoutOptions,
 ): WriteLayoutResult {
   assertRealDirectory(outDir);
+  const allowed = readAllowed(outDir);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
+    allowed: allowedFilesByRule(allowed),
     appPath: options.app,
     structural: options.structural,
     enforcers: options.enforcers,
@@ -94,7 +115,7 @@ export function writeLayout(
   }
 
   const managed: ManagedOutputs = {
-    files: [...files, emitted.rules].map((file) => path.relative(options.cwd, file)),
+    files: files.map((file) => path.relative(options.cwd, file)),
     readme: readme !== 'off' && readme !== 'skipped' ? true : (prior?.managed.readme ?? false),
     readmeCreated,
     prettierignore,
@@ -111,8 +132,10 @@ export function writeLayout(
         app: options.app,
         rulesDir: path.relative(options.cwd, outDir) || ARCHPRINT_DIR,
       },
+      { rules: emitted.rules, allowed: sortAllowed(allowed) },
       managed,
     ),
   );
-  return { files, removed, readme, configPath };
+  const folded = removeFoldedFiles(outDir, options.cwd);
+  return { files, removed, folded, readme, configPath };
 }

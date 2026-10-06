@@ -48,7 +48,7 @@ const checked = (
   ...overrides,
 });
 
-const skipped: CheckResult = { status: 'skipped', reason: 'no .archprint/rules.json' };
+const skipped: CheckResult = { status: 'skipped', reason: 'no .archprint/config.json' };
 
 describe('findingMessage', () => {
   it('states the rule and the evidence recorded when the rule was adopted', () => {
@@ -107,7 +107,7 @@ describe('githubAnnotations', () => {
 
   it('turns a skipped check into a visible notice', () => {
     expect(githubAnnotations(skipped, 'new')).toEqual([
-      '::notice title=archprint check did not run::no .archprint/rules.json',
+      '::notice title=archprint check did not run::no .archprint/config.json',
     ]);
   });
 });
@@ -134,7 +134,7 @@ describe('githubSummary and text', () => {
 
   it('renders the skip reason in the summary and the text', () => {
     expect(githubSummary(skipped)).toContain('archprint check did not run');
-    expect(renderCheckText(skipped)).toBe('archprint check did not run: no .archprint/rules.json');
+    expect(renderCheckText(skipped)).toBe('archprint check did not run: no .archprint/config.json');
   });
 
   it('renders text with the location, the rule and changed rules', () => {
@@ -188,7 +188,7 @@ describe('checkJson', () => {
     expect(checkJson(skipped, '9.9.9')).toEqual({
       archprintVersion: '9.9.9',
       status: 'skipped',
-      reason: 'no .archprint/rules.json',
+      reason: 'no .archprint/config.json',
     });
     const json = checkJson(
       checked({
@@ -209,16 +209,16 @@ describe('a change that removes the adopted rules', () => {
     status: 'rules-removed',
     base: 'main',
     commit: '97cefaf986aa51f3c7953afecd6fe4fb87beebd1',
-    missingFile: '.archprint/rules.json',
+    missingFile: '.archprint/config.json',
     removed: [rule],
   };
   const message =
-    'This change removes .archprint/rules.json, so the 1 rule(s) adopted on the base commit are no longer checked: AP-001.';
+    'This change removes the adopted rules in .archprint/config.json, so the 1 rule(s) adopted on the base commit are no longer checked: AP-001.';
 
   it('says which rules stop being checked in every format, and never fails the job', () => {
     expect(renderCheckText(removed)).toBe(`archprint check: ${message}`);
     expect(githubAnnotations(removed, 'new')).toEqual([
-      `::warning file=.archprint/rules.json,title=archprint rules removed::${message}`,
+      `::warning file=.archprint/config.json,title=archprint rules removed::${message}`,
     ]);
     expect(githubSummary(removed)).toContain(message);
     expect(checkJson(removed, '9.9.9')).toEqual({
@@ -226,7 +226,7 @@ describe('a change that removes the adopted rules', () => {
       status: 'rules-removed',
       base: 'main',
       commit: removed.commit,
-      missingFile: '.archprint/rules.json',
+      missingFile: '.archprint/config.json',
       removedInChange: ['AP-001'],
     });
     expect(checkExitCode(removed, 'new')).toBe(0);

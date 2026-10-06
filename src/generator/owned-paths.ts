@@ -45,6 +45,14 @@ export function assertRealDirectory(dir: string, cwd = process.cwd()): void {
   }
 }
 
+/** Deletes `file` when it is a regular file strictly inside `root`, leaving anything else in place. */
+export function removeOwnedFile(root: string, file: string): boolean {
+  const target = ownedPath(root, file);
+  if (target === null || !existsSync(target) || !lstatSync(target).isFile()) return false;
+  rmSync(target);
+  return true;
+}
+
 /** Writes `content` to `file` as a regular file strictly inside `root`, replacing a symlink rather than following it. */
 export function writeOwnedFile(root: string, file: string, content: string): void {
   const target = ownedPath(root, file);

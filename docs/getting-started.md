@@ -203,17 +203,17 @@ jobs:
 - **Warning by default.** Add `--fail-on new` (or the Action's `fail-on: new`) to fail the job on a new
   violation, then mark the job a required status check in your branch protection so a pull request that adds one
   can't merge.
-- **Only adopted rules.** `check` reads `.archprint/rules.json`, written by `init` and `generate`, and checks only
-  the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
+- **Only adopted rules.** `check` reads the adopted rules in `.archprint/config.json`, written by `init` and
+  `generate`, and checks only the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
   but never counted against it.
 - **A justified exception needs a reason.** When a file has a real reason to break a rule, record it:
   `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`. It
-  goes in `.archprint/allow.json`, `check` stops counting it and lists it with its reason in the pull request, and
+  goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason in the pull request, and
   the next `archprint generate` stops ESLint flagging it. An entry without a reason is rejected, and an entry the
   code no longer needs is pointed out. Rules enforced through dependency-cruiser (public API) are not covered on
   that side yet.
-- **Removing rules is never silent.** If a pull request deletes `.archprint/rules.json` or
-  `config.json` that the base branch has, `check` warns and lists every rule that stops being checked. It does not
+- **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,
+  that the base branch has, `check` warns and lists every rule that stops being checked. It does not
   fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,
   add a [CODEOWNERS](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
   entry and turn on "Require review from Code Owners" in branch protection:
@@ -223,8 +223,9 @@ jobs:
   /.github/workflows/ @your-team
   ```
 
-- **Upgrading from 0.8.x or earlier:** run `archprint generate` once to write `rules.json`. Until you do, `check`
-  posts a notice that it did not run and exits 0.
+- **Upgrading:** from 0.8.x or earlier, run `archprint generate` once to record the adopted rules. Until you do,
+  `check` posts a notice that it did not run and exits 0. Setups from 0.9.0 to 0.11.x keep working as they are:
+  `check` still reads their `rules.json` and `allow.json`, and the next `generate` moves both into `config.json`.
 - **Other CI systems:** `--format json` gives version-keyed output, and the exit code is the contract: `0` ok, `1`
   new violations with `--fail-on new`, `2` the CI setup is wrong (for example a shallow clone without the base
   commit). Check out the full history (`fetch-depth: 0` or your CI's equivalent).

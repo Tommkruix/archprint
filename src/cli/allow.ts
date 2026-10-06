@@ -32,9 +32,9 @@ export function runAllow(options: AllowOptions): string {
   if (config === null || adopted === null) {
     throw new AllowError('No adopted rules here. Run archprint init (or generate) first.');
   }
-  const rule = adopted.rules.find((candidate) => candidate.id === options.rule);
+  const rule = adopted.find((candidate) => candidate.id === options.rule);
   if (rule === undefined) {
-    const known = adopted.rules.map((candidate) => candidate.id).join(', ');
+    const known = adopted.map((candidate) => candidate.id).join(', ');
     throw new AllowError(`No adopted rule "${options.rule}". Adopted rules: ${known || 'none'}.`);
   }
   const appDir = path.resolve(options.cwd, config.app);
