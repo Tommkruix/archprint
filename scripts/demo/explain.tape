@@ -5,9 +5,11 @@ Set Height 520
 Hide
 Type `cd "$DEMO_DIR" && export PS1='$ ' && clear`
 Enter
+Wait@120s /^\$\s*$/
 Show
 
 Type "npx archprint explain AP-001 ."
 Sleep 300ms
 Enter
-Sleep 7s
+Wait@120s /^\$\s*$/
+Sleep 3s
