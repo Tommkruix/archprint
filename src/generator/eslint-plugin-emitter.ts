@@ -39,7 +39,7 @@ export const MAKE_RULE_FUNCTION = `function makeRule(spec) {
     create(context) {
       const file = context.filename.replace(/\\\\/g, '/');
       if (!roles.some((role) => role.test(file))) return {};
-      if (spec.ignore.some((path) => file.endsWith(path))) return {};
+      if (spec.ignore.some((path) => file.endsWith('/' + path))) return {};
       return {
         ImportDeclaration(node) {
           if (node.importKind === 'type') return;

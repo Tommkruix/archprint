@@ -35,20 +35,29 @@ describe('parseLegacyAllowed', () => {
   });
 
   it('refuses a path that is not a plain relative path inside the app', () => {
-    for (const file of [
-      '../outside.ts',
-      '/abs.ts',
-      'app\\route.ts',
-      'a/./b.ts',
-      '',
-      'a//b.ts',
-      'src/**',
-      'a?.ts',
-      'src/[ab].ts',
-    ]) {
+    for (const file of ['../outside.ts', '/abs.ts', 'app\\route.ts', 'a/./b.ts', '', 'a//b.ts']) {
       expect(() => parseLegacyAllowed(json([entry({ file })]), 'allow.json')).toThrow(
         /relative to the app/,
       );
+    }
+  });
+
+  it('refuses a wildcard, since an entry names one file', () => {
+    for (const file of ['src/**', 'a?.ts', 'app/*/route.ts']) {
+      expect(() => parseLegacyAllowed(json([entry({ file })]), 'allow.json')).toThrow(
+        /one file, not a pattern/,
+      );
+    }
+  });
+
+  it('accepts the folder names web frameworks use for routes', () => {
+    for (const file of [
+      'app/api/orders/[id]/route.ts',
+      'app/[[...slug]]/page.tsx',
+      'app/(shop)/@modal/(.)cart/page.tsx',
+      'src/{legacy}/x.ts',
+    ]) {
+      expect(parseLegacyAllowed(json([entry({ file })]), 'allow.json')[0]!.file).toBe(file);
     }
   });
 
@@ -116,6 +125,12 @@ describe('reading and writing the allowed exceptions', () => {
     writeConfig({ team: { owner: 'platform' } });
     writeAllowed(dir, [entry()]);
     expect(readConfigJson().team).toEqual({ owner: 'platform' });
+  });
+
+  it('refuses to write an entry it would refuse to read', () => {
+    writeConfig({});
+    expect(() => writeAllowed(dir, [entry({ file: 'app/*/route.ts' })])).toThrow(/not a pattern/);
+    expect(readConfigJson().allowed).toBeUndefined();
   });
 
   it('refuses to write without a config.json', () => {

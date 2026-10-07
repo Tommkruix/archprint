@@ -1,5 +1,5 @@
 import type { ConsoleIsolationAnalysis } from '../detector/console-isolation-detector.js';
-import { CLI_GLOBS, TEST_GLOBS } from './eslint-scope.js';
+import { CLI_GLOBS, literalGlob, TEST_GLOBS } from './eslint-scope.js';
 
 export interface EslintFlatConfigBlock {
   files: string[];
@@ -11,7 +11,7 @@ export function withMinedExemptions(
   baseIgnores: readonly string[],
   violations: readonly { file: string }[],
 ): string[] {
-  return [...baseIgnores, ...violations.map((violation) => violation.file)];
+  return [...baseIgnores, ...violations.map((violation) => literalGlob(violation.file))];
 }
 
 export function toEslintConsoleIsolation(

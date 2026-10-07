@@ -929,6 +929,38 @@ describe('cli generate', () => {
     expect(dc(collect(emptyScan()), 'stories-isolation')).toBeUndefined();
   });
 
+  it('scopes the env-access exemptions to the app for a config at the repository root', () => {
+    const env = { ...fakeEnv(60, 1), violations: [{ file: 'app/[id]/env.ts' }] };
+    const collected = collectEnforcement(emptyScan({ envAccess: env }), {
+      enforcers: ESLINT,
+      structural: true,
+      appPath: 'apps/web',
+    });
+    const block = collected.eslintBlocks.find((entry) => entry.family === 'env-access')!.block as {
+      ignores: string[];
+    };
+    expect(block.ignores).toEqual(
+      expect.arrayContaining(['apps/web/app/[[]id[]]/env.ts', 'app/[[]id[]]/env.ts']),
+    );
+  });
+
+  it('scopes the workspace-package exemptions to the app for a config at the repository root', () => {
+    const wpkg = {
+      ...fakeWpkg(60, 1),
+      violations: [{ file: 'app/[id]/x.ts', specifier: '@scope/pkg/src/a', package: '@scope/pkg' }],
+    };
+    const collected = collectEnforcement(emptyScan({ workspacePackageApi: wpkg }), {
+      enforcers: ESLINT,
+      structural: true,
+      appPath: 'apps/web',
+    });
+    const globs = collected.eslintBlocks.flatMap(({ block }) => {
+      const { ignores = [], files = [] } = block as { ignores?: string[]; files?: string[] };
+      return [...ignores, ...files];
+    });
+    expect(globs).toEqual(expect.arrayContaining(['apps/web/app/[[]id[]]/x.ts']));
+  });
+
   it('collects console, env, and no-restricted-imports eslint blocks when clean, none otherwise', () => {
     expect(
       es(
