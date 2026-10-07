@@ -110,7 +110,7 @@ describe('generated eslint plugin grandfathering (end to end)', () => {
       name: 'no-forbidden',
       roles: ['app\\/api\\/.*\\/route\\.tsx?$'],
       markers: ['@/forbidden'],
-      ignore: ['app/api/legacy/route.ts'],
+      ignore: ['app/api/legacy/route.ts', 'app/api/[id]/(admin)/route.ts'],
       message: 'forbidden',
     };
     writeFileSync(path.join(tmp, 'eslint-plugin.archprint.mjs'), renderEslintPluginSource([spec]));
@@ -133,6 +133,22 @@ describe('generated eslint plugin grandfathering (end to end)', () => {
       filePath: path.join(tmp, 'app', 'api', 'legacy', 'route.ts'),
     });
     expect(result!.messages.filter((m) => m.ruleId === 'archprint/no-forbidden')).toHaveLength(0);
+  });
+
+  it('does not flag an exception in a framework route folder, and flags the folder name read as a pattern', async () => {
+    const lintAt = async (...segments: string[]) =>
+      (
+        await eslint.lintText(offending, { filePath: path.join(tmp, ...segments) })
+      )[0]!.messages.filter((m) => m.ruleId === 'archprint/no-forbidden');
+    expect(await lintAt('app', 'api', '[id]', '(admin)', 'route.ts')).toHaveLength(0);
+    expect(await lintAt('app', 'api', 'i', 'admin', 'route.ts')).toHaveLength(1);
+  });
+
+  it('flags a file whose path only ends with the exception without being it', async () => {
+    const [result] = await eslint.lintText(offending, {
+      filePath: path.join(tmp, 'webapp', 'api', 'legacy', 'route.ts'),
+    });
+    expect(result!.messages.filter((m) => m.ruleId === 'archprint/no-forbidden')).toHaveLength(1);
   });
 
   it('flags the same violation in a new file', async () => {

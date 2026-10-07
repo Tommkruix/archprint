@@ -517,6 +517,23 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(process.exitCode).toBe(0);
   });
 
+  it('allows an exception in a framework route folder, and check and generate keep working', async () => {
+    const dynamic = `${app}/app/api/orders/[id]/(admin)/route.ts`;
+    write('app/api/orders/[id]/(admin)/route.ts', directDbRoute);
+    await run(['allow', 'AP-001', dynamic, '--reason', reasonText]);
+    commitAll('allow a direct query in a dynamic route');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main', '--format', 'json']);
+    expect(JSON.parse(output())).toMatchObject({
+      status: 'checked',
+      introduced: [],
+      allowedInChange: [{ rule: 'AP-001', file: 'app/api/orders/[id]/(admin)/route.ts' }],
+    });
+    await run(['generate', app]);
+    expect(process.exitCode).toBe(0);
+    expect(readConfigJson().allowed).toHaveLength(1);
+  });
+
   it('refuses to allow without a reason, an unknown rule, or a file the rule does not report', async () => {
     write('app/api/orders/route.ts', directDbRoute);
     await run(['allow', 'AP-001', orders]);

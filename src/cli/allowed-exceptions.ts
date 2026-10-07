@@ -22,7 +22,6 @@ export const allowKey = (rule: string, file: string): string => `${rule}\u0000${
 const isRelativePosixPath = (file: string): boolean =>
   file !== '' &&
   !file.includes('\\') &&
-  !/[*?[\]{}!]/.test(file) &&
   !path.posix.isAbsolute(file) &&
   !file.split('/').some((segment) => segment === '..' || segment === '.' || segment === '');
 
@@ -35,6 +34,9 @@ function validateEntry(entry: unknown, source: string): AllowedException {
     throw new InvalidAllowError(
       `${source}: "${String(file)}" must be a file path relative to the app, using forward slashes.`,
     );
+  }
+  if (/[*?]/.test(file)) {
+    throw new InvalidAllowError(`${source}: "${file}" must name one file, not a pattern.`);
   }
   if (typeof reason !== 'string' || reason.trim() === '') {
     throw new InvalidAllowError(`${source}: ${rule} in ${file} needs a reason.`);
@@ -96,7 +98,8 @@ export function writeAllowed(outDir: string, entries: readonly AllowedException[
   if (readConfig(outDir) === null) {
     throw new InvalidAllowError(`${configPath(outDir)} is missing.`);
   }
-  const file = updateConfig(outDir, { allowed: sortAllowed(entries) });
+  const allowed = sortAllowed(parseAllowedList(entries, configPath(outDir)));
+  const file = updateConfig(outDir, { allowed });
   removeOwnedFile(outDir, path.join(outDir, LEGACY_ALLOW_FILE));
   return file;
 }
