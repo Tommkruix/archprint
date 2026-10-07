@@ -64,19 +64,20 @@ deep pass before enforcing).
 
 ## The generated output and the lifecycle
 
-`generate` (and `init`) write a minimal `.archprint/` directory, and only for the linters your repo actually
-uses, Archprint detects ESLint and dependency-cruiser and emits each rule for a tool you already run, so you
-are never left with config for a tool you do not have (`--emit all` forces every format):
+`generate` (and `init`) write `.archprint/config.json` plus one file for each linter your repo already runs that
+has rules to enforce: a typical ESLint project gets two files, `config.json` and `eslint.mjs`, and a repo whose
+dependency-cruiser rules are adopted too gets a third. Archprint detects ESLint and dependency-cruiser, so you are
+never left with config for a tool you do not have (`--emit all` forces every format):
 
-- `.archprint/eslint.mjs`: one self-contained ESLint flat-config file that inlines every inferred ESLint rule
-  (forbidden imports, import-style, console isolation) and needs no extra plugins (it adds rules to your existing
-  ESLint setup, which already parses your TypeScript), so it can be committed, published, or shared and adopted
-  in one line,
-- `.archprint/dependency-cruiser.json`: one `forbidden` ruleset (when dependency-cruiser is present),
-- `.archprint/config.json`: the system file recording the exact definition of each adopted mechanical rule (its
-  resolution mode and the evidence recorded when it was adopted, which `archprint check` uses in CI), the
+- `.archprint/config.json` (always): the system file recording the exact definition of each adopted mechanical
+  rule (its resolution mode and the evidence recorded when it was adopted, which `archprint check` uses in CI), the
   exceptions allowed with a reason, what is enforced, followed but only reported, held for review, worth adopting,
   and the managed outputs `eject` removes,
+- `.archprint/eslint.mjs` (when ESLint is present): one self-contained ESLint flat-config file that inlines every
+  inferred ESLint rule (forbidden imports, import-style, console isolation) and needs no extra plugins (it adds
+  rules to your existing ESLint setup, which already parses your TypeScript), so it can be committed, published,
+  or shared and adopted in one line,
+- `.archprint/dependency-cruiser.json` (when dependency-cruiser is present): one `forbidden` ruleset,
 - a managed section in your `README.md` explaining what is enforced, followed but only reported, held for review,
   and worth adopting, plus a managed `.prettierignore` entry so the generated files stay out of your formatter.
 

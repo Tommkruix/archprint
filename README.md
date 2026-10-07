@@ -253,15 +253,20 @@ ecosystem actually does rather than hand-picked defaults.
 
 ## What it writes to your project
 
-`archprint generate` (and `init`) writes a minimal `.archprint/` folder, and only for the linters your repo
-actually uses. It detects
-ESLint and dependency-cruiser and emits each rule for a tool you already run, so you are not left with config for
-a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the format.
+`archprint generate` (and `init`) writes `.archprint/config.json` plus one file for each linter your repo already
+runs that has rules to enforce. A typical ESLint project gets two files, `config.json` and `eslint.mjs`; a repo
+whose dependency-cruiser rules are adopted too gets a third. archprint detects ESLint and dependency-cruiser, so
+you are never left with config for a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the
+format.
 
-- **`.archprint/eslint.mjs`**: one self-contained ESLint flat-config file that inlines every inferred ESLint rule
-  (marker-based forbidden imports, `no-restricted-imports` import-style boundaries, console isolation) and needs
-  no extra plugins: it adds rules to your existing ESLint setup, which already parses your TypeScript. So you can
-  commit it, publish it, or hand it to another repo and adopt it in one line
+- **`.archprint/config.json`** (always): the exact definition of each mechanical rule you adopted, with the
+  evidence recorded at adoption and the resolution mode it was generated in (`archprint check` reads it, so a check
+  never re-infers a rule), the exceptions you allowed with a reason, what is enforced, followed but only reported,
+  held for review, and worth adopting, and the list of managed outputs `eject` removes.
+- **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
+  every inferred ESLint rule (marker-based forbidden imports, `no-restricted-imports` import-style boundaries,
+  console isolation) and needs no extra plugins: it adds rules to your existing ESLint setup, which already parses
+  your TypeScript. So you can commit it, publish it, or hand it to another repo and adopt it in one line
   (`import archprint from './.archprint/eslint.mjs'`). It self-ignores `**/.archprint/**`. The forbidden-import
   rules (AP-) ship as a generated local eslint plugin inside it, so wiring the eslint config enforces them too, no
   extra install.
@@ -269,13 +274,9 @@ a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the form
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are added only with
   `--include-structural`, after you review them.
-- **`.archprint/config.json`**: the exact definition of each mechanical rule you adopted, with the evidence
-  recorded at adoption and the resolution mode it was generated in (`archprint check` reads it, so a check never
-  re-infers a rule), the exceptions you allowed with a reason, what is enforced, followed but only reported, held
-  for review, and worth adopting, and the list of managed outputs `eject` removes.
 - **A managed section in your `README.md`** summarizing what is enforced now, followed but only reported, held for
-  review, and worth adopting (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so the generated files stay
-  out of your formatter.
+  review, and worth adopting (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so
+  the generated files stay out of your formatter.
 
 `--expand` additionally writes the granular artifacts inside `.archprint/`: the per-family ESLint and
 dependency-cruiser JSON, per-rule cards (`.md`) with passing and failing fixtures, the eslint-plugin-boundaries
@@ -341,14 +342,14 @@ jobs:
   violation, then mark the job a required status check in your branch protection so a pull request that adds one
   can't merge.
 - **Only adopted rules.** `check` reads the adopted rules in `.archprint/config.json`, written by `init` and
-  `generate`, and checks only the mechanical rules recorded there, never structural ones. Rules adopted in the same pull request are listed
-  but never counted against it.
+  `generate`, and checks only the mechanical rules recorded there, never structural ones. Rules adopted in the same
+  pull request are listed but never counted against it.
 - **A justified exception needs a reason.** When a file has a real reason to break a rule, record it:
-  `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`. It
-  goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason in the pull request, and
-  the next `archprint generate` stops ESLint flagging it. An entry without a reason is rejected, and an entry the
-  code no longer needs is pointed out. Rules enforced through dependency-cruiser (public API) are not covered on
-  that side yet.
+  `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`.
+  It goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason
+  in the pull request, and the next `archprint generate` stops ESLint flagging it. An entry without a reason is
+  rejected, and an entry the code no longer needs is pointed out. Rules enforced through dependency-cruiser (public
+  API) are not covered on that side yet.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,
   that the base branch has, `check` warns and lists every rule that stops being checked. It does not
   fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,
