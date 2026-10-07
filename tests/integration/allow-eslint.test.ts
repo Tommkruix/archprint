@@ -6,7 +6,11 @@ import { ESLint } from 'eslint';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emitLayout } from '../../src/cli/generate.js';
 import { scanRepo } from '../../src/cli/scan.js';
-import { exemptionPaths, mergeNoRestrictedImports } from '../../src/generator/eslint-scope.js';
+import {
+  exemptionGlobs,
+  literalGlob,
+  mergeNoRestrictedImports,
+} from '../../src/generator/eslint-scope.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const eslintOnly = {
@@ -50,7 +54,7 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
     const both = "import a from './deep/x';\nimport b from './y.fixture';\nexport { a, b };\n";
     const messages = await lint(
       mergeNoRestrictedImports([
-        restricting('deep', exemptionPaths('src/allowed.ts', 'apps/web')),
+        restricting('deep', exemptionGlobs(literalGlob('src/allowed.ts'), 'apps/web')),
         restricting('fixture'),
       ]),
       {
@@ -62,6 +66,51 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
     expect(messages.get('apps/web/src/allowed.ts')).toEqual(['no fixture']);
     expect(messages.get('apps/web/src/other.ts')).toEqual(['no deep', 'no fixture']);
     expect(messages.get('apps/admin/src/allowed.ts')).toEqual(['no deep', 'no fixture']);
+  });
+
+  it('exempts a file in a framework route folder exactly, not the files its name would match as a glob', async () => {
+    const both = "import a from './deep/x';\nimport b from './y.fixture';\nexport { a, b };\n";
+    const allowed = 'app/(shop)/@modal/[[...slug]]/[id]/route.ts';
+    const messages = await lint(
+      mergeNoRestrictedImports([
+        restricting('deep', exemptionGlobs(literalGlob(allowed), 'apps/(web)')),
+        restricting('fixture'),
+      ]),
+      {
+        [`apps/(web)/${allowed}`]: both,
+        'apps/(web)/app/(shop)/@modal/[[...slug]]/i/route.ts': both,
+        'apps/(web)/app/shop/modal/s/d/route.ts': both,
+        'apps/w/app/(shop)/@modal/[[...slug]]/[id]/route.ts': both,
+      },
+    );
+    expect(messages.get(`apps/(web)/${allowed}`)).toEqual(['no fixture']);
+    expect(messages.get('apps/(web)/app/(shop)/@modal/[[...slug]]/i/route.ts')).toEqual([
+      'no deep',
+      'no fixture',
+    ]);
+    expect(messages.get('apps/(web)/app/shop/modal/s/d/route.ts')).toEqual([
+      'no deep',
+      'no fixture',
+    ]);
+    expect(messages.get('apps/w/app/(shop)/@modal/[[...slug]]/[id]/route.ts')).toEqual([
+      'no deep',
+      'no fixture',
+    ]);
+  });
+
+  it('exempts a file whose folder name holds braces, not the folders brace expansion would name', async () => {
+    const both = "import a from './deep/x';\nexport { a };\n";
+    const messages = await lint(
+      [{ files: ['**/*.ts'] }, restricting('deep', [literalGlob('src/{a,b}/x.ts')])],
+      {
+        'src/{a,b}/x.ts': both,
+        'src/a/x.ts': both,
+        'src/b/x.ts': both,
+      },
+    );
+    expect(messages.get('src/{a,b}/x.ts')).toEqual([]);
+    expect(messages.get('src/a/x.ts')).toEqual(['no deep']);
+    expect(messages.get('src/b/x.ts')).toEqual(['no deep']);
   });
 
   it('stops an AP rule flagging an allowed file and keeps flagging the others', async () => {

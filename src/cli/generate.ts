@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { exemptionPaths } from '../generator/eslint-scope.js';
+import { exemptionGlobs, literalGlob, repoPath } from '../generator/eslint-scope.js';
 import { writeOwnedFile } from '../generator/owned-paths.js';
 import { toDependencyCruiser, toEslintBoundaries } from '../generator/layer-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
@@ -126,8 +126,8 @@ export function collectEnforcement(
       : {
           ...block,
           ignores: withIgnored(
-            [...(block.ignores ?? []), ...allowedFor(ruleId)].flatMap((entry) =>
-              exemptionPaths(entry, appPath),
+            [...(block.ignores ?? []), ...allowedFor(ruleId).map(literalGlob)].flatMap((glob) =>
+              exemptionGlobs(glob, appPath),
             ),
             [],
           ),
@@ -142,7 +142,7 @@ export function collectEnforcement(
           (spec) => ({
             ...spec,
             ignore: withIgnored(spec.ignore, allowedFor(idByName.get(spec.name) ?? '')).map(
-              (file) => exemptionPaths(file, appPath)[0]!,
+              (file) => repoPath(file, appPath),
             ),
           }),
         )
@@ -161,7 +161,7 @@ export function collectEnforcement(
     if (block !== null) adopted.push(consoleIsolationRule(scan));
   }
   if (structural && emitEslint && pick('env-access'))
-    pushBlock('env-access', toEslintEnvAccess(scan.envAccess));
+    pushBlock('env-access', allowing(toEslintEnvAccess(scan.envAccess), 'env-access'));
   const noRestricted: (NoRestrictedImportsBlock | null)[] = [];
   if (emitEslint && pick('import-style')) {
     const block = allowing(toEslintDeepRelative(scan.deepRelative), 'import-style');
@@ -174,7 +174,9 @@ export function collectEnforcement(
     if (block !== null) adopted.push(testIsolationRule(scan));
   }
   if (structural && emitEslint && pick('workspace-package'))
-    noRestricted.push(toEslintWorkspacePackageApi(scan.workspacePackageApi));
+    noRestricted.push(
+      allowing(toEslintWorkspacePackageApi(scan.workspacePackageApi), 'workspace-package'),
+    );
   mergeNoRestrictedImports(noRestricted).forEach((block, index) =>
     pushBlock(
       index === 0 ? 'no-restricted-imports' : `no-restricted-imports-exceptions-${index}`,

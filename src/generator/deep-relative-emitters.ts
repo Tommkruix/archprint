@@ -1,4 +1,5 @@
 import type { DeepRelativeAnalysis } from '../detector/deep-relative-detector.js';
+import { literalGlob } from './eslint-scope.js';
 
 export interface NoRestrictedImportsPattern {
   regex: string;
@@ -15,7 +16,9 @@ export interface EslintNoRestrictedImportsConfig {
 export function exemptImporters(
   violations: readonly { file: string }[],
 ): Pick<EslintNoRestrictedImportsConfig, 'ignores'> {
-  return violations.length > 0 ? { ignores: violations.map((violation) => violation.file) } : {};
+  return violations.length > 0
+    ? { ignores: violations.map((violation) => literalGlob(violation.file)) }
+    : {};
 }
 
 export function toEslintDeepRelative(
