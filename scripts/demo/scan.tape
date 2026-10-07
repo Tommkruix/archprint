@@ -5,9 +5,11 @@ Set Height 880
 Hide
 Type `cd "$DEMO_DIR" && export PS1='$ ' && clear`
 Enter
+Wait@30s /^\$\s*$/
 Show
 
 Type "npx archprint scan ."
 Sleep 300ms
 Enter
-Sleep 8s
+Wait@120s /^\$\s*$/
+Sleep 3s
