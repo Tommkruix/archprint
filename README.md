@@ -499,7 +499,8 @@ codes are the contract: `0` on success, `1` on error (for `check`: new violation
 
 ## Example on a real repo
 
-A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web`, 2,232 TypeScript files), trimmed:
+A real scan of [inbox-zero](https://github.com/elie222/inbox-zero) (`apps/web` at commit `11281be`, 2,232 TypeScript
+files), trimmed to the first rules of each section:
 
 ```
 Scanned 2,232 TypeScript files
@@ -514,6 +515,10 @@ GENERATED RULES
 LAYER BOUNDARIES (review before enforcing)
   utils !-> app  layer boundary   confidence 99%
           Evidence: 650/653 utils files conform (99.5%); 451 app file(s) depend on utils
+          Exceptions: 3
+  utils !-> components  layer boundary   confidence 99%
+          Evidence: 650/653 utils files conform (99.5%); 160 components file(s) depend on utils
+          Exceptions: 3
   hooks !-> app  layer boundary   confidence 94%
           Evidence: 65/65 hooks files conform (100%); 121 app file(s) depend on hooks
 ```
@@ -539,9 +544,11 @@ Published on npm and safe to run on your real repo. Every rule is review-gated b
 command (`archprint eject`), and deterministic, and generated rules are green by construction on the code they
 were inferred from.
 
-- **Validated at scale:** `scan` and `recommend` ran over a corpus of 92,861 public TypeScript repositories (61,690
-  apps) with zero crashes; 91 repos (0.1%) could not be fetched or timed out. The full `init`/`wire`/`eject`
-  round-trip ran clean on a 2,000-repo stratified sample.
+- **Validated at scale:** the latest census (archprint 0.12.2, October 2026) ran `scan` over 92,861 public
+  TypeScript repositories with no crashes; 494 (0.5%) could not be fetched or timed out, most of them deleted or very
+  large repositories. The full workflow (`init`, `check`, `allow`, `generate`, `check`, `wire`, `eject`) ran on a
+  2,019-repo stratified sample: it found one bug, exceptions in route folders like Next.js `[id]`, fixed in 0.12.3, and
+  all 2,012 repositories it ran on came back exactly as they were after `eject`.
 - **Production-ready today:** `scan` and `recommend`, `check` for pull requests, and auto-enforcement of the
   mechanical families, with a self-consistency check at generate time, an `init` scaffolder for fresh repos, and
   framework coverage across React, Angular, Vue, and Svelte. The engine (twenty detectors, the confidence gate, and
