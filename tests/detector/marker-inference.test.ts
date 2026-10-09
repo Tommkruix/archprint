@@ -77,6 +77,27 @@ describe('inferDbClientMarkers', () => {
     );
   });
 
+  it('discovers Supabase client helpers however the factory is imported (named, aliased, namespace) or typed', () => {
+    const inferred = inferDbClientMarkers(fixtureFor('db-supabase'));
+    expect(inferred.wrappers).toHaveLength(4);
+    for (const helper of ['server', 'client', 'admin', 'middleware']) {
+      expect(inferred.markers.some((marker) => marker.test(`@/utils/supabase/${helper}`))).toBe(
+        true,
+      );
+    }
+    expect(inferred.markers.some((marker) => marker.test('@/utils/format'))).toBe(false);
+    expect(inferred.markers.some((marker) => marker.test('@supabase/supabase-js'))).toBe(true);
+    expect(inferred.markers.some((marker) => marker.test('@supabase/ssr'))).toBe(true);
+  });
+
+  it("does not take another SDK's createClient for a database client, beside a database import or any Supabase import that is not a client factory", () => {
+    expect(inferDbClientMarkers(fixtureFor('db-redis-cache')).wrappers).toEqual([]);
+  });
+
+  it('discovers a Kysely client constructed with a type argument', () => {
+    expect(inferDbClientMarkers(fixtureFor('db-kysely-generic')).wrappers).toContain('@/db/client');
+  });
+
   it('does not treat a type-only db re-export as a wrapper', () => {
     const inferred = inferDbClientMarkers(fixtureFor('db-type-reexport'));
     expect(inferred.wrappers).toHaveLength(0);

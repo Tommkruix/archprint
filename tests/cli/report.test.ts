@@ -140,9 +140,62 @@ describe('renderReport suggested layer boundaries', () => {
   });
 });
 
+describe('renderReport UI / data separation', () => {
+  it('states what the rule measures, never a service layer it does not check', () => {
+    const report = renderReport(
+      baseScan({
+        uiDataIsolation: {
+          appDir: '/app',
+          componentCount: 86,
+          offenderCount: 0,
+          violations: [],
+          gate: evaluateGate({ roleFileCount: 86, violatingFileCount: 0, roleConfidence: 1 }),
+        },
+      }),
+      '1.0.0',
+    );
+    expect(report).toContain('86/86 components never import the data layer directly');
+    expect(report).not.toContain('through services');
+  });
+});
+
+describe('renderReport circular dependencies', () => {
+  it('prints a real import loop and counts the rest of the group, never the files in alphabetical order', () => {
+    const report = renderReport(
+      baseScan({
+        cycles: {
+          appDir: '/app',
+          fileCount: 10,
+          cycles: [
+            {
+              files: [
+                'artifacts/code.ts',
+                'artifacts/sheet.ts',
+                'artifacts/text.ts',
+                'lib/server.ts',
+              ],
+              path: ['artifacts/code.ts', 'lib/server.ts', 'artifacts/code.ts'],
+            },
+          ],
+          filesInCycles: 4,
+          gate: evaluateGate({ roleFileCount: 10, violatingFileCount: 4, roleConfidence: 1 }),
+        },
+      }),
+      '1.0.0',
+    );
+    expect(report).toContain(
+      'artifacts/code.ts -> lib/server.ts -> artifacts/code.ts  (+2 more file(s) in this cycle)',
+    );
+    expect(report).not.toContain('artifacts/code.ts -> artifacts/sheet.ts');
+  });
+});
+
 describe('renderReport circular dependencies overflow', () => {
   it('shows only the first five cycles and a remainder count', () => {
-    const cycles = Array.from({ length: 6 }, (_, i) => ({ files: [`x${i}.ts`, `y${i}.ts`] }));
+    const cycles = Array.from({ length: 6 }, (_, i) => ({
+      files: [`x${i}.ts`, `y${i}.ts`],
+      path: [`x${i}.ts`, `y${i}.ts`, `x${i}.ts`],
+    }));
     const report = renderReport(
       baseScan({
         cycles: {
