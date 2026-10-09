@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createImportAnalyzer } from '../../src/scanner/file-walker.js';
+import { createImportAnalyzer, valueImportBindings } from '../../src/scanner/file-walker.js';
 
 describe('fast import analyzer', () => {
   let dir: string;
@@ -19,6 +19,7 @@ describe('fast import analyzer', () => {
         "import { type U2, v } from 'mixed-named';",
         "import D from 'default-imp';",
         "import * as N from 'namespace-imp';",
+        "import { real as alias } from 'aliased-named';",
         "import 'side-effect';",
         "export const lazy = () => import('dynamic-imp');",
         '',
@@ -41,5 +42,15 @@ describe('fast import analyzer', () => {
     expect(byId.get('namespace-imp')).toBe(true);
     expect(byId.get('side-effect')).toBe(true);
     expect(byId.get('dynamic-imp')).toBe(true);
+  });
+
+  it('records the runtime values each import binds, and none for types, side effects or dynamic imports', () => {
+    expect(valueImportBindings(file)).toEqual([
+      { specifier: 'value-named', imported: 'a', local: 'a' },
+      { specifier: 'mixed-named', imported: 'v', local: 'v' },
+      { specifier: 'default-imp', imported: 'default', local: 'D' },
+      { specifier: 'namespace-imp', imported: '*', local: 'N' },
+      { specifier: 'aliased-named', imported: 'real', local: 'alias' },
+    ]);
   });
 });

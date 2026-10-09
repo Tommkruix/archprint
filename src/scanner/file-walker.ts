@@ -140,10 +140,36 @@ function nodeHasValueBinding(clause: ts.ImportClause | undefined): boolean {
   return hasValueNamed || hasDefault || hasNamespace || sideEffectOnly;
 }
 
+/** A runtime value an import binds: `imported` is the exported name, `*` for a namespace, `default` for a default. */
+export interface ValueBinding {
+  imported: string;
+  local: string;
+}
+
 interface RawImport {
   specifier: string;
   hasValueBinding: boolean;
+  valueBindings: ValueBinding[];
   line: number;
+}
+
+function valueBindingsOf(clause: ts.ImportClause | undefined): ValueBinding[] {
+  if (clause === undefined || clause.isTypeOnly) return [];
+  const bound: ValueBinding[] = [];
+  if (clause.name !== undefined) bound.push({ imported: 'default', local: clause.name.text });
+  const bindings = clause.namedBindings;
+  if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+    bound.push({ imported: '*', local: bindings.name.text });
+  } else if (bindings !== undefined) {
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly) continue;
+      bound.push({
+        imported: (element.propertyName ?? element.name).text,
+        local: element.name.text,
+      });
+    }
+  }
+  return bound;
 }
 
 const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
@@ -174,6 +200,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
       raw.push({
         specifier: statement.moduleSpecifier.text,
         hasValueBinding: nodeHasValueBinding(statement.importClause),
+        valueBindings: valueBindingsOf(statement.importClause),
         line: lineOf(statement),
       });
     }
@@ -185,7 +212,12 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
       node.arguments.length > 0 &&
       ts.isStringLiteral(node.arguments[0]!)
     ) {
-      raw.push({ specifier: node.arguments[0].text, hasValueBinding: true, line: lineOf(node) });
+      raw.push({
+        specifier: node.arguments[0].text,
+        hasValueBinding: true,
+        valueBindings: [],
+        line: lineOf(node),
+      });
     }
     ts.forEachChild(node, visit);
   };
@@ -198,6 +230,15 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
 export interface ImportLocation {
   specifier: string;
   line: number;
+}
+
+/** The runtime values a file's static imports bind to names; `import type`, `import { type X }` and `import 'x'` bind none. */
+export function valueImportBindings(
+  absoluteFilePath: string,
+): (ValueBinding & { specifier: string })[] {
+  return parseFastImports(absoluteFilePath).flatMap((imp) =>
+    imp.valueBindings.map((binding) => ({ ...binding, specifier: imp.specifier })),
+  );
 }
 
 export function importLocations(absoluteFilePath: string): ImportLocation[] {

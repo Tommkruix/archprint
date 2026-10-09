@@ -89,7 +89,7 @@ function withCycles(cycleFiles: string[][], fileCount: number): CycleAnalysis {
   return {
     appDir: 'x',
     fileCount,
-    cycles: cycleFiles.map((files) => ({ files })),
+    cycles: cycleFiles.map((files) => ({ files, path: [...files, files[0]!] })),
     filesInCycles,
     gate: evaluateGate({
       roleFileCount: fileCount,
@@ -772,7 +772,7 @@ describe('cli scan', () => {
     });
     const report = renderReport(scan, '1.0.0');
     expect(report).toContain('CIRCULAR DEPENDENCIES');
-    expect(report).toContain('a.ts -> b.ts');
+    expect(report).toContain('a.ts -> b.ts -> a.ts');
   });
 
   it('reports a clean no-cycles rule when the repo is cycle-free', () => {

@@ -36,7 +36,7 @@ export function toDependencyCruiserUiData(analysis: UiDataIsolationAnalysis): Ui
     forbidden: [
       {
         name: 'no-ui-to-data',
-        comment: `Archprint inferred UI/data separation: ${conform}/${analysis.componentCount} UI components reach the data layer only through services, not directly; a component importing the DB/data layer is forbidden (confidence ${floor}).`,
+        comment: `Archprint inferred UI/data separation: ${conform}/${analysis.componentCount} UI components never import the data layer (files under db, database or prisma folders, or a prisma, drizzle or kysely client file) directly; a component importing it is forbidden (confidence ${floor}).`,
         severity: 'error',
         from: { path: componentPath() },
         to: { path: dataPath() },

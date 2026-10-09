@@ -17,6 +17,9 @@ known exception files it was inferred from, so adopting it is green on your curr
 
 Detects a request handler (a route, API handler, server action, controller, or tRPC router) importing a forbidden target: the database client directly (AP-001) or
 the UI layer (AP-002). Markers (what counts as "the DB client" or "the UI layer") are inferred from your repo.
+The database client covers the common client libraries (Prisma, Drizzle, TypeORM, Sequelize, MikroORM, Kysely,
+MongoDB and Mongoose, `pg`, `postgres`, `mysql2`, PlanetScale, Neon, `better-sqlite3`, and Supabase) plus your own
+modules that create one, such as a `lib/db.ts` or a helper that creates a Supabase client.
 **When not to use:** small apps that deliberately keep data access inline with no service layer follow a
 different but valid convention; AP-001 is treated as a case study (idiomatic direct-ORM is common), AP-002 is
 the confirmatory rule.

@@ -196,7 +196,9 @@ export function renderReport(
   if (scan.cycles.cycles.length > 0) {
     lines.push(yellow(bold(`CIRCULAR DEPENDENCIES (${scan.cycles.cycles.length})`)));
     for (const cycle of scan.cycles.cycles.slice(0, 5)) {
-      lines.push(dim(`  ${cycle.files.join(' -> ')}`));
+      const others = cycle.files.length - (cycle.path.length - 1);
+      const more = others > 0 ? `  (+${others} more file(s) in this cycle)` : '';
+      lines.push(dim(`  ${cycle.path.join(' -> ')}${more}`));
     }
     if (scan.cycles.cycles.length > 5) {
       lines.push(dim(`  ... and ${scan.cycles.cycles.length - 5} more`));
@@ -442,7 +444,7 @@ export function renderReport(
     lines.push(`  ${FAMILY_STATEMENTS['ui-data']}   confidence ${floor}`);
     lines.push(
       dim(
-        `          Evidence: ${uiData.componentCount - uiData.offenderCount}/${uiData.componentCount} components reach data only through services`,
+        `          Evidence: ${uiData.componentCount - uiData.offenderCount}/${uiData.componentCount} components never import the data layer directly`,
       ),
     );
     if (uiData.offenderCount > 0) {
