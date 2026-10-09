@@ -39,6 +39,13 @@ describe('detector presets', () => {
     ]);
   });
 
+  it('detectDbClientInRequestEntry reports a request handler that reaches the database through a Supabase wrapper', () => {
+    const result = detectDbClientInRequestEntry(fixture('db-supabase'));
+    expect(result.violations.map((violation) => violation.file)).toEqual([
+      'app/api/auth/callback/route.ts',
+    ]);
+  });
+
   it('detectNoDbInRequestEntry classifies the request-entry files with the default markers', () => {
     const result = detectNoDbInRequestEntry(fixture('cli-auto'));
     expect(result.name).toBe('no-direct-db-in-request-entry');

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { ts } from 'ts-morph';
-import { walkRepo, type WalkedFile } from '../scanner/file-walker.js';
+import { valueImportBindings, walkRepo, type WalkedFile } from '../scanner/file-walker.js';
 import { REQUEST_ENTRY_ROLES, type Role } from '../scanner/role-classifier.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
@@ -150,6 +150,8 @@ export function inferUiLayerMarkers(appDir: string): InferredMarkers {
   };
 }
 
+const SUPABASE_LIBRARY = /@supabase\/(supabase-js|ssr|postgrest-js|auth-helpers-[a-z-]+)(\/|$)/;
+
 const DB_LIBRARIES: readonly { pattern: RegExp; example: string }[] = [
   { pattern: /@prisma\/(client|adapter-)/, example: '@prisma/client' },
   { pattern: /drizzle-orm/, example: 'drizzle-orm' },
@@ -165,16 +167,54 @@ const DB_LIBRARIES: readonly { pattern: RegExp; example: string }[] = [
   { pattern: /@planetscale\/database/, example: '@planetscale/database' },
   { pattern: /@neondatabase\/serverless/, example: '@neondatabase/serverless' },
   { pattern: /better-sqlite3/, example: 'better-sqlite3' },
+  { pattern: SUPABASE_LIBRARY, example: '@supabase/supabase-js' },
 ];
 
 export const KNOWN_DB_LIBRARIES: readonly RegExp[] = DB_LIBRARIES.map((library) => library.pattern);
 export const KNOWN_DB_EXAMPLES: readonly string[] = DB_LIBRARIES.map((library) => library.example);
 
-const DB_CLIENT_CONSTRUCTOR =
-  /new PrismaClient\s*\(|\bdrizzle\s*\(|new DataSource\s*\(|new Sequelize\s*\(|new Kysely\s*\(|MikroORM\.init\s*\(|mongoose\.(connect|createConnection)\s*\(/;
+/** Matches a call to any of `callees`, allowing TypeScript type arguments: `new Kysely<DB>(` as well as `new Kysely(`. */
+const callTo = (callees: readonly string[]): RegExp =>
+  new RegExp(callees.map((callee) => String.raw`${callee}\s*(?:<[^()]*>)?\s*\(`).join('|'));
 
-const DB_CLIENT_CONSTRUCTOR_GENERIC =
-  /new Pool\s*\(|new Client\s*\(|\bpostgres\s*\(|create(Pool|Connection)\s*\(|new Database\s*\(/;
+const DB_CLIENT_CONSTRUCTOR = callTo([
+  'new PrismaClient',
+  String.raw`\bdrizzle`,
+  'new DataSource',
+  'new Sequelize',
+  'new Kysely',
+  String.raw`MikroORM\.init`,
+  String.raw`mongoose\.(?:connect|createConnection)`,
+]);
+
+const DB_CLIENT_CONSTRUCTOR_GENERIC = callTo([
+  'new Pool',
+  'new Client',
+  String.raw`\bpostgres`,
+  'create(?:Pool|Connection)',
+  'new Database',
+]);
+
+const SUPABASE_FACTORY = String.raw`create(?:Server|Browser)?Client|create(?:RouteHandler|ServerComponent|ServerAction|ClientComponent|Middleware|PagesServer|PagesBrowser)Client`;
+const IS_SUPABASE_FACTORY = new RegExp(`^(?:${SUPABASE_FACTORY})$`);
+
+/**
+ * Whether the file calls a client factory it imported from a Supabase package, under whatever local name. Checking
+ * the binding, not the call's name, keeps another SDK's `createClient` out.
+ */
+function callsSupabaseFactory(absoluteFile: string, text: string): boolean {
+  const callees = valueImportBindings(absoluteFile)
+    .filter((binding) => SUPABASE_LIBRARY.test(binding.specifier))
+    .flatMap((binding) => {
+      if (binding.imported === '*') {
+        return [String.raw`\b${escapeRegExp(binding.local)}\.(?:${SUPABASE_FACTORY})`];
+      }
+      return IS_SUPABASE_FACTORY.test(binding.imported)
+        ? [String.raw`\b${escapeRegExp(binding.local)}`]
+        : [];
+    });
+  return callees.length > 0 && callTo(callees).test(text);
+}
 
 const DB_TOKENS = [
   'prisma',
@@ -191,6 +231,7 @@ const DB_TOKENS = [
   'new Pool',
   'postgres',
   'mysql2',
+  'supabase',
 ];
 
 export interface InferredDbMarkers {
@@ -266,14 +307,15 @@ export function inferDbClientMarkers(
       continue;
     }
     if (!DB_TOKENS.some((token) => text.includes(token))) continue;
+    const imports = importSpecifiers(text);
     if (DB_CLIENT_CONSTRUCTOR.test(text)) {
       wrapperFiles.push(file);
     } else if (
       DB_CLIENT_CONSTRUCTOR_GENERIC.test(text) &&
-      importSpecifiers(text).some((specifier) =>
-        KNOWN_DB_LIBRARIES.some((lib) => lib.test(specifier)),
-      )
+      imports.some((specifier) => KNOWN_DB_LIBRARIES.some((lib) => lib.test(specifier)))
     ) {
+      wrapperFiles.push(file);
+    } else if (callsSupabaseFactory(file, text)) {
       wrapperFiles.push(file);
     } else if (
       reexportSpecifiers(text).some((specifier) =>
