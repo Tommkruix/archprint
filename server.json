@@ -7,12 +7,12 @@
     "url": "https://github.com/Tommkruix/archprint",
     "source": "github"
   },
-  "version": "0.12.3",
+  "version": "0.12.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "archprint",
-      "version": "0.12.3",
+      "version": "0.12.4",
       "transport": {
         "type": "stdio"
       },
