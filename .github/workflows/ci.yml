@@ -15,6 +15,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
+      - run: node scripts/check-lockfile-version.mjs
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
