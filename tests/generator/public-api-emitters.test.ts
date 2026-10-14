@@ -42,7 +42,7 @@ describe('toDependencyCruiserPublicApi', () => {
     const config = toDependencyCruiserPublicApi([
       group('features/auth', 200, 1, ['src/legacy.ts']),
     ]);
-    expect(config.forbidden[0]!.from.pathNot).toContain('src/legacy\\.ts$');
+    expect(config.forbidden[0]!.from.pathNot).toContain('(^|/)src/legacy\\.ts$');
   });
 
   it('emits only AUTO groups by default, and SUGGEST when asked', () => {

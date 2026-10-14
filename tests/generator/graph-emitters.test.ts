@@ -20,6 +20,8 @@ function boundary(
     name: `no-import:${from}->${to}`,
     from,
     to,
+    fromDirs: [from],
+    toDirs: [to],
     description: 'x',
     stats: {
       roleFileCount,

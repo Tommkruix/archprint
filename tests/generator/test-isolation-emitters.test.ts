@@ -45,7 +45,7 @@ describe('toDependencyCruiserTestIsolation', () => {
 
   it('exempts the tolerated importers the gate accepted via from.pathNot', () => {
     const config = toDependencyCruiserTestIsolation(analysis(200, 1, 3, ['src/leak.ts']));
-    expect(config.forbidden[0]!.from.pathNot).toEqual([TEST_PATH, 'src/leak\\.ts$']);
+    expect(config.forbidden[0]!.from.pathNot).toEqual([TEST_PATH, '(^|/)src/leak\\.ts$']);
   });
 
   it('emits nothing when the rule is not enforceable (below AUTO)', () => {

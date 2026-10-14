@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
+import { type DependencyCruiserRule, evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import { summarizeRules } from '../../src/cli/summary.js';
 import type {
   AppIsolationAnalysis,
@@ -444,6 +445,8 @@ function fakeLayerBoundary(from: string, to: string, roleFileCount: number): Lay
     name: `no-import:${from}->${to}`,
     from,
     to,
+    fromDirs: [from],
+    toDirs: [to],
     description: 'layer boundary',
     stats: {
       roleFileCount,
@@ -830,6 +833,7 @@ describe('cli generate', () => {
       structural: options.structural ?? true,
       only: options.only,
       ruleIds: options.ruleIds,
+      appPath: options.appPath,
     });
   const dc = (c: CollectedEnforcement, family: string): { name: string }[] | undefined =>
     c.depcruise.find((entry) => entry.family === family)?.forbidden;
@@ -873,6 +877,16 @@ describe('cli generate', () => {
     expect(
       emitLayout(emptyScan(), outDir, { version: '9.9.9', enforcers: ESLINT }).eslint,
     ).toBeNull();
+  });
+
+  it('scopes dependency-cruiser layer rules to the app folder, and ts-arch rules to the app root', () => {
+    const scan = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)] });
+    const c = collect(scan, { appPath: 'apps/web' });
+    const layer = c.depcruise.find((entry) => entry.family === 'layer')!
+      .forbidden[0] as DependencyCruiserRule;
+    expect(new RegExp(layer.from.path).test('apps/web/utils/a.ts')).toBe(true);
+    const tsArch = c.tsArchRules.find((rule) => rule.name === 'no-utils-to-api')!;
+    expect(new RegExp(tsArch.from.path).test('utils/a.ts')).toBe(true);
   });
 
   it('collects ts-arch boundary rules and expands the test file from AUTO boundaries', () => {
@@ -1063,5 +1077,38 @@ describe('cli generate', () => {
     const dot = readFileSync(path.join(outDir, 'layer-graph.archprint.dot'), 'utf8');
     expect(dot).toContain('digraph archprint');
     expect(collect(emptyScan()).hasGraph).toBe(false);
+  });
+});
+
+describe('scanRepo layer evidence', () => {
+  const temps: string[] = [];
+  afterAll(() => {
+    for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('reads layer imports as written even in a deep scan, the way every layer enforcer reads them', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'archprint-layer-evidence-'));
+    temps.push(dir);
+    const files: Record<string, string> = {
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: { module: 'esnext', moduleResolution: 'bundler' },
+      }),
+      'app/index.ts': "export { shared0 } from '../shared/s0';",
+      'lib/barrel-user.ts': "import { shared0 } from '../app'; export const viaBarrel = shared0;",
+    };
+    for (let i = 0; i < 6; i += 1) {
+      files[`lib/l${i}.ts`] = `export const lib${i} = ${i};`;
+      files[`shared/s${i}.ts`] = `export const shared${i} = ${i};`;
+      files[`app/a${i}.ts`] =
+        `import { lib${i} } from '../lib/l${i}'; export const app${i} = lib${i};`;
+    }
+    for (const [file, source] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      writeFileSync(path.join(dir, file), source);
+    }
+    const libApp = scanRepo(dir, { deep: true }).layerBoundaries.find(
+      (boundary) => boundary.from === 'lib' && boundary.to === 'app',
+    );
+    expect(libApp!.violations.map((violation) => violation.file)).toEqual(['lib/barrel-user.ts']);
   });
 });
