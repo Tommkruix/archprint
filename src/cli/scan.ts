@@ -1,10 +1,15 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
-import { listSourceFiles } from '../scanner/file-walker.js';
+import { walkSourceTree } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
 import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
-import { detectLayerBoundaries, type LayerBoundary } from '../detector/layer-detector.js';
+import {
+  detectLayerBoundaries,
+  type LayerBoundary,
+  layerAliases,
+} from '../detector/layer-detector.js';
+import type { LayerAlias } from '../detector/layer-paths.js';
 import { detectOrphans, type OrphanAnalysis } from '../detector/orphan-detector.js';
 import { computeLayerReachability, type ReachabilityAnalysis } from '../detector/reachability.js';
 import {
@@ -81,6 +86,8 @@ export interface ScanResult {
   aliasCount: number;
   patterns: ScannedPattern[];
   layerBoundaries: LayerBoundary[];
+  layerAliases: LayerAlias[];
+  gitignoredPaths: string[];
   cycles: CycleAnalysis;
   orphans: OrphanAnalysis;
   reachability: ReachabilityAnalysis;
@@ -106,7 +113,8 @@ export function hasTsConfig(appDir: string): boolean {
 }
 
 export function scanRepo(appDir: string, options: { deep?: boolean } = {}): ScanResult {
-  const fileCount = listSourceFiles(appDir).length;
+  const sourceTree = walkSourceTree(appDir);
+  const fileCount = sourceTree.files.length;
   const aliasCount = Object.keys(buildWorkspaceMap(appDir)).length;
 
   const configs: PatternConfig[] = [];
@@ -160,6 +168,8 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     aliasCount,
     patterns,
     layerBoundaries,
+    layerAliases: layerAliases(appDir),
+    gitignoredPaths: sourceTree.ignored,
     cycles,
     orphans,
     reachability,

@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { excludeAllowed } from '../../src/cli/allowed-evidence.js';
 import { scanRepo, type ScanResult } from '../../src/cli/scan.js';
 import { publicApiRuleName } from '../../src/generator/public-api-emitters.js';
+import { nextApp, writeTree } from '../integration/layer-app.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -159,4 +160,33 @@ describe('excludeAllowed for each adoptable family', () => {
       expect(after.population).toBe(before.population - 1);
     });
   }
+});
+
+describe('excludeAllowed on layer boundaries', () => {
+  let app: string;
+  let scan: ScanResult;
+  beforeAll(() => {
+    app = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-layer-evidence-')));
+    writeTree(app, nextApp());
+    scan = scanRepo(app);
+  });
+  afterAll(() => rmSync(app, { recursive: true, force: true }));
+
+  const libApp = (result: ScanResult) =>
+    result.layerBoundaries.find((boundary) => boundary.from === 'lib' && boundary.to === 'app')!;
+
+  it('leaves an allowed layer exception out of the evidence and re-gates the boundary', () => {
+    const before = libApp(scan);
+    const after = libApp(excludeAllowed(scan, new Map([['no-lib-to-app', ['src/lib/legacy.ts']]])));
+    expect(before.violations.map((violation) => violation.file)).toEqual(['src/lib/legacy.ts']);
+    expect(after.violations).toEqual([]);
+    expect(after.stats.violatingFileCount).toBe(0);
+    expect(after.stats.roleFileCount).toBe(before.stats.roleFileCount - 1);
+    expect(after.stats.roleConfidence).toBeGreaterThan(before.stats.roleConfidence);
+  });
+
+  it('leaves a boundary alone when another rule is allowed', () => {
+    const other = excludeAllowed(scan, new Map([['no-app-to-lib', ['src/lib/legacy.ts']]]));
+    expect(libApp(other)).toBe(libApp(scan));
+  });
 });

@@ -7,7 +7,8 @@ import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import type { ScanResult } from './scan.js';
 
-type ToolCategory = 'eslint' | 'dependency-cruiser' | 'eslint-or-depcruise' | 'none';
+type ToolCategory =
+  'eslint' | 'dependency-cruiser' | 'eslint-or-depcruise' | 'depcruise-or-eslint' | 'none';
 
 const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   'forbidden-imports': 'eslint',
@@ -18,7 +19,7 @@ const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   'test-isolation': 'eslint-or-depcruise',
   'phantom-deps': 'dependency-cruiser',
   'dependency-hygiene': 'dependency-cruiser',
-  layer: 'dependency-cruiser',
+  layer: 'depcruise-or-eslint',
   'role-layering': 'dependency-cruiser',
   'public-api': 'dependency-cruiser',
   'feature-slice': 'dependency-cruiser',
@@ -51,6 +52,8 @@ export function resolveEnforcer(key: FamilyKey, enforcers: InstalledEnforcers): 
       return depcruise ? 'dependency-cruiser' : 'needs dependency-cruiser';
     case 'eslint-or-depcruise':
       return eslint ? 'eslint' : 'dependency-cruiser';
+    case 'depcruise-or-eslint':
+      return depcruise ? 'dependency-cruiser' : 'eslint';
   }
 }
 

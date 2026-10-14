@@ -34,6 +34,8 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   aliasCount: 0,
   patterns: [],
   layerBoundaries: [],
+  layerAliases: [],
+  gitignoredPaths: [],
   cycles: {
     appDir: '/app',
     fileCount: 10,

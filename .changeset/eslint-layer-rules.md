@@ -1,0 +1,7 @@
+---
+'archprint': minor
+---
+
+Layer boundaries can now be enforced with plain ESLint. When your repo does not use dependency-cruiser, `generate --include-structural` writes each layer boundary into `.archprint/eslint.mjs` as its own rule, such as `archprint/no-lib-to-app`, with no extra plugin, and `recommend` names ESLint as its enforcer. The rule checks `.ts` and `.tsx` files and reads imports the way the scan counted them: relative paths and tsconfig aliases, side-effect and dynamic imports, but not type-only imports, test files, or the folders the scan skips (`build`, dot-folders, and the ones your `.gitignore` excluded when you generated). It exempts the files that already broke the boundary, so it passes on the code it was generated from. Layer rules are now adopted: `archprint check` reports a new break, and `archprint allow` accepts one, whether ESLint or dependency-cruiser enforces it. Older archprint versions do not recognize adopted layer rules, so update archprint in CI (for example the GitHub Action's `archprint-version`) before you generate with `--include-structural`.
+
+`--rules` now selects any generated rule, not only `AP-` rules: an `AP-` id or the name ESLint prints for it, a family rule such as `import-style` or `test-isolation`, or a layer rule by its id (`no-lib-to-app`) or by the label `scan` prints (`lib !-> app`). It keeps only the rules it names, so `--rules AP-002` no longer also writes the other families. A name that matches no rule the run would generate is an error that lists the ones it would, and nothing is changed.

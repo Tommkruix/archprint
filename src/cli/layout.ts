@@ -2,7 +2,7 @@ import { existsSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
 import { assertRealDirectory, ownedPath, removeOwnedFile } from '../generator/owned-paths.js';
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
-import { ARCHPRINT_DIR, emitLayout } from './generate.js';
+import { ARCHPRINT_DIR, collectEnforcement, type CollectOptions, emitLayout } from './generate.js';
 import { buildConfig, readConfig, writeConfig, type ManagedOutputs } from './archprint-config.js';
 import { injectAdoptionSection } from './adoption-readme.js';
 import { ensureIgnoreEntry } from './ignore-file.js';
@@ -39,6 +39,20 @@ export interface WriteLayoutResult {
   configPath: string;
 }
 
+export class UnknownRulesError extends Error {
+  constructor(unknown: readonly string[], available: readonly string[], structural: boolean) {
+    super(
+      `--rules names no rule this run would generate: ${unknown.join(', ')}. ` +
+        (available.length > 0
+          ? `Rules available: ${available.join(', ')}.`
+          : 'This run generates no rules.') +
+        (structural
+          ? ''
+          : ' Structural rules, such as layer boundaries, need --include-structural.'),
+    );
+  }
+}
+
 const LEGACY_FILES: readonly string[] = [LEGACY_RULES_FILE, LEGACY_ALLOW_FILE];
 
 function cleanPrior(outDir: string, cwd: string): string[] {
@@ -72,17 +86,23 @@ export function writeLayout(
 ): WriteLayoutResult {
   assertRealDirectory(outDir);
   const allowed = readAllowed(outDir);
-  const removed = cleanPrior(outDir, options.cwd);
-  const emitted = emitLayout(scan, outDir, {
+  const collectOptions: CollectOptions = {
     allowed: allowedFilesByRule(allowed),
     appPath: options.app,
     structural: options.structural,
     enforcers: options.enforcers,
     only: options.only,
     ruleIds: options.ruleIds,
+    mode: options.mode,
+  };
+  const { unknownRules, availableRules } = collectEnforcement(scan, collectOptions);
+  if (unknownRules.length > 0)
+    throw new UnknownRulesError(unknownRules, availableRules, options.structural ?? false);
+  const removed = cleanPrior(outDir, options.cwd);
+  const emitted = emitLayout(scan, outDir, {
+    ...collectOptions,
     expand: options.expand,
     graph: options.graph,
-    mode: options.mode,
     version: options.version,
   });
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(

@@ -4,6 +4,9 @@ import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+export const layerRuleName = ({ from, to }: { from: string; to: string }): string =>
+  `no-${from}-to-${to}`;
+
 const appPrefix = (appPath: string): string => {
   const normalized = appPath.replace(/\\/g, '/').replace(/\/+$/, '');
   return normalized === '' || normalized === '.' ? '' : `${escapeRegExp(normalized)}/`;
@@ -36,14 +39,18 @@ export function toDependencyCruiser(
   boundaries: readonly LayerBoundary[],
   include: readonly GenerationStatus[] = ['AUTO'],
   appPath = '.',
+  allowedFor: (ruleId: string) => readonly string[] = () => [],
 ): DependencyCruiserConfig {
   const forbidden = selected(boundaries, include).map((boundary) => ({
-    name: `no-${boundary.from}-to-${boundary.to}`,
+    name: layerRuleName(boundary),
     comment: `Archprint inferred boundary: the "${boundary.to}" layer depends on "${boundary.from}" across ${boundary.reverseFlow} file(s); the reverse is forbidden (confidence ${confidencePct(boundary)}).`,
     severity: 'error' as const,
     from: {
       path: layerPath(boundary.fromDirs, appPath),
-      pathNot: exemptDepcruiseFrom(TEST_ROLE_REGEX, boundary.violations),
+      pathNot: exemptDepcruiseFrom(TEST_ROLE_REGEX, [
+        ...boundary.violations,
+        ...allowedFor(layerRuleName(boundary)).map((file) => ({ file })),
+      ]),
     },
     to: {
       path: layerPath(boundary.toDirs, appPath),
