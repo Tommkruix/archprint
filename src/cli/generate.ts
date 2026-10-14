@@ -189,7 +189,7 @@ export function collectEnforcement(
     if (forbidden.length > 0) depcruise.push({ family, forbidden });
   };
   if (structural && emitDepcruise && pick('layer'))
-    pushDc('layer', toDependencyCruiser(scan.layerBoundaries, ['AUTO']).forbidden);
+    pushDc('layer', toDependencyCruiser(scan.layerBoundaries, ['AUTO'], appPath).forbidden);
   if (structural && emitDepcruise && pick('role-layering'))
     pushDc(
       'role-layering',

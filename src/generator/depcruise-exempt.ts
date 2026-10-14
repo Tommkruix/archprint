@@ -8,6 +8,9 @@ export function exemptDepcruiseFrom(
   violations: readonly { file: string }[],
 ): string | string[] {
   const bases = typeof base === 'string' ? [base] : [...base];
-  const parts = [...bases, ...violations.map((violation) => `${escapeRegExp(violation.file)}$`)];
+  const parts = [
+    ...bases,
+    ...violations.map((violation) => `(^|/)${escapeRegExp(violation.file)}$`),
+  ];
   return parts.length === 1 ? parts[0]! : parts;
 }

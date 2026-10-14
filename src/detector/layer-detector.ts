@@ -34,12 +34,18 @@ const isStructural = (segment: string): boolean =>
   /^\[.*\]$/.test(segment) ||
   segment.startsWith('@');
 
+function layerRootOf(relativePath: string): { layer: string; dir: string } | null {
+  const segments = relativePath.split('/');
+  const index = segments.findIndex(
+    (segment) => ROUTER_ROOTS.has(segment) || !isStructural(segment),
+  );
+  return index === -1
+    ? null
+    : { layer: segments[index]!, dir: segments.slice(0, index + 1).join('/') };
+}
+
 export function layerOfPath(relativePath: string): string | null {
-  for (const segment of relativePath.split('/')) {
-    if (ROUTER_ROOTS.has(segment)) return segment;
-    if (!isStructural(segment)) return segment;
-  }
-  return null;
+  return layerRootOf(relativePath)?.layer ?? null;
 }
 
 interface AliasEntry {
@@ -107,6 +113,8 @@ export interface LayerBoundary {
   name: string;
   from: string;
   to: string;
+  fromDirs: string[];
+  toDirs: string[];
   description: string;
   stats: {
     roleFileCount: number;
@@ -144,12 +152,16 @@ export function detectLayerBoundaries(
   const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
   const fileLayer = new Map<string, string>();
   const layerFileCount = new Map<string, number>();
+  const layerDirs = new Map<string, Set<string>>();
   for (const file of files) {
-    const layer = layerOfPath(file.relativePath);
-    if (layer === null) continue;
+    const placement = layerRootOf(file.relativePath);
+    if (placement === null) continue;
+    const { layer, dir } = placement;
     fileLayer.set(file.relativePath, layer);
     layerFileCount.set(layer, (layerFileCount.get(layer) ?? 0) + 1);
+    layerDirs.set(layer, (layerDirs.get(layer) ?? new Set()).add(dir));
   }
+  const dirsOf = (layer: string): string[] => [...layerDirs.get(layer)!].sort();
 
   const aliases = buildAliasEntries(root);
   const analyze = createImportAnalyzer(root, { resolve });
@@ -211,6 +223,8 @@ export function detectLayerBoundaries(
         name: `no-import:${from}->${to}`,
         from,
         to,
+        fromDirs: dirsOf(from),
+        toDirs: dirsOf(to),
         description: `Files in the "${from}" layer must not import the "${to}" layer (observed: "${to}" depends on "${from}" across ${reverseFlow} file(s), not the reverse).`,
         stats: {
           roleFileCount,

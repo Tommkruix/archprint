@@ -12,6 +12,8 @@ const suggestBoundary = (from: string, to: string, violating = 0): LayerBoundary
     name: `no-import:${from}->${to}`,
     from,
     to,
+    fromDirs: [from],
+    toDirs: [to],
     description: '',
     stats: {
       roleFileCount,

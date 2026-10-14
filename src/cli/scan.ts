@@ -133,9 +133,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
 
   const results = detectForbiddenImports(appDir, configs, { resolve: options.deep ?? false });
   const patterns = configs.map((config, index) => ({ config, result: results[index]! }));
-  const layerBoundaries = detectLayerBoundaries(appDir, {
-    resolve: options.deep ?? false,
-  }).boundaries;
+  const layerBoundaries = detectLayerBoundaries(appDir, { resolve: false }).boundaries;
   const graph = buildImportGraph(appDir, { resolve: false });
   const cycles = detectCycles(appDir, { graph });
   const orphans = detectOrphans(appDir, { graph });
