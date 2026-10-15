@@ -1,5 +1,19 @@
 # archprint
 
+## 0.13.0
+
+### Minor Changes
+
+- Layer boundaries can now be enforced with plain ESLint. When your repo does not use dependency-cruiser, `generate --include-structural` writes each layer boundary into `.archprint/eslint.mjs` as its own rule, such as `archprint/no-lib-to-app`, with no extra plugin, and `recommend` names ESLint as its enforcer. The rule checks `.ts` and `.tsx` files and reads imports the way the scan counted them: relative paths and tsconfig aliases, side-effect and dynamic imports, but not type-only imports, test files, or the folders the scan skips (`build`, dot-folders, and the ones your `.gitignore` excluded when you generated). It exempts the files that already broke the boundary, so it passes on the code it was generated from. Layer rules are now adopted: `archprint check` reports a new break, and `archprint allow` accepts one, whether ESLint or dependency-cruiser enforces it. Older archprint versions do not recognize adopted layer rules, so update archprint in CI (for example the GitHub Action's `archprint-version`) before you generate with `--include-structural`.
+
+  `--rules` now selects any generated rule, not only `AP-` rules: an `AP-` id or the name ESLint prints for it, a family rule such as `import-style` or `test-isolation`, or a layer rule by its id (`no-lib-to-app`) or by the label `scan` prints (`lib !-> app`). It keeps only the rules it names, so `--rules AP-002` no longer also writes the other families. A name that matches no rule the run would generate is an error that lists the ones it would, and nothing is changed.
+
+### Patch Changes
+
+- Layer boundaries written for dependency-cruiser no longer fail on their first run. A rule such as `lib` must not import `app` used to flag the few existing exceptions it was generated with, test files, and type-only imports, none of which the scan counts. It also matched every folder with the layer's name at any depth, so a `lib/` folder inside a route like `app/(dashboard)/lib/` counted as the `lib` layer. The rule now matches only the folders the layer was found in, and in a monorepo it matches paths the way dependency-cruiser reports them from the folder where you ran archprint.
+
+  Layer boundaries are now found from imports as written in every scan mode, which is how dependency-cruiser, ESLint and ts-arch read them. A full scan used to follow re-exporting index files and could find a boundary its own rule then contradicted. Exceptions to other dependency-cruiser rules also match on a folder boundary now, so an exception for `lib/legacy.ts` no longer exempts `mylib/legacy.ts`.
+
 ## 0.12.4
 
 ### Patch Changes
