@@ -339,7 +339,7 @@ export function buildProgram(version = readVersion()): Command {
     .option('--only <family>', `emit only one rule family (${FAMILY_NAMES.join(', ')})`)
     .option(
       '--rules <ids>',
-      'emit only these forbidden-import rule ids (comma-separated, e.g. AP-001,AP-002)',
+      'emit only these rules (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
     )
     .option(
       '--check',
@@ -423,11 +423,14 @@ export function buildProgram(version = readVersion()): Command {
         const enforcers = applyEmitOverride(detectEnforcers(scan.appDir), options.emit);
         const recommendations = buildRecommendations(scan, detectStack(scan.appDir), enforcers);
         const ruleIds = options.rules
-          ? options.rules
-              .split(',')
-              .map((id) => id.trim())
-              .filter(Boolean)
-          : undefined;
+          ?.split(',')
+          .map((id) => id.trim())
+          .filter(Boolean);
+        if (ruleIds !== undefined && ruleIds.length === 0) {
+          console.error('--rules needs at least one rule id, e.g. --rules AP-002,no-lib-to-app.');
+          process.exitCode = 1;
+          return;
+        }
         const { files, removed, folded, configPath } = writeLayout(scan, outDir, {
           structural,
           enforcers,
@@ -729,7 +732,7 @@ export function buildProgram(version = readVersion()): Command {
   program
     .command('allow')
     .description(
-      'Allow one adopted rule to be broken in one file, with a reason. archprint check accepts it, lists it in the pull request, and archprint generate stops ESLint flagging it.',
+      'Allow one adopted rule to be broken in one file, with a reason. archprint check accepts it, lists it in the pull request, and archprint generate stops the generated rules flagging it.',
     )
     .argument('<rule>', 'adopted rule id, e.g. AP-001 or console-isolation')
     .argument('<file>', 'file the rule reports, relative to the current directory')

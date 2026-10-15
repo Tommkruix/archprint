@@ -41,6 +41,19 @@ describe('ruleDefinitionKey', () => {
     expect(ruleDefinitionKey(remeasured)).toBe(ruleDefinitionKey(consoleRule));
   });
 
+  it('changes when a layer rule names other layers', () => {
+    const layerRule = (to: string): AdoptedRule => ({
+      id: 'no-lib-to-app',
+      family: 'layer',
+      from: 'lib',
+      to,
+      statement: 's',
+      mode: 'fast',
+      evidence,
+    });
+    expect(ruleDefinitionKey(layerRule('app'))).not.toBe(ruleDefinitionKey(layerRule('pages')));
+  });
+
   it('changes when what the rule forbids changes', () => {
     expect(ruleDefinitionKey(dbRule(['drizzle-orm']))).not.toBe(
       ruleDefinitionKey(dbRule(['@prisma\\/client'])),

@@ -59,6 +59,9 @@ Nothing whose inferred layer or role could be wrong is written as enforcement wi
   workspace aliases with the type-aware resolver. Use it to catch a forbidden import that is hidden behind a
   barrel re-export.
 
+Layer boundaries are the exception: they are always found from imports as written, in both modes, because that
+is how the generated ESLint rule reads an import, and how dependency-cruiser names the file it points at.
+
 `--deep` opts `scan` into full resolution; `--fast` opts `generate` out of it (with a warning to confirm with a
 deep pass before enforcing).
 
@@ -74,7 +77,8 @@ never left with config for a tool you do not have (`--emit all` forces every for
   exceptions allowed with a reason, what is enforced, followed but only reported, held for review, worth adopting,
   and the managed outputs `eject` removes,
 - `.archprint/eslint.mjs` (when ESLint is present): one self-contained ESLint flat-config file that inlines every
-  inferred ESLint rule (forbidden imports, import-style, console isolation) and needs no extra plugins (it adds
+  inferred ESLint rule (forbidden imports, import-style, console isolation, and layer boundaries when you include
+  structural rules and do not use dependency-cruiser) and needs no extra plugins (it adds
   rules to your existing ESLint setup, which already parses your TypeScript), so it can be committed, published,
   or shared and adopted in one line,
 - `.archprint/dependency-cruiser.json` (when dependency-cruiser is present): one `forbidden` ruleset,

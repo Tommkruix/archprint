@@ -6,6 +6,7 @@ import {
   type WalkedFile,
 } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { type LayerAlias, layerRootOf, resolveImportPath } from './layer-paths.js';
 import {
   evaluateGate,
   type GateResult,
@@ -13,77 +14,30 @@ import {
   wilsonLowerBound,
 } from './confidence-gate.js';
 
-const STRUCTURAL_SEGMENTS = new Set([
-  'src',
-  'dist',
-  'build',
-  'public',
-  'test',
-  'tests',
-  '__tests__',
-  'node_modules',
-  '.next',
-]);
-
-const ROUTER_ROOTS = new Set(['app', 'pages']);
-
-const isStructural = (segment: string): boolean =>
-  STRUCTURAL_SEGMENTS.has(segment) ||
-  segment.includes('.') ||
-  /^\(.*\)$/.test(segment) ||
-  /^\[.*\]$/.test(segment) ||
-  segment.startsWith('@');
-
 export function layerOfPath(relativePath: string): string | null {
-  for (const segment of relativePath.split('/')) {
-    if (ROUTER_ROOTS.has(segment)) return segment;
-    if (!isStructural(segment)) return segment;
-  }
-  return null;
+  return layerRootOf(relativePath)?.layer ?? null;
 }
 
-interface AliasEntry {
-  prefix: string;
-  dir: string;
-}
-
-const buildAliasEntries = (appDir: string): AliasEntry[] =>
+/** The tsconfig path aliases and baseUrl folders, each as an app-relative directory. */
+export const layerAliases = (appDir: string): LayerAlias[] =>
   Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
     prefix: key.replace(/\/?\*$/, ''),
-    dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
+    dir: path
+      .relative(appDir, path.resolve(appDir, String(value).replace(/\/?\*$/, '')))
+      .split(path.sep)
+      .join('/'),
   }));
-
-function specifierToLayer(
-  specifier: string,
-  fileAbsPath: string,
-  appDir: string,
-  aliases: readonly AliasEntry[],
-): string | null {
-  let abs: string | null = null;
-  if (specifier.startsWith('.')) {
-    abs = path.resolve(path.dirname(fileAbsPath), specifier);
-  } else {
-    for (const { prefix, dir } of aliases) {
-      if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
-        abs = path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, ''));
-        break;
-      }
-    }
-  }
-  if (abs === null) return null;
-  const rel = path.relative(appDir, abs).split(path.sep).join('/');
-  return rel.startsWith('..') ? null : layerOfPath(rel);
-}
 
 function targetLayers(
   imp: ResolvedImport,
-  fileAbsPath: string,
+  file: WalkedFile,
   appDir: string,
-  aliases: readonly AliasEntry[],
+  aliases: readonly LayerAlias[],
   resolve: boolean,
 ): string[] {
   if (!resolve) {
-    const layer = specifierToLayer(imp.specifier, fileAbsPath, appDir, aliases);
+    const target = resolveImportPath(file.relativePath, imp.specifier, aliases);
+    const layer = target === null ? null : layerOfPath(target);
     return layer === null ? [] : [layer];
   }
   const layers: string[] = [];
@@ -97,6 +51,79 @@ function targetLayers(
   return layers;
 }
 
+interface LayerPlacement {
+  files: WalkedFile[];
+  fileLayer: Map<string, string>;
+  layerFileCount: Map<string, number>;
+  layerDirs: Map<string, Set<string>>;
+}
+
+function placeFiles(root: string): LayerPlacement {
+  const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
+  const fileLayer = new Map<string, string>();
+  const layerFileCount = new Map<string, number>();
+  const layerDirs = new Map<string, Set<string>>();
+  for (const file of files) {
+    const placement = layerRootOf(file.relativePath);
+    if (placement === null) continue;
+    const { layer, dir } = placement;
+    fileLayer.set(file.relativePath, layer);
+    layerFileCount.set(layer, (layerFileCount.get(layer) ?? 0) + 1);
+    layerDirs.set(layer, (layerDirs.get(layer) ?? new Set()).add(dir));
+  }
+  return { files, fileLayer, layerFileCount, layerDirs };
+}
+
+/** For each `from>to` layer pair, the files importing across it and the first specifier that does. */
+function collectEdges(
+  root: string,
+  { files, fileLayer }: LayerPlacement,
+  resolve: boolean,
+): Map<string, Map<string, string>> {
+  const aliases = layerAliases(root);
+  const analyze = createImportAnalyzer(root, { resolve });
+  const edges = new Map<string, Map<string, string>>();
+  for (const file of files) {
+    const from = fileLayer.get(file.relativePath);
+    if (from === undefined) continue;
+    let imports: ResolvedImport[];
+    try {
+      imports = analyze(file.absolutePath);
+    } catch {
+      /* v8 ignore next -- defensive: analyze throws only on an unreadable/malformed source file */
+      imports = [];
+    }
+    for (const imp of imports) {
+      if (!imp.hasValueBinding) continue;
+      for (const to of targetLayers(imp, file, root, aliases, resolve)) {
+        if (to === from) continue;
+        const key = `${from}>${to}`;
+        let sources = edges.get(key);
+        if (sources === undefined) {
+          sources = new Map();
+          edges.set(key, sources);
+        }
+        if (!sources.has(file.relativePath)) sources.set(file.relativePath, imp.specifier);
+      }
+    }
+  }
+  return edges;
+}
+
+const edgeList = (
+  sources: Map<string, string> | undefined,
+): { file: string; specifier: string }[] =>
+  [...(sources?.entries() ?? [])].map(([file, specifier]) => ({ file, specifier }));
+
+export type LayerImportLookup = (from: string, to: string) => { file: string; specifier: string }[];
+
+/** Which files in one layer import another, read as written (the way the layer rules enforce). */
+export function layerImports(appDir: string): LayerImportLookup {
+  const root = path.resolve(appDir);
+  const edges = collectEdges(root, placeFiles(root), false);
+  return (from, to) => edgeList(edges.get(`${from}>${to}`));
+}
+
 export interface LayerInfo {
   layer: string;
   fileCount: number;
@@ -107,6 +134,8 @@ export interface LayerBoundary {
   name: string;
   from: string;
   to: string;
+  fromDirs: string[];
+  toDirs: string[];
   description: string;
   stats: {
     roleFileCount: number;
@@ -141,44 +170,10 @@ export function detectLayerBoundaries(
   const minLayerFiles = options.minLayerFiles ?? 5;
 
   const root = path.resolve(appDir);
-  const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
-  const fileLayer = new Map<string, string>();
-  const layerFileCount = new Map<string, number>();
-  for (const file of files) {
-    const layer = layerOfPath(file.relativePath);
-    if (layer === null) continue;
-    fileLayer.set(file.relativePath, layer);
-    layerFileCount.set(layer, (layerFileCount.get(layer) ?? 0) + 1);
-  }
-
-  const aliases = buildAliasEntries(root);
-  const analyze = createImportAnalyzer(root, { resolve });
-
-  const edges = new Map<string, Map<string, string>>();
-  for (const file of files) {
-    const from = fileLayer.get(file.relativePath);
-    if (from === undefined) continue;
-    let imports: ResolvedImport[];
-    try {
-      imports = analyze(file.absolutePath);
-    } catch {
-      /* v8 ignore next -- defensive: analyze throws only on an unreadable/malformed source file */
-      imports = [];
-    }
-    for (const imp of imports) {
-      if (!imp.hasValueBinding) continue;
-      for (const to of targetLayers(imp, file.absolutePath, root, aliases, resolve)) {
-        if (to === from) continue;
-        const key = `${from}>${to}`;
-        let sources = edges.get(key);
-        if (sources === undefined) {
-          sources = new Map();
-          edges.set(key, sources);
-        }
-        if (!sources.has(file.relativePath)) sources.set(file.relativePath, imp.specifier);
-      }
-    }
-  }
+  const placement = placeFiles(root);
+  const { layerFileCount, layerDirs } = placement;
+  const dirsOf = (layer: string): string[] => [...layerDirs.get(layer)!].sort();
+  const edges = collectEdges(root, placement, resolve);
 
   const edgeSize = (from: string, to: string): number => edges.get(`${from}>${to}`)?.size ?? 0;
 
@@ -203,14 +198,14 @@ export function detectLayerBoundaries(
         violatingFileCount: violating,
         roleConfidence: directionalConfidence,
       });
-      const violations = [...(edges.get(`${from}>${to}`)?.entries() ?? [])].map(
-        ([file, specifier]) => ({ file, specifier }),
-      );
+      const violations = edgeList(edges.get(`${from}>${to}`));
       boundaries.push({
         id: 'AP-LAYER',
         name: `no-import:${from}->${to}`,
         from,
         to,
+        fromDirs: dirsOf(from),
+        toDirs: dirsOf(to),
         description: `Files in the "${from}" layer must not import the "${to}" layer (observed: "${to}" depends on "${from}" across ${reverseFlow} file(s), not the reverse).`,
         stats: {
           roleFileCount,

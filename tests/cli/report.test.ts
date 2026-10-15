@@ -12,6 +12,8 @@ const suggestBoundary = (from: string, to: string, violating = 0): LayerBoundary
     name: `no-import:${from}->${to}`,
     from,
     to,
+    fromDirs: [from],
+    toDirs: [to],
     description: '',
     stats: {
       roleFileCount,
@@ -32,6 +34,8 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   aliasCount: 0,
   patterns: [],
   layerBoundaries: [],
+  layerAliases: [],
+  gitignoredPaths: [],
   cycles: {
     appDir: '/app',
     fileCount: 10,

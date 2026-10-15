@@ -1,4 +1,5 @@
-import { evaluateGate } from '../detector/confidence-gate.js';
+import { evaluateGate, wilsonLowerBound } from '../detector/confidence-gate.js';
+import { layerRuleName } from '../generator/layer-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
 import { readAdoptedRules } from './adopted-rules.js';
 import { allowedFilesByRule, readAllowed } from './allowed-exceptions.js';
@@ -142,5 +143,28 @@ export function excludeAllowed(scan: ScanResult, allowed: AllowedByRule): ScanRe
         };
       }),
     },
+    layerBoundaries: scan.layerBoundaries.map((boundary) => {
+      const layer = exclude(boundary.violations, allowedFor(layerRuleName(boundary)));
+      if (layer.removedFiles === 0) return boundary;
+      const roleFileCount = boundary.stats.roleFileCount - layer.removedFiles;
+      const directional = wilsonLowerBound(
+        boundary.reverseFlow,
+        layer.keptFiles + boundary.reverseFlow,
+      );
+      const gate = regate(roleFileCount, layer.keptFiles, directional);
+      return {
+        ...boundary,
+        violations: layer.kept,
+        gate,
+        stats: {
+          ...boundary.stats,
+          roleFileCount,
+          conformingFileCount: roleFileCount - layer.keptFiles,
+          violatingFileCount: layer.keptFiles,
+          ratio: gate.observedConformance,
+          roleConfidence: directional,
+        },
+      };
+    }),
   };
 }

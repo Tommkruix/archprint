@@ -1,9 +1,19 @@
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
+import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const layerPath = (layer: string): string => `(^|/)${escapeRegExp(layer)}/`;
+export const layerRuleName = ({ from, to }: { from: string; to: string }): string =>
+  `no-${from}-to-${to}`;
+
+const appPrefix = (appPath: string): string => {
+  const normalized = appPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  return normalized === '' || normalized === '.' ? '' : `${escapeRegExp(normalized)}/`;
+};
+
+const layerPath = (dirs: readonly string[], appPath: string): string =>
+  `^${appPrefix(appPath)}(?:${dirs.map(escapeRegExp).join('|')})/`;
 
 const confidencePct = (boundary: LayerBoundary): string =>
   `${(boundary.gate.conditions.confidence.value * 100).toFixed(0)}%`;
@@ -17,8 +27,8 @@ export interface DependencyCruiserRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { path: string };
-  to: { path: string };
+  from: { path: string; pathNot?: string | string[] };
+  to: { path: string; dependencyTypesNot?: string[] };
 }
 
 export interface DependencyCruiserConfig {
@@ -28,13 +38,24 @@ export interface DependencyCruiserConfig {
 export function toDependencyCruiser(
   boundaries: readonly LayerBoundary[],
   include: readonly GenerationStatus[] = ['AUTO'],
+  appPath = '.',
+  allowedFor: (ruleId: string) => readonly string[] = () => [],
 ): DependencyCruiserConfig {
   const forbidden = selected(boundaries, include).map((boundary) => ({
-    name: `no-${boundary.from}-to-${boundary.to}`,
+    name: layerRuleName(boundary),
     comment: `Archprint inferred boundary: the "${boundary.to}" layer depends on "${boundary.from}" across ${boundary.reverseFlow} file(s); the reverse is forbidden (confidence ${confidencePct(boundary)}).`,
     severity: 'error' as const,
-    from: { path: layerPath(boundary.from) },
-    to: { path: layerPath(boundary.to) },
+    from: {
+      path: layerPath(boundary.fromDirs, appPath),
+      pathNot: exemptDepcruiseFrom(TEST_ROLE_REGEX, [
+        ...boundary.violations,
+        ...allowedFor(layerRuleName(boundary)).map((file) => ({ file })),
+      ]),
+    },
+    to: {
+      path: layerPath(boundary.toDirs, appPath),
+      dependencyTypesNot: ['type-only'],
+    },
   }));
   return { forbidden };
 }

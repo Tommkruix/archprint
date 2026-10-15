@@ -46,7 +46,10 @@ export function buildWorkspaceMap(rootDir: string): Record<string, string> {
 
   if (options.baseUrl !== undefined) {
     try {
-      for (const entry of readdirSync(options.baseUrl, { withFileTypes: true })) {
+      const entries = readdirSync(options.baseUrl, { withFileTypes: true }).sort((a, b) =>
+        a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+      );
+      for (const entry of entries) {
         if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') {
           continue;
         }

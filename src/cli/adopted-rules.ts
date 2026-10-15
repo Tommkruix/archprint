@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import type { GateResult } from '../detector/confidence-gate.js';
 import type { Role } from '../scanner/role-classifier.js';
+import type { LayerBoundary } from '../detector/layer-detector.js';
+import { layerRuleName } from '../generator/layer-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
 import { configPath, configSection, readConfigSection } from './archprint-config.js';
 import { FAMILY_STATEMENTS } from './rule-statements.js';
@@ -41,7 +43,13 @@ export interface SingleFamilyRule extends RuleBase {
   family: 'test-isolation' | 'console-isolation' | 'import-style';
 }
 
-export type AdoptedRule = ForbiddenImportRule | PublicApiRule | SingleFamilyRule;
+export interface LayerRule extends RuleBase {
+  family: 'layer';
+  from: string;
+  to: string;
+}
+
+export type AdoptedRule = ForbiddenImportRule | PublicApiRule | LayerRule | SingleFamilyRule;
 
 const evidenceOf = (gate: GateResult, total: number, violating: number): AdoptionEvidence => ({
   conforming: total - violating,
@@ -108,6 +116,22 @@ export function publicApiRules(scan: ScanResult): AdoptedRule[] {
     }));
 }
 
+export function layerRule(boundary: LayerBoundary): LayerRule {
+  return {
+    id: layerRuleName(boundary),
+    family: 'layer',
+    from: boundary.from,
+    to: boundary.to,
+    statement: `the ${boundary.from} layer must not import the ${boundary.to} layer`,
+    mode: 'fast',
+    evidence: evidenceOf(
+      boundary.gate,
+      boundary.stats.roleFileCount,
+      boundary.stats.violatingFileCount,
+    ),
+  };
+}
+
 export const byRuleId = (a: AdoptedRule, b: AdoptedRule): number => a.id.localeCompare(b.id);
 
 export class InvalidRulesError extends Error {}
@@ -115,6 +139,7 @@ export class InvalidRulesError extends Error {}
 const FAMILIES: ReadonlySet<string> = new Set([
   'forbidden-imports',
   'public-api',
+  'layer',
   'test-isolation',
   'console-isolation',
   'import-style',
@@ -134,6 +159,8 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
     roles?: unknown;
     forbidden?: { source?: unknown; flags?: unknown }[];
     dir?: unknown;
+    from?: unknown;
+    to?: unknown;
   };
   if (typeof candidate.id !== 'string' || !FAMILIES.has(String(candidate.family))) {
     return invalid('a rule has no valid id or family');
@@ -163,6 +190,12 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
   }
   if (candidate.family === 'public-api' && typeof candidate.dir !== 'string') {
     return invalid(`rule ${candidate.id} has no directory`);
+  }
+  if (
+    candidate.family === 'layer' &&
+    (typeof candidate.from !== 'string' || typeof candidate.to !== 'string')
+  ) {
+    return invalid(`rule ${candidate.id} has no layers`);
   }
   return rule as AdoptedRule;
 }
@@ -212,6 +245,8 @@ export function ruleDefinitionKey(rule: AdoptedRule): string {
       ]);
     case 'public-api':
       return JSON.stringify([...common, rule.dir]);
+    case 'layer':
+      return JSON.stringify([...common, rule.from, rule.to]);
     default:
       return JSON.stringify(common);
   }

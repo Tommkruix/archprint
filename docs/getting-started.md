@@ -127,6 +127,9 @@ archprint generate apps/web --emit all
 # Also emit the structural-inference families (review these first)
 archprint generate apps/web --include-structural
 
+# Adopt only the rules you choose, by id
+archprint generate apps/web --include-structural --rules no-lib-to-app,import-style
+
 # Also write the granular per-family files, rule cards, fixtures, and graph
 archprint generate apps/web --expand
 ```
@@ -204,12 +207,13 @@ jobs:
   violation, then mark the job a required status check in your branch protection so a pull request that adds one
   can't merge.
 - **Only adopted rules.** `check` reads the adopted rules in `.archprint/config.json`, written by `init` and
-  `generate`, and checks only the mechanical rules recorded there, never structural ones. Rules adopted in the same
+  `generate`, and checks only the rules recorded there: the mechanical rules, plus layer boundaries once you adopt
+  them with `--include-structural`. Rules adopted in the same
   pull request are listed but never counted against it.
 - **A justified exception needs a reason.** When a file has a real reason to break a rule, record it:
   `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`.
   It goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason
-  in the pull request, and the next `archprint generate` stops ESLint flagging it. An entry without a reason is
+  in the pull request, and the next `archprint generate` stops the generated rules flagging it. An entry without a reason is
   rejected, and an entry the code no longer needs is pointed out. Rules enforced through dependency-cruiser (public
   API) are not covered on that side yet.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,

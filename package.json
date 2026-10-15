@@ -57,7 +57,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "version-packages": "changeset version && node scripts/sync-server-json.mjs",
+    "version-packages": "changeset version && npm install --package-lock-only --ignore-scripts && node scripts/sync-server-json.mjs",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -81,7 +81,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
     "commander": "^15.0.0",
-    "ignore": "7.0.10",
+    "ignore": "7.0.12",
     "ts-morph": "28.0.0",
     "typescript": "6.0.3"
   },

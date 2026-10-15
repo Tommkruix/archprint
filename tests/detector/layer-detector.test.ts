@@ -1,10 +1,27 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { detectLayerBoundaries, layerOfPath } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'layers');
+const temps: string[] = [];
+afterEach(() => {
+  while (temps.length > 0) rmSync(temps.pop()!, { recursive: true, force: true });
+});
+
+function app(files: Record<string, string>): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'archprint-layers-'));
+  temps.push(dir);
+  for (const [file, source] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    writeFileSync(path.join(dir, file), source);
+  }
+  return dir;
+}
+
 const boundary = (analysis: ReturnType<typeof detectLayerBoundaries>, from: string, to: string) =>
   analysis.boundaries.find((b) => b.from === from && b.to === to);
 
@@ -81,5 +98,17 @@ describe('detectLayerBoundaries', () => {
     expect(deep!.from).toBe('utils');
     expect(deep!.to).toBe('components');
     expect(deep!.stats.violatingFileCount).toBe(fast!.stats.violatingFileCount);
+  });
+
+  it('records the scanned folders each layer lives in, not every folder sharing its name', () => {
+    const dir = app({
+      'lib/a.ts': 'export const a = 1;',
+      'src/lib/b.ts': 'export const b = 1;',
+      'app/page.ts': "import { a } from '../lib/a'; export const page = a;",
+      'app/(dash)/lib/c.ts': "import { b } from '../../../src/lib/b'; export const c = b;",
+    });
+    const libApp = boundary(detectLayerBoundaries(dir, { minLayerFiles: 1 }), 'lib', 'app');
+    expect(libApp!.fromDirs).toEqual(['lib', 'src/lib']);
+    expect(libApp!.toDirs).toEqual(['app']);
   });
 });

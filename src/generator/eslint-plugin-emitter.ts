@@ -52,8 +52,10 @@ export const MAKE_RULE_FUNCTION = `function makeRule(spec) {
   };
 }`;
 
+export const LINTED_FILES = "['**/*.{ts,tsx}']";
+
 export const PLUGIN_CONFIGS = `SPECS.map((spec) => ({
-  files: ['**/*.{ts,tsx}'],
+  files: ${LINTED_FILES},
   plugins: { archprint: plugin },
   rules: { ['archprint/' + spec.name]: 'error' },
 }))`;

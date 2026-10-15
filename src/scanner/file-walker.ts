@@ -13,9 +13,7 @@ import { buildWorkspaceMap } from './workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from './workspace-packages.js';
 import { createIgnoreFilter } from './ignore-filter.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
-
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage']);
-const SOURCE_FILE = /\.(ts|tsx|vue|svelte)$/;
+import { isSkippedFolder, isSourceFileName } from './source-paths.js';
 
 const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 const isSingleFileComponent = (filePath: string): boolean =>
@@ -71,9 +69,17 @@ function dynamicImportSpecifiers(sourceFile: SourceFile): string[] {
   return specifiers;
 }
 
-export function listSourceFiles(rootDir: string): string[] {
+export interface SourceTree {
+  files: string[];
+  /** The gitignored folders and source files the walk left out, relative to the root. */
+  ignored: string[];
+}
+
+export function walkSourceTree(rootDir: string): SourceTree {
   const files: string[] = [];
+  const ignored: string[] = [];
   const isIgnored = createIgnoreFilter(rootDir);
+  const relativeTo = (full: string): string => path.relative(rootDir, full);
   const walk = (dir: string): void => {
     const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
@@ -81,20 +87,21 @@ export function listSourceFiles(rootDir: string): string[] {
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (
-          !SKIP_DIRS.has(entry.name) &&
-          !entry.name.startsWith('.') &&
-          !isIgnored(path.relative(rootDir, full), true)
-        ) {
-          walk(full);
-        }
-      } else if (entry.isFile() && SOURCE_FILE.test(entry.name) && !entry.name.endsWith('.d.ts')) {
-        if (!isIgnored(path.relative(rootDir, full), false)) files.push(full);
+        if (isSkippedFolder(entry.name)) continue;
+        if (isIgnored(relativeTo(full), true)) ignored.push(relativeTo(full));
+        else walk(full);
+      } else if (entry.isFile() && isSourceFileName(entry.name)) {
+        if (isIgnored(relativeTo(full), false)) ignored.push(relativeTo(full));
+        else files.push(full);
       }
     }
   };
   walk(rootDir);
-  return files;
+  return { files, ignored: ignored.map((file) => file.split(path.sep).join('/')) };
+}
+
+export function listSourceFiles(rootDir: string): string[] {
+  return walkSourceTree(rootDir).files;
 }
 
 function readHead(file: string, bytes = 512): string {

@@ -13,6 +13,8 @@ function boundary(from: string, to: string, roleFileCount: number): LayerBoundar
     name: `no-import:${from}->${to}`,
     from,
     to,
+    fromDirs: [from],
+    toDirs: [to],
     description: 'x',
     stats: {
       roleFileCount,
@@ -28,14 +30,42 @@ function boundary(from: string, to: string, roleFileCount: number): LayerBoundar
 }
 
 describe('toDependencyCruiser', () => {
-  it('emits one forbidden rule per AUTO boundary, scoped to layer paths', () => {
-    const config = toDependencyCruiser([boundary('utils', 'components', 40)]);
-    expect(config.forbidden).toHaveLength(1);
-    const rule = config.forbidden[0]!;
-    expect(rule.name).toBe('no-utils-to-components');
-    expect(rule.from.path).toBe('(^|/)utils/');
-    expect(rule.to.path).toBe('(^|/)components/');
+  it('emits one forbidden rule per AUTO boundary, scoped to the folders the layers were scanned in', () => {
+    const rule = toDependencyCruiser([
+      { ...boundary('lib', 'app', 40), fromDirs: ['lib', 'src/lib'], toDirs: ['app', 'src/app'] },
+    ]).forbidden[0]!;
+    expect(rule.name).toBe('no-lib-to-app');
     expect(rule.severity).toBe('error');
+    const from = new RegExp(rule.from.path);
+    expect(from.test('lib/db.ts')).toBe(true);
+    expect(from.test('src/lib/db.ts')).toBe(true);
+    expect(from.test('app/(dash)/lib/db.ts')).toBe(false);
+    expect(from.test('packages/ui/lib/db.ts')).toBe(false);
+    expect(from.test('node_modules/@scope/lib/index.js')).toBe(false);
+    expect(new RegExp(rule.to.path).test('src/app/page.tsx')).toBe(true);
+  });
+
+  it('matches the layer under the app folder when the app is not where the config lives', () => {
+    const rule = toDependencyCruiser([boundary('lib', 'app', 40)], ['AUTO'], 'apps\\web')
+      .forbidden[0]!;
+    const from = new RegExp(rule.from.path);
+    expect(from.test('apps/web/lib/db.ts')).toBe(true);
+    expect(from.test('lib/db.ts')).toBe(false);
+    expect(from.test('apps/admin/lib/db.ts')).toBe(false);
+  });
+
+  it('exempts the known violators and test files, and ignores type-only imports', () => {
+    const leaky = {
+      ...boundary('lib', 'app', 40),
+      violations: [{ file: 'lib/legacy.ts', specifier: '../app/page' }],
+    };
+    const rule = toDependencyCruiser([leaky]).forbidden[0]!;
+    const exempt = [rule.from.pathNot ?? []].flat().map((source) => new RegExp(source));
+    const isExempt = (file: string): boolean => exempt.some((pattern) => pattern.test(file));
+    expect(isExempt('lib/legacy.ts')).toBe(true);
+    expect(isExempt('lib/db.test.ts')).toBe(true);
+    expect(isExempt('lib/db.ts')).toBe(false);
+    expect(rule.to.dependencyTypesNot).toEqual(['type-only']);
   });
 
   it('emits only AUTO boundaries by default, and SUGGEST when asked', () => {
