@@ -82,6 +82,21 @@ the dominant dependency direction. **When not to use:** when a directory is not 
 `utils/` that mixes server logic and client glue), the inferred boundary can forbid legitimate imports, review
 the direction before enforcing.
 
+Each boundary is one rule, named for the two layers (`no-utils-to-app`). It goes to dependency-cruiser when your
+repo uses it, and otherwise into `.archprint/eslint.mjs` as `archprint/no-utils-to-app`, with no extra plugin.
+Either way it skips type-only imports and test files, and exempts the files that already broke it.
+
+The ESLint rule reads imports as written, relative paths and tsconfig aliases alike, and places each file in a
+layer the same way the scan does, so it reports the files `archprint check` reports. It checks `.ts` and `.tsx`
+files and skips what the scan never reads: `node_modules`, `dist`, `build`, `coverage`, dot-folders, and the
+folders your `.gitignore` excluded when you generated (regenerate after you gitignore a new folder of source
+files). Imports in `.vue` and `.svelte` files are reported by `check` but not by ESLint. Neither the scan nor the
+rule counts a re-export (`export ... from`) or `require()` yet. The dependency-cruiser rule matches the folders the
+layer was found in, as dependency-cruiser resolves each import.
+
+Layer rules are adopted, so `archprint check` reports a new break and `archprint allow` can accept one. Adopt only
+some of them with `--rules`, for example `archprint generate --include-structural --rules no-utils-to-app`.
+
 ### Role layering (Review)
 
 Detects a semantic tier importing against its direction (for example `SERVICE` must not import `DATA_ACCESS`).

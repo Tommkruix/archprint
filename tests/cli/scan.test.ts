@@ -332,6 +332,8 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     aliasCount: 0,
     patterns: [],
     layerBoundaries: [],
+    layerAliases: [],
+    gitignoredPaths: [],
     cycles: emptyCycles(),
     orphans: emptyOrphans(),
     reachability: emptyReachability(),
@@ -877,6 +879,42 @@ describe('cli generate', () => {
     expect(
       emitLayout(emptyScan(), outDir, { version: '9.9.9', enforcers: ESLINT }).eslint,
     ).toBeNull();
+  });
+
+  it('keeps only the rules --rules names, across ESLint and dependency-cruiser families', () => {
+    const scan = emptyScan({
+      patterns: [fakePattern('AP-002', 'AUTO')],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+    });
+    const both = { ...DEPCRUISE, eslint: true };
+    const ids = (c: CollectedEnforcement) => c.adopted.map((rule) => rule.id).sort();
+
+    const ap = collect(scan, { enforcers: both, ruleIds: ['ap-002'] });
+    expect(ids(ap)).toEqual(['AP-002']);
+    expect(dc(ap, 'layer')).toBeUndefined();
+
+    const layer = collect(scan, { enforcers: both, ruleIds: [' utils  !->  API '] });
+    expect(ids(layer)).toEqual(['no-utils-to-api']);
+    expect(layer.eslintSpecs).toEqual([]);
+    expect(dc(layer, 'layer')!.map((rule) => rule.name)).toEqual(['no-utils-to-api']);
+
+    const byPrintedName = collect(scan, { enforcers: both, ruleIds: ['rule-AP-002'] });
+    expect(ids(byPrintedName)).toEqual(['AP-002']);
+
+    const unknown = collect(scan, { enforcers: both, ruleIds: ['AP-002', 'nope'] });
+    expect(unknown.unknownRules).toEqual(['nope']);
+    expect(unknown.availableRules).toEqual(['AP-002', 'no-utils-to-api']);
+  });
+
+  it('leaves out layer rules whose names would collide', () => {
+    const scan = emptyScan({
+      layerBoundaries: [
+        fakeLayerBoundary('a-to-b', 'c', 40),
+        fakeLayerBoundary('a', 'b-to-c', 40),
+        fakeLayerBoundary('utils', 'api', 40),
+      ],
+    });
+    expect(collect(scan).adopted.map((rule) => rule.id)).toEqual(['no-utils-to-api']);
   });
 
   it('scopes dependency-cruiser layer rules to the app folder, and ts-arch rules to the app root', () => {

@@ -259,17 +259,19 @@ whose dependency-cruiser rules are adopted too gets a third. archprint detects E
 you are never left with config for a tool you do not have. `--emit <eslint|dependency-cruiser|all>` forces the
 format.
 
-- **`.archprint/config.json`** (always): the exact definition of each mechanical rule you adopted, with the
+- **`.archprint/config.json`** (always): the exact definition of each rule you adopted, with the
   evidence recorded at adoption and the resolution mode it was generated in (`archprint check` reads it, so a check
   never re-infers a rule), the exceptions you allowed with a reason, what is enforced, followed but only reported,
   held for review, and worth adopting, and the list of managed outputs `eject` removes.
 - **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
   every inferred ESLint rule (marker-based forbidden imports, `no-restricted-imports` import-style boundaries,
-  console isolation) and needs no extra plugins: it adds rules to your existing ESLint setup, which already parses
-  your TypeScript. So you can commit it, publish it, or hand it to another repo and adopt it in one line
-  (`import archprint from './.archprint/eslint.mjs'`). It self-ignores `**/.archprint/**`. The forbidden-import
-  rules (AP-) ship as a generated local eslint plugin inside it, so wiring the eslint config enforces them too, no
-  extra install.
+  console isolation, and layer boundaries when you include structural rules and do not use dependency-cruiser)
+  and needs no extra plugins: it adds rules to your existing ESLint setup, which already parses your TypeScript.
+  So you can commit it, publish it, or hand it to another repo and adopt it in one line
+  (`import archprint from './.archprint/eslint.mjs'`). Layer boundaries are the exception: they find your app
+  relative to the file, so they only apply where it was generated. It self-ignores `**/.archprint/**`. The
+  forbidden-import (AP-) and layer rules ship as a generated local eslint plugin inside it, so wiring the eslint
+  config enforces them too, no extra install.
 - **`.archprint/dependency-cruiser.json`** (when dependency-cruiser is present): one `forbidden` ruleset with the
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are added only with
@@ -342,12 +344,13 @@ jobs:
   violation, then mark the job a required status check in your branch protection so a pull request that adds one
   can't merge.
 - **Only adopted rules.** `check` reads the adopted rules in `.archprint/config.json`, written by `init` and
-  `generate`, and checks only the mechanical rules recorded there, never structural ones. Rules adopted in the same
+  `generate`, and checks only the rules recorded there: the mechanical rules, plus layer boundaries once you adopt
+  them with `--include-structural`. Rules adopted in the same
   pull request are listed but never counted against it.
 - **A justified exception needs a reason.** When a file has a real reason to break a rule, record it:
   `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`.
   It goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason
-  in the pull request, and the next `archprint generate` stops ESLint flagging it. An entry without a reason is
+  in the pull request, and the next `archprint generate` stops the generated rules flagging it. An entry without a reason is
   rejected, and an entry the code no longer needs is pointed out. Rules enforced through dependency-cruiser (public
   API) are not covered on that side yet.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,
@@ -475,7 +478,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   fresh repo too), and names the installed tool that will enforce each rule it can write.
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
-  `--only <family>` and `--rules <ids>` narrow the output, `--check` runs the generated rules against your repo,
+  `--only <family>` and `--rules <ids>` narrow the output (`--rules` keeps only the rules it names, such as
+  `AP-002`, `import-style` or the layer rule `no-lib-to-app`), `--check` runs the generated rules against your repo,
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
@@ -483,7 +487,7 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `--out <dir>`. See [Use in CI](#use-in-ci).
 - **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule being broken in one file, with a
   reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
-  `generate` stops ESLint flagging it. `--remove` takes it back out.
+  `generate` stops the generated rules flagging it. `--remove` takes it back out.
 - **`archprint wire`**: references the generated rules from the enforcement tools your repo uses (flat eslint
   config, `.dependency-cruiser.json`) through a managed, reversible reference. `--out <dir>`, `--dry-run`.
 - **`archprint eject`**: removes Archprint's generated files, its config, the managed README section, and any

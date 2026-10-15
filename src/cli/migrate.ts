@@ -6,7 +6,13 @@ import { hasTsConfig, scanRepo } from './scan.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { renderAdoptionBody } from './report.js';
 import { writeLayout } from './layout.js';
-import { ARCHPRINT_DIR, DEPCRUISE_FILE, ESLINT_FILE, collectEnforcement } from './generate.js';
+import {
+  ARCHPRINT_DIR,
+  DEPCRUISE_FILE,
+  ESLINT_FILE,
+  collectEnforcement,
+  writesEslint,
+} from './generate.js';
 import { CONFIG_FILE } from './archprint-config.js';
 import { ownedPath, staysInsideItsFolder } from '../generator/owned-paths.js';
 import { OUTPUTS_MANIFEST_FILE, readOutputs, removeIfEmpty } from './outputs-manifest.js';
@@ -179,7 +185,7 @@ export function runMigration(
   const scan = scanRepo(plan.appDir, { deep: true });
   const enforcers = detectEnforcers(scan.appDir);
   const collected = collectEnforcement(scan, { enforcers });
-  const willEmitEslint = collected.eslintSpecs.length > 0 || collected.eslintBlocks.length > 0;
+  const willEmitEslint = writesEslint(collected);
   const willEmitDepcruise = collected.depcruise.length > 0;
   const emitAbort = emitMismatch(plan, willEmitEslint, willEmitDepcruise, cwd);
   if (emitAbort !== null) {

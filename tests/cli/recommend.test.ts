@@ -54,7 +54,10 @@ describe('resolveEnforcer', () => {
       'needs eslint',
     );
     expect(resolveEnforcer('layer', only({ dependencyCruiser: true }))).toBe('dependency-cruiser');
-    expect(resolveEnforcer('layer', only({ eslint: true }))).toBe('needs dependency-cruiser');
+    expect(resolveEnforcer('layer', only({ eslint: true }))).toBe('eslint');
+    expect(resolveEnforcer('layer', only({ eslint: true, dependencyCruiser: true }))).toBe(
+      'dependency-cruiser',
+    );
     expect(resolveEnforcer('test-isolation', only({ eslint: true }))).toBe('eslint');
     expect(resolveEnforcer('test-isolation', only({ dependencyCruiser: true }))).toBe(
       'dependency-cruiser',

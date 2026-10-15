@@ -1,5 +1,6 @@
 import { detectConsoleIsolation } from '../detector/console-isolation-detector.js';
 import { detectDeepRelativeImports } from '../detector/deep-relative-detector.js';
+import { layerImports } from '../detector/layer-detector.js';
 import { detectForbiddenImports, type PatternConfig } from '../detector/pattern-detector.js';
 import { detectPublicApiBoundaries } from '../detector/public-api-detector.js';
 import { detectTestIsolation } from '../detector/test-isolation-detector.js';
@@ -76,6 +77,21 @@ export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Fi
         subject: violation.specifier,
         kind: 'specifier',
       });
+    }
+  }
+  const layers = byFamily('layer');
+  if (layers.length > 0) {
+    const importsAcross = layerImports(appDir);
+    for (const rule of layers) {
+      if (rule.family !== 'layer') continue;
+      for (const edge of importsAcross(rule.from, rule.to)) {
+        findings.push({
+          ruleId: rule.id,
+          file: edge.file,
+          subject: edge.specifier,
+          kind: 'specifier',
+        });
+      }
     }
   }
   const publicApi = byFamily('public-api');

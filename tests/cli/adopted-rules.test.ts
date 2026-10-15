@@ -67,7 +67,8 @@ describe('reading the adopted rules', () => {
   const invalidRules: [string, unknown][] = [
     ['a rules section that is not a list', 7],
     ['a rule that is not an object', [7]],
-    ['an unknown family', [{ ...rule, family: 'layer' }]],
+    ['an unknown family', [{ ...rule, family: 'role-layering' }]],
+    ['a layer rule with no layers', [{ ...rule, family: 'layer', from: 'lib' }]],
     ['no resolution mode', [{ ...rule, mode: 'slow' }]],
     ['no markers', [{ ...rule, forbidden: null }]],
     ['an oversized pattern', [{ ...rule, forbidden: [{ source: 'a'.repeat(201), flags: '' }] }]],

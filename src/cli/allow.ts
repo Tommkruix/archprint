@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { assertRealDirectory, ownedPath } from '../generator/owned-paths.js';
-import { readAdoptedRules } from './adopted-rules.js';
+import { type AdoptedRule, readAdoptedRules } from './adopted-rules.js';
 import {
   allowKey,
   readAllowed,
@@ -21,6 +21,9 @@ export interface AllowOptions {
   reason?: string;
   remove?: boolean;
 }
+
+const regenerateHint = (rule: AdoptedRule): string =>
+  `Run archprint generate to update the ${rule.family === 'layer' ? 'generated' : 'ESLint'} rules.`;
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
@@ -55,7 +58,7 @@ export function runAllow(options: AllowOptions): string {
       throw new AllowError(`There is no allowed exception for ${rule.id} in ${file}.`);
     }
     writeAllowed(outDir, others);
-    return `Removed the exception for ${rule.id} in ${file}. Run archprint generate to update the ESLint rules.`;
+    return `Removed the exception for ${rule.id} in ${file}. ${regenerateHint(rule)}`;
   }
 
   const reason = options.reason?.trim() ?? '';
@@ -71,6 +74,6 @@ export function runAllow(options: AllowOptions): string {
   const lint =
     rule.family === 'public-api'
       ? ' dependency-cruiser does not read this list, so add the exception there too if you use it.'
-      : ' Run archprint generate to update the ESLint rules.';
+      : ` ${regenerateHint(rule)}`;
   return `Allowed ${rule.id} in ${file}. archprint check accepts it now.${lint}`;
 }
