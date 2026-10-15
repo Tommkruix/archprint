@@ -159,6 +159,9 @@ archprint generate apps/web --check
 # Generate a single rule by id after reviewing it (including a SUGGEST rule)
 archprint generate apps/web --rule AP-001
 
+# Adopt only the rules you choose, including reviewed layer boundaries
+archprint generate apps/web --include-structural --rules AP-002,no-utils-to-app
+
 # Recommend a rule set from the evidence and the detected stack (fresh repos too)
 archprint recommend apps/web
 
@@ -531,6 +534,31 @@ LAYER BOUNDARIES (review before enforcing)
 `AP-002` is a mechanical family, so it auto-generates as enforcement. The layer boundaries are inferred, so they
 are shown for review, not written as enforcement unless you pass `--include-structural`. Every number is measured
 from the import graph, not estimated.
+
+### Adopt the layer boundaries you agree with
+
+A layer boundary is held for review because a folder name can be misread as a layer. Once you have read the
+evidence, adopt the boundaries you agree with by id: `utils !-> app` becomes the rule `no-utils-to-app`.
+
+```bash
+# 1. Read the boundaries and their evidence
+archprint scan apps/web
+
+# 2. Write the rules you chose: AP-002 plus two of the boundaries above
+archprint generate apps/web --include-structural --rules AP-002,no-utils-to-app,no-hooks-to-app
+
+# 3. Reference the generated rules from your ESLint config (once)
+archprint wire
+```
+
+Without dependency-cruiser, each boundary becomes an ESLint rule in `.archprint/eslint.mjs`, such as
+`archprint/no-utils-to-app`, with no extra plugin; with dependency-cruiser, it goes there instead. The rule
+exempts the files that already break the boundary, so your lint stays green, and it catches a new import across
+the boundary, by relative path or alias. `archprint check` reports a new break in a pull request, and
+`archprint allow` records a justified exception. `--rules` keeps only the rules it names, so list every rule you
+want in the same run. If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
+or later there first. The [rules reference](https://tommkruix.github.io/archprint/rules#layer-boundaries-review)
+says exactly which imports and files the rule reads.
 
 ## Technical notes
 
