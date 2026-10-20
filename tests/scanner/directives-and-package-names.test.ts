@@ -1,7 +1,7 @@
 import { builtinModules } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { hasLeadingDirective } from '../../src/scanner/directives.js';
-import { packageName } from '../../src/scanner/package-name.js';
+import { isPackageInternal, packageName } from '../../src/scanner/package-name.js';
 
 describe('hasLeadingDirective', () => {
   it('finds the directive after a BOM or a shebang line, as JavaScript does', () => {
@@ -39,5 +39,15 @@ describe('packageName', () => {
     ]) {
       expect(packageName(specifier, aliases, builtins)).toBeNull();
     }
+  });
+});
+
+describe('isPackageInternal', () => {
+  it('is true only for a src, internal or internals folder right under the package', () => {
+    expect(isPackageInternal('next/src/server', 'next')).toBe(true);
+    expect(isPackageInternal('@acme/ui/internals/x', '@acme/ui')).toBe(true);
+    expect(isPackageInternal('next', 'next')).toBe(false);
+    expect(isPackageInternal('next/navigation', 'next')).toBe(false);
+    expect(isPackageInternal('next/dist/src/x', 'next')).toBe(false);
   });
 });

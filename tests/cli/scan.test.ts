@@ -161,6 +161,7 @@ function fakeEntryPurity(entryCount: number, offenderCount: number): EntryPurity
   return {
     appDir: 'x',
     entryCount,
+    imports: [],
     offenderCount,
     gate: evaluateGate({
       roleFileCount: entryCount,

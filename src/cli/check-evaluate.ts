@@ -1,5 +1,7 @@
 import { detectConsoleIsolation } from '../detector/console-isolation-detector.js';
 import { cycleEdges } from '../detector/cycle-detector.js';
+import { detectDependencyInternals } from '../detector/dependency-internals-detector.js';
+import { detectEntryPurity } from '../detector/entry-purity-detector.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
 import { detectDeepRelativeImports } from '../detector/deep-relative-detector.js';
 import { layerImports } from '../detector/layer-detector.js';
@@ -76,6 +78,21 @@ export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Fi
   for (const rule of byFamily('cycles')) {
     for (const edge of cycleEdges(buildImportGraph(appDir, { resolve: false }))) {
       findings.push({ ruleId: rule.id, file: edge.file, subject: edge.target, kind: 'target' });
+    }
+  }
+  for (const rule of byFamily('dependency-hygiene')) {
+    for (const violation of detectDependencyInternals(appDir).violations) {
+      findings.push({
+        ruleId: rule.id,
+        file: violation.file,
+        subject: violation.specifier,
+        kind: 'specifier',
+      });
+    }
+  }
+  for (const rule of byFamily('entry-purity')) {
+    for (const edge of detectEntryPurity(appDir).imports) {
+      findings.push({ ruleId: rule.id, file: edge.importer, subject: edge.file, kind: 'target' });
     }
   }
   for (const rule of byFamily('phantom-deps')) {

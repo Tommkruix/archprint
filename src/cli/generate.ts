@@ -7,8 +7,10 @@ import {
   toEslintBoundaries,
 } from '../generator/layer-emitters.js';
 import {
+  entryRuleSpec,
   type EslintAppRules,
   hasAppRules,
+  internalsRuleSpec,
   layerRuleSpecs,
   phantomRuleSpec,
   renderEslintAppRules,
@@ -21,9 +23,15 @@ import {
   toEslintTestIsolation,
 } from '../generator/test-isolation-emitters.js';
 import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emitters.js';
-import { toDependencyCruiserDependencyInternals } from '../generator/dependency-internals-emitters.js';
+import {
+  DEPENDENCY_INTERNALS_RULE,
+  toDependencyCruiserDependencyInternals,
+} from '../generator/dependency-internals-emitters.js';
 import { toDependencyCruiserRoleLayering } from '../generator/role-layering-emitters.js';
-import { toDependencyCruiserEntryPurity } from '../generator/entry-purity-emitters.js';
+import {
+  ENTRY_PURITY_RULE,
+  toDependencyCruiserEntryPurity,
+} from '../generator/entry-purity-emitters.js';
 import {
   PHANTOM_DEPENDENCY_RULE,
   toDependencyCruiserPhantomDependencies,
@@ -59,6 +67,8 @@ import {
   forbiddenImportRule,
   importStyleRule,
   cycleRule,
+  dependencyInternalsRule,
+  entryPurityRule,
   isCycleFree,
   layerRule,
   NO_CYCLES_RULE,
@@ -308,6 +318,20 @@ export function collectEnforcement(
     selects(SERVER_CLIENT_RULE)
       ? scan.serverClient
       : null;
+  const internals =
+    structural &&
+    pick('dependency-hygiene') &&
+    isEnforceable(scan.dependencyInternals.gate, scan.dependencyInternals.externalImporterCount) &&
+    selects(DEPENDENCY_INTERNALS_RULE)
+      ? scan.dependencyInternals
+      : null;
+  const entry =
+    structural &&
+    pick('entry-purity') &&
+    isEnforceable(scan.entryPurity.gate, scan.entryPurity.entryCount) &&
+    selects(ENTRY_PURITY_RULE)
+      ? scan.entryPurity
+      : null;
   const appRules: EslintAppRules = {
     appDir: scan.appDir,
     aliases: scan.layerAliases,
@@ -323,6 +347,8 @@ export function collectEnforcement(
             allowedFor,
           ),
     serverClient: serverClient === null ? null : serverClientRuleSpec(serverClient, allowedFor),
+    internals: internals === null ? null : internalsRuleSpec(internals, allowedFor),
+    entry: entry === null ? null : entryRuleSpec(entry, allowedFor),
   };
   const eslintApp = emitDepcruise || !hasAppRules(appRules) ? null : appRules;
   if (emitDepcruise) {
@@ -334,11 +360,20 @@ export function collectEnforcement(
         'server-client',
         toDependencyCruiserServerClient(serverClient, appPath, allowedFor).forbidden,
       );
+    if (internals !== null)
+      pushDc(
+        'dependency-internals',
+        toDependencyCruiserDependencyInternals(internals, allowedFor).forbidden,
+      );
+    if (entry !== null)
+      pushDc('entry-purity', toDependencyCruiserEntryPurity(entry, allowedFor).forbidden);
   }
   adopted.push(...layers.map(layerRule));
   if (phantom !== null) adopted.push(phantomDependencyRule(scan));
   if (pick('cycles') && isCycleFree(scan) && selects(NO_CYCLES_RULE)) adopted.push(cycleRule(scan));
   if (serverClient !== null) adopted.push(serverClientRule(scan));
+  if (internals !== null) adopted.push(dependencyInternalsRule(scan));
+  if (entry !== null) adopted.push(entryPurityRule(scan));
   if (structural && emitDepcruise && pick('role-layering'))
     pushNamedDc(
       'role-layering',
@@ -366,13 +401,6 @@ export function collectEnforcement(
       adopted.push(testIsolationRule(scan));
     }
   }
-  if (structural && emitDepcruise && pick('dependency-hygiene'))
-    pushNamedDc(
-      'dependency-internals',
-      toDependencyCruiserDependencyInternals(scan.dependencyInternals).forbidden,
-    );
-  if (structural && emitDepcruise && pick('entry-purity'))
-    pushNamedDc('entry-purity', toDependencyCruiserEntryPurity(scan.entryPurity).forbidden);
   if (structural && emitDepcruise && pick('stories-isolation'))
     pushNamedDc(
       'stories-isolation',

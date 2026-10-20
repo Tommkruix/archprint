@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { ESLint } from 'eslint';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { phantomDependencyRule, serverClientRule } from '../../src/cli/adopted-rules.js';
+import {
+  dependencyInternalsRule,
+  entryPurityRule,
+  phantomDependencyRule,
+  serverClientRule,
+} from '../../src/cli/adopted-rules.js';
 import { evaluateRules } from '../../src/cli/check-evaluate.js';
 import { emitLayout } from '../../src/cli/generate.js';
 import { scanRepo, type ScanResult } from '../../src/cli/scan.js';
@@ -15,6 +20,9 @@ import { writeTree } from './layer-app.js';
 
 const PHANTOM = 'archprint/no-phantom-dependencies';
 const SERVER_CLIENT = 'archprint/no-server-only-in-client';
+const INTERNALS = 'archprint/no-dependency-internals';
+const ENTRY = 'archprint/no-import-framework-entry';
+const RULES = [PHANTOM, SERVER_CLIENT, INTERNALS, ENTRY];
 const ESLINT_BIN = path.join(
   path.dirname(createRequire(import.meta.url).resolve('eslint/package.json')),
   'bin',
@@ -39,6 +47,14 @@ describe('generated ESLint dependency rules (end to end)', () => {
     expect(scan.serverClient.violations).toEqual([
       { file: 'src/components/legacy-client.tsx', target: 'src/lib/db.ts' },
     ]);
+    expect(scan.dependencyInternals.gate.status).toBe('AUTO');
+    expect(scan.dependencyInternals.violations).toEqual([
+      { file: 'src/lib/legacy-internal.ts', specifier: 'next/src/server' },
+    ]);
+    expect(scan.entryPurity.gate.status).toBe('AUTO');
+    expect(scan.entryPurity.imports).toEqual([
+      { file: 'src/app/r0/page.tsx', importer: 'src/lib/legacy-entry.ts' },
+    ]);
     emitLayout(scan, at('.archprint'), {
       version: '9.9.9',
       enforcers: eslintOnly,
@@ -58,7 +74,7 @@ describe('generated ESLint dependency rules (end to end)', () => {
     const results = await eslint.lintFiles(['src/**/*.{ts,tsx}']);
     expect(results.length).toBeGreaterThan(60);
     const hits = results.flatMap((result) =>
-      result.messages.filter((m) => m.ruleId === PHANTOM || m.ruleId === SERVER_CLIENT),
+      result.messages.filter((m) => RULES.includes(m.ruleId ?? '')),
     );
     expect(hits).toEqual([]);
   });
@@ -157,6 +173,41 @@ describe('generated ESLint dependency rules (end to end)', () => {
     ).toBe(0);
   });
 
+  it('reports reaching into a package, but not its public entry or subpaths', async () => {
+    const file = at('src', 'lib', 'new.ts');
+    for (const specifier of ['next/src/server', 'next/internal/router', '@acme/ui/internals/x']) {
+      const source = `import { x } from '${specifier}';\nexport const y = x;\n`;
+      expect(await ruleHits(eslint, INTERNALS, source, file)).toBe(1);
+    }
+    for (const specifier of [
+      'next',
+      'next/navigation',
+      'react/jsx-runtime',
+      '@/lib/db',
+      '#src/x',
+    ]) {
+      const source = `import { x } from '${specifier}';\nexport const y = x;\n`;
+      expect(await ruleHits(eslint, INTERNALS, source, file)).toBe(0);
+    }
+    const legacy = "import { x } from 'next/src/server';\nexport const i = x;\n";
+    expect(await ruleHits(eslint, INTERNALS, legacy, at('src', 'lib', 'legacy-internal.ts'))).toBe(
+      0,
+    );
+  });
+
+  it('reports importing a page from other code, but not existing imports or pages importing pages', async () => {
+    const page = "import Page from '@/app/r1/page';\nexport const p = Page;\n";
+    expect(await ruleHits(eslint, ENTRY, page, at('src', 'lib', 'new.ts'))).toBe(1);
+    const relative = "import Page from '../app/r2/page';\nexport const p = Page;\n";
+    expect(await ruleHits(eslint, ENTRY, relative, at('src', 'lib', 'new.ts'))).toBe(1);
+    const known = "import Page from '@/app/r0/page';\nexport const p = Page;\n";
+    expect(await ruleHits(eslint, ENTRY, known, at('src', 'lib', 'legacy-entry.ts'))).toBe(0);
+    expect(await ruleHits(eslint, ENTRY, known, at('src', 'lib', 'new.ts'))).toBe(1);
+    expect(await ruleHits(eslint, ENTRY, page, at('src', 'app', 'r3', 'page.tsx'))).toBe(0);
+    const typeOnly = "import type Page from '@/app/r1/page';\nexport type P = typeof Page;\n";
+    expect(await ruleHits(eslint, ENTRY, typeOnly, at('src', 'lib', 'new.ts'))).toBe(0);
+  });
+
   it('reports exactly the files archprint check reports, on the same imports', async () => {
     const probes: Record<string, string> = {
       'src/probe/undeclared.ts':
@@ -174,11 +225,33 @@ describe('generated ESLint dependency rules (end to end)', () => {
         "'use client';\nimport type { db } from '@/lib/db';\nexport type X = typeof db;\n",
       'src/probe/server.ts': "import { db } from '@/lib/db';\nexport const x = db;\n",
       'src/probe/probe.test.ts': "import _ from 'lodash';\nexport const x = _;\n",
+      'src/probe/internal.ts': "import { x } from 'next/src/client';\nexport const y = x;\n",
+      'src/probe/public.ts':
+        "import { useRouter } from 'next/navigation';\nexport const y = useRouter;\n",
+      'src/probe/imports-page.ts': "import Page from '@/app/r5/page';\nexport const p = Page;\n",
+      'src/probe/imports-known-page.ts':
+        "import Page from '@/app/r0/page';\nexport const p = Page;\n",
     };
     writeTree(root, probes);
     try {
-      const rules = [phantomDependencyRule(scan), serverClientRule(scan)];
-      const known = ['src/lib/legacy-phantom.ts', 'src/components/legacy-client.tsx'];
+      const rules = [
+        phantomDependencyRule(scan),
+        serverClientRule(scan),
+        dependencyInternalsRule(scan),
+        entryPurityRule(scan),
+      ];
+      const known = [
+        'src/lib/legacy-phantom.ts',
+        'src/components/legacy-client.tsx',
+        'src/lib/legacy-internal.ts',
+      ];
+      const knownEntryImports = scan.entryPurity.imports.map(
+        (entry) => `${entry.importer} -> ${entry.file}`,
+      );
+      const isKnown = (finding: { ruleId: string; file: string; subject: string }): boolean =>
+        finding.ruleId === 'no-import-framework-entry'
+          ? knownEntryImports.includes(`${finding.file} -> ${finding.subject}`)
+          : known.includes(finding.file);
       const countsByFile = (files: string[]): Record<string, number> =>
         Object.fromEntries(
           [...new Set(files)].sort().map((file) => [file, files.filter((f) => f === file).length]),
@@ -186,7 +259,7 @@ describe('generated ESLint dependency rules (end to end)', () => {
       const checked = (ruleId: string): Record<string, number> =>
         countsByFile(
           evaluateRules(root, rules)
-            .filter((finding) => finding.ruleId === ruleId && !known.includes(finding.file))
+            .filter((finding) => finding.ruleId === ruleId && !isKnown(finding))
             .map((finding) => finding.file),
         );
       const results = await eslint.lintFiles(['src/**/*.{ts,tsx}']);
@@ -198,12 +271,17 @@ describe('generated ESLint dependency rules (end to end)', () => {
               .map(() => path.relative(root, result.filePath).split(path.sep).join('/')),
           ),
         );
-      for (const ruleId of ['no-phantom-dependencies', 'no-server-only-in-client']) {
+      for (const ruleId of RULES.map((rule) => rule.replace('archprint/', ''))) {
         expect(linted(ruleId)).toEqual(checked(ruleId));
       }
       expect(linted('no-phantom-dependencies')).toEqual({
         'src/probe/dynamic.ts': 1,
         'src/probe/undeclared.ts': 2,
+      });
+      expect(linted('no-dependency-internals')).toEqual({ 'src/probe/internal.ts': 1 });
+      expect(linted('no-import-framework-entry')).toEqual({
+        'src/probe/imports-known-page.ts': 1,
+        'src/probe/imports-page.ts': 1,
       });
       expect(linted('no-server-only-in-client')).toEqual({
         'src/probe/client-db.tsx': 1,

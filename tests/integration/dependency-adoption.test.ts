@@ -43,10 +43,17 @@ describe('dependency rules through the CLI', () => {
     await generate('eslint', '--include-structural');
     const adopted = readAdoptedRules(out())!;
     expect(adopted.map((rule) => rule.id)).toEqual(
-      expect.arrayContaining([PHANTOM, SERVER_CLIENT]),
+      expect.arrayContaining([
+        PHANTOM,
+        SERVER_CLIENT,
+        'no-dependency-internals',
+        'no-import-framework-entry',
+      ]),
     );
 
     writeTree(repo, {
+      'src/lib/new-internal.ts': "import { x } from 'next/src/client';\nexport const y = x;\n",
+      'src/lib/new-entry.ts': "import Page from '@/app/r9/page';\nexport const p = Page;\n",
       'src/lib/new-phantom.ts': "import _ from 'lodash';\nexport const x = _;\n",
       'src/components/new-client.tsx':
         "'use client';\nimport { db } from '@/lib/db';\nexport const X = db;\n",
@@ -57,6 +64,14 @@ describe('dependency rules through the CLI', () => {
         .map((finding) => finding.file)
         .sort();
     expect(files(PHANTOM)).toEqual(['src/lib/legacy-phantom.ts', 'src/lib/new-phantom.ts']);
+    expect(files('no-dependency-internals')).toEqual([
+      'src/lib/legacy-internal.ts',
+      'src/lib/new-internal.ts',
+    ]);
+    expect(files('no-import-framework-entry')).toEqual([
+      'src/lib/legacy-entry.ts',
+      'src/lib/new-entry.ts',
+    ]);
     expect(files(SERVER_CLIENT)).toEqual([
       'src/components/legacy-client.tsx',
       'src/components/new-client.tsx',
@@ -84,6 +99,32 @@ describe('dependency rules through the CLI', () => {
     expect(phantom.from.pathNot).toContain('(^|/)src/lib/new-phantom\\.ts$');
     expect(readAdoptedRules(out())!.map((rule) => rule.id)).toEqual(
       expect.arrayContaining([PHANTOM, SERVER_CLIENT]),
+    );
+  });
+
+  it('leaves allowed importers out of the entry and internals evidence', () => {
+    writeTree(repo, {
+      'src/lib/second-entry.ts': "import Page from '@/app/r1/page';\nexport const p = Page;\n",
+      'src/lib/second-internal.ts':
+        "import { x } from 'next/internal/router';\nexport const y = x;\n",
+    });
+    const scan = scanRepo(repo);
+    expect(scan.entryPurity.offenderCount).toBe(2);
+    expect(scan.dependencyInternals.offenderCount).toBe(2);
+    const allowed = excludeAllowed(
+      scan,
+      new Map([
+        ['no-import-framework-entry', ['src/lib/second-entry.ts']],
+        ['no-dependency-internals', ['src/lib/second-internal.ts']],
+      ]),
+    );
+    expect(allowed.entryPurity.offenderCount).toBe(1);
+    expect(allowed.entryPurity.imports.map((entry) => entry.importer)).toEqual([
+      'src/lib/legacy-entry.ts',
+    ]);
+    expect(allowed.dependencyInternals.offenderCount).toBe(1);
+    expect(allowed.dependencyInternals.externalImporterCount).toBe(
+      scan.dependencyInternals.externalImporterCount - 1,
     );
   });
 

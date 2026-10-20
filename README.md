@@ -272,13 +272,13 @@ format.
 - **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
   every inferred ESLint rule (marker-based forbidden imports, `no-restricted-imports` import-style boundaries,
   console isolation, and, when you include structural rules and do not use dependency-cruiser, layer boundaries,
-  undeclared (phantom) dependencies and the server/client boundary)
+  undeclared (phantom) dependencies, the server/client boundary, package internals and entry purity)
   and needs no extra plugins: it adds rules to your existing ESLint setup, which already parses your TypeScript.
   So you can commit it, publish it, or hand it to another repo and adopt it in one line
   (`import archprint from './.archprint/eslint.mjs'`). Layer boundaries are the exception: they find your app
   relative to the file, so they only apply where it was generated. It self-ignores `**/.archprint/**`. The
-  forbidden-import (AP-), layer, phantom-dependency and server/client rules ship as a generated local eslint plugin
-  inside it, so wiring the eslint config enforces them too, no extra install.
+  forbidden-import (AP-) rules and those structural rules ship as a generated local eslint plugin inside it, so
+  wiring the eslint config enforces them too, no extra install.
 - **`.archprint/dependency-cruiser.json`** (when dependency-cruiser is present): one `forbidden` ruleset with the
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps, server/client) are added only with
