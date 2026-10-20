@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildImportGraph } from '../../src/scanner/import-graph.js';
+import { cycleEdges } from '../../src/detector/cycle-detector.js';
 import { detectCycles } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -72,6 +73,24 @@ describe('detectCycles', () => {
     expect(detectCycles(selfMemberFixture).cycles).toEqual([
       { files: ['a.ts', 'b.ts'], path: ['a.ts', 'b.ts', 'a.ts'] },
       { files: ['a.ts'], path: ['a.ts', 'a.ts'] },
+    ]);
+  });
+});
+
+describe('cycleEdges', () => {
+  it('lists the imports inside each cyclic group and self-imports, not imports into a group', () => {
+    const adjacency = new Map<string, string[]>([
+      ['a.ts', ['b.ts']],
+      ['b.ts', ['a.ts', 'c.ts']],
+      ['c.ts', ['c.ts']],
+      ['d.ts', ['a.ts']],
+    ]);
+    const files = [...adjacency.keys()].map((relativePath) => ({ relativePath }));
+    const graph = { root: '/x', files, adjacency } as unknown as Parameters<typeof cycleEdges>[0];
+    expect(cycleEdges(graph)).toEqual([
+      { file: 'a.ts', target: 'b.ts' },
+      { file: 'b.ts', target: 'a.ts' },
+      { file: 'c.ts', target: 'c.ts' },
     ]);
   });
 });

@@ -9,6 +9,8 @@ function analysis(externalImporterCount: number, offenderCount: number): Phantom
   return {
     appDir: 'x',
     externalImporterCount,
+    declaringPackageJsons: [],
+    workspacePackages: [],
     offenderCount,
     gate: evaluateGate({
       roleFileCount: externalImporterCount,

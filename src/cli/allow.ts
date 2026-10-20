@@ -22,8 +22,17 @@ export interface AllowOptions {
   remove?: boolean;
 }
 
+const GENERATED_FOR_EITHER_ENFORCER: ReadonlySet<AdoptedRule['family']> = new Set([
+  'layer',
+  'phantom-deps',
+  'server-client',
+]);
+
+/** What to run so the generated rules follow the change; nothing when only archprint check enforces the rule. */
 const regenerateHint = (rule: AdoptedRule): string =>
-  `Run archprint generate to update the ${rule.family === 'layer' ? 'generated' : 'ESLint'} rules.`;
+  rule.family === 'cycles'
+    ? ''
+    : ` Run archprint generate to update the ${GENERATED_FOR_EITHER_ENFORCER.has(rule.family) ? 'generated' : 'ESLint'} rules.`;
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
@@ -58,7 +67,7 @@ export function runAllow(options: AllowOptions): string {
       throw new AllowError(`There is no allowed exception for ${rule.id} in ${file}.`);
     }
     writeAllowed(outDir, others);
-    return `Removed the exception for ${rule.id} in ${file}. ${regenerateHint(rule)}`;
+    return `Removed the exception for ${rule.id} in ${file}.${regenerateHint(rule)}`;
   }
 
   const reason = options.reason?.trim() ?? '';
@@ -74,6 +83,6 @@ export function runAllow(options: AllowOptions): string {
   const lint =
     rule.family === 'public-api'
       ? ' dependency-cruiser does not read this list, so add the exception there too if you use it.'
-      : ` ${regenerateHint(rule)}`;
+      : regenerateHint(rule);
   return `Allowed ${rule.id} in ${file}. archprint check accepts it now.${lint}`;
 }

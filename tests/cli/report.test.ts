@@ -74,6 +74,8 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   phantomDependencies: {
     appDir: '/app',
     externalImporterCount: 0,
+    declaringPackageJsons: [],
+    workspacePackages: [],
     offenderCount: 0,
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
     violations: [],
@@ -124,6 +126,8 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   serverClient: {
     appDir: '/app',
     clientCount: 0,
+    clients: [],
+    serverModules: [],
     offenderCount: 0,
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
     violations: [],

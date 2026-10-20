@@ -200,7 +200,9 @@ folder's purpose incorrectly. So only the **mechanical** families, which rest on
 without review: forbidden imports (AP-001, AP-002), circular dependencies, test isolation, import style, console
 isolation, and public-API barrels. An adversarial correctness audit (three rounds over four real repositories)
 found zero false positives in these every round. All of them except circular dependencies are written as lint
-rules; for cycles, Archprint reports the result but does not write a rule yet.
+rules; a cycle-free codebase with enough files for the gate adopts "no circular dependencies", which
+`archprint check` enforces on each pull request (cycles need the whole import graph, so there is no lint rule for
+them).
 
 The **structural** families infer a "layer" or "role" from paths, which can be wrong (layer and role boundaries,
 UI/data separation, entry purity, server/client, feature-slice and app isolation, env access, workspace package
@@ -217,7 +219,8 @@ connecting them, use `archprint generate --check`.
 ## What it can detect
 
 **Ships as:** **Auto** = turned on as enforcement (mechanical families). **Review** = held for your review by
-default; emit with `--include-structural`. **Report** = shown only, never enforced.
+default; emit with `--include-structural`. **Check** = enforced by `archprint check` on each pull request. **Report** =
+shown only, never enforced.
 
 Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and classifies UI components across React
 (`.tsx`), Angular (`.component.ts`, `.directive.ts`), and Vue and Svelte single-file components (it reads the
@@ -226,7 +229,7 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Detector                           | Rule it can infer                                                                                                          | Ships as |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | Forbidden imports (AP-001, AP-002) | AP-001: a request entry (route handler) must not import the DB client. AP-002: a server entry must not import the UI layer | Auto     |
-| Circular dependencies              | The module graph should stay acyclic (gated on how cycle free it already is); reported, no lint rule written yet           | Report   |
+| Circular dependencies              | The module graph should stay acyclic; adopted when there are no cycles, and `archprint check` reports a new one            | Check    |
 | Test isolation                     | Production (non-test) code must not import test or spec files                                                              | Auto     |
 | Dependency hygiene                 | Import third-party packages by their public entry, not a dependency's `src`/`internal` internals                           | Review   |
 | Dependency declaration             | Every imported third-party package must be declared in `package.json` (no phantom/transitive deps)                         | Review   |
@@ -247,7 +250,7 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
 `recommend` (and `init`) sort every rule family into tiers: rules your code already follows (enforce now), rules
-your code follows that Archprint reports but does not write yet (circular dependencies today), rules with thin
+your code follows that Archprint reports but does not write, rules with thin
 evidence (review and adopt), and rules that comparable repos commonly follow but yours does not yet (adopt from day
 one). Each recommendation carries the share of comparable repos (your detected stack, else
 overall) that already enforce that rule, mined from a census of tens of thousands of public TypeScript
@@ -268,16 +271,17 @@ format.
   held for review, and worth adopting, and the list of managed outputs `eject` removes.
 - **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
   every inferred ESLint rule (marker-based forbidden imports, `no-restricted-imports` import-style boundaries,
-  console isolation, and layer boundaries when you include structural rules and do not use dependency-cruiser)
+  console isolation, and, when you include structural rules and do not use dependency-cruiser, layer boundaries,
+  undeclared (phantom) dependencies and the server/client boundary)
   and needs no extra plugins: it adds rules to your existing ESLint setup, which already parses your TypeScript.
   So you can commit it, publish it, or hand it to another repo and adopt it in one line
   (`import archprint from './.archprint/eslint.mjs'`). Layer boundaries are the exception: they find your app
   relative to the file, so they only apply where it was generated. It self-ignores `**/.archprint/**`. The
-  forbidden-import (AP-) and layer rules ship as a generated local eslint plugin inside it, so wiring the eslint
-  config enforces them too, no extra install.
+  forbidden-import (AP-), layer, phantom-dependency and server/client rules ship as a generated local eslint plugin
+  inside it, so wiring the eslint config enforces them too, no extra install.
 - **`.archprint/dependency-cruiser.json`** (when dependency-cruiser is present): one `forbidden` ruleset with the
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
-  feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps) are added only with
+  feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps, server/client) are added only with
   `--include-structural`, after you review them.
 - **A managed section in your `README.md`** summarizing what is enforced now, followed but only reported, held for
   review, and worth adopting (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so

@@ -1,19 +1,14 @@
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
-import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
+import { appPathPrefix, exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const layerRuleName = ({ from, to }: { from: string; to: string }): string =>
   `no-${from}-to-${to}`;
 
-const appPrefix = (appPath: string): string => {
-  const normalized = appPath.replace(/\\/g, '/').replace(/\/+$/, '');
-  return normalized === '' || normalized === '.' ? '' : `${escapeRegExp(normalized)}/`;
-};
-
 const layerPath = (dirs: readonly string[], appPath: string): string =>
-  `^${appPrefix(appPath)}(?:${dirs.map(escapeRegExp).join('|')})/`;
+  `^${appPathPrefix(appPath)}(?:${dirs.map(escapeRegExp).join('|')})/`;
 
 const confidencePct = (boundary: LayerBoundary): string =>
   `${(boundary.gate.conditions.confidence.value * 100).toFixed(0)}%`;
