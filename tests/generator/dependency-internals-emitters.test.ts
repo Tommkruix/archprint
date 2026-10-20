@@ -24,7 +24,7 @@ function analysis(
 
 describe('toDependencyCruiserDependencyInternals', () => {
   it('emits a rule forbidding imports into a package internals directory when clean (AUTO)', () => {
-    const config = toDependencyCruiserDependencyInternals(analysis(40, 0));
+    const config = toDependencyCruiserDependencyInternals(analysis(40, 0), () => []);
     expect(config.forbidden).toHaveLength(1);
     const rule = config.forbidden[0]!;
     expect(rule.name).toBe('no-dependency-internals');
@@ -35,11 +35,19 @@ describe('toDependencyCruiserDependencyInternals', () => {
     expect(rule.to.path).not.toContain('dist');
   });
 
+  it('exempts allowed files from the rule', () => {
+    const rule = toDependencyCruiserDependencyInternals(analysis(40, 0), () => ['lib/legacy.ts'])
+      .forbidden[0]!;
+    const exempt = [rule.from.pathNot].flat().map((source) => new RegExp(source));
+    expect(exempt.some((pattern) => pattern.test('lib/legacy.ts'))).toBe(true);
+    expect(exempt.some((pattern) => pattern.test('lib/other.ts'))).toBe(false);
+  });
+
   it('emits nothing when no external packages are imported', () => {
-    expect(toDependencyCruiserDependencyInternals(analysis(0, 0)).forbidden).toEqual([]);
+    expect(toDependencyCruiserDependencyInternals(analysis(0, 0), () => []).forbidden).toEqual([]);
   });
 
   it('emits nothing when the rule is not enforceable (below AUTO)', () => {
-    expect(toDependencyCruiserDependencyInternals(analysis(5, 3)).forbidden).toEqual([]);
+    expect(toDependencyCruiserDependencyInternals(analysis(5, 3), () => []).forbidden).toEqual([]);
   });
 });

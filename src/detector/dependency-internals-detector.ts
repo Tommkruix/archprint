@@ -5,28 +5,12 @@ import {
   walkRepo,
   type WalkedFile,
 } from '../scanner/file-walker.js';
+import { isPackageInternal, packageName } from '../scanner/package-name.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import * as path from 'node:path';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 
-const INTERNAL_DIRS = new Set(['src', 'internal', 'internals']);
 const BUILTINS = new Set(builtinModules);
-
-type SpecifierKind = 'first-party' | 'builtin' | 'external' | 'internal';
-
-function classifySpecifier(specifier: string, aliasPrefixes: readonly string[]): SpecifierKind {
-  if (specifier.startsWith('.')) return 'first-party';
-  const bare = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
-  if (specifier.startsWith('node:') || BUILTINS.has(bare) || BUILTINS.has(bare.split('/')[0]!)) {
-    return 'builtin';
-  }
-  for (const prefix of aliasPrefixes) {
-    if (specifier === prefix || specifier.startsWith(`${prefix}/`)) return 'first-party';
-  }
-  const parts = specifier.split('/');
-  const rest = specifier.startsWith('@') ? parts.slice(2) : parts.slice(1);
-  return rest.length > 0 && INTERNAL_DIRS.has(rest[0]!) ? 'internal' : 'external';
-}
 
 export interface DependencyInternalViolation {
   file: string;
@@ -70,9 +54,10 @@ export function detectDependencyInternals(
     }
     for (const imp of imports) {
       if (!imp.hasValueBinding) continue;
-      const kind = classifySpecifier(imp.specifier, aliasPrefixes);
-      if (kind === 'external' || kind === 'internal') externalImporters.add(file.relativePath);
-      if (kind === 'internal') {
+      const name = packageName(imp.specifier, aliasPrefixes, BUILTINS);
+      if (name === null) continue;
+      externalImporters.add(file.relativePath);
+      if (isPackageInternal(imp.specifier, name)) {
         offenders.add(file.relativePath);
         violations.push({ file: file.relativePath, specifier: imp.specifier });
       }

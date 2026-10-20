@@ -6,14 +6,28 @@ export interface AliasEntry {
   dir: string;
 }
 
-const JS_EXT_TO_TS: Record<string, readonly string[]> = {
-  '.js': ['.ts', '.tsx'],
-  '.jsx': ['.tsx'],
-  '.mjs': ['.ts', '.tsx'],
-  '.cjs': ['.ts', '.tsx'],
-};
-const BARE_CANDIDATES = ['', '.ts', '.tsx', '.vue', '.svelte', '/index.ts', '/index.tsx'];
-const FIRST_PARTY_TARGET = /\.(ts|tsx|vue|svelte)$/;
+/**
+ * The files an import of `base` (a path without resolution) can mean, in the order TypeScript-style resolution
+ * tries them. Self-contained: the generated ESLint rules embed it.
+ */
+export function firstPartyCandidates(base: string): string[] {
+  const jsToTs: Record<string, readonly string[]> = {
+    '.js': ['.ts', '.tsx'],
+    '.jsx': ['.tsx'],
+    '.mjs': ['.ts', '.tsx'],
+    '.cjs': ['.ts', '.tsx'],
+  };
+  const name = base.slice(Math.max(base.lastIndexOf('/'), base.lastIndexOf('\\')) + 1);
+  const dot = name.lastIndexOf('.');
+  const extension = dot > 0 ? name.slice(dot) : '';
+  const candidates = (jsToTs[extension] ?? []).map(
+    (tsExtension) => base.slice(0, -extension.length) + tsExtension,
+  );
+  for (const suffix of ['', '.ts', '.tsx', '.vue', '.svelte', '/index.ts', '/index.tsx']) {
+    candidates.push(base + suffix);
+  }
+  return candidates.filter((candidate) => /\.(ts|tsx|vue|svelte)$/.test(candidate));
+}
 
 function specifierBase(
   specifier: string,
@@ -38,15 +52,8 @@ export function resolveFirstPartyImport(
 ): string | null {
   const base = specifierBase(specifier, fromAbsPath, aliases);
   if (base === null) return null;
-  const candidates: string[] = [];
-  const tsExtensions = JS_EXT_TO_TS[path.extname(base)];
-  if (tsExtensions !== undefined) {
-    const stem = base.slice(0, -path.extname(base).length);
-    for (const tsExt of tsExtensions) candidates.push(stem + tsExt);
-  }
-  for (const suffix of BARE_CANDIDATES) candidates.push(base + suffix);
-  for (const candidate of candidates) {
-    if (FIRST_PARTY_TARGET.test(candidate) && existsSync(candidate)) return candidate;
+  for (const candidate of firstPartyCandidates(base)) {
+    if (existsSync(candidate)) return candidate;
   }
   return null;
 }

@@ -1,3 +1,5 @@
+import { hasLeadingDirective } from './directives.js';
+
 export type Role =
   | 'CONTROLLER'
   | 'SERVICE'
@@ -153,48 +155,32 @@ export const REQUEST_ENTRY_ROLES: readonly Role[] = [
   'TRPC_ROUTER',
 ];
 
-export function classifyFile(relativePath: string): RoleClassification {
+/** The index of the first rule whose pattern matches the path, or -1. Self-contained: the ESLint rules embed it. */
+export function firstMatchingRule(
+  relativePath: string,
+  rules: readonly { test: RegExp }[],
+): number {
   const normalizedPath = relativePath.replace(/\\/g, '/');
-  for (const rule of ROLE_RULES) {
-    if (rule.test.test(normalizedPath)) {
-      return { role: rule.role, confidence: rule.confidence, matchedRule: rule.id };
-    }
-  }
-  return { role: 'UNKNOWN', confidence: 0, matchedRule: null };
+  return rules.findIndex((rule) => rule.test.test(normalizedPath));
 }
 
-const USE_SERVER_LITERAL = /^["']use server["']/;
-const USE_CLIENT_LITERAL = /^["']use client["']/;
-const isWhitespace = (c: string): boolean =>
-  c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
+/** The role rules in the order classifyFile tries them, as regex sources. */
+export const ROLE_RULE_SOURCES: readonly { role: Role; source: string }[] = ROLE_RULES.map(
+  (rule) => ({ role: rule.role, source: rule.test.source }),
+);
 
-function hasLeadingDirective(sourceHead: string, literal: RegExp): boolean {
-  let i = 0;
-  const n = sourceHead.length;
-  for (;;) {
-    while (i < n && isWhitespace(sourceHead[i]!)) i++;
-    if (sourceHead.startsWith('//', i)) {
-      const newline = sourceHead.indexOf('\n', i);
-      if (newline === -1) return false;
-      i = newline + 1;
-    } else if (sourceHead.startsWith('/*', i)) {
-      const end = sourceHead.indexOf('*/', i + 2);
-      if (end === -1) return false;
-      i = end + 2;
-    } else {
-      break;
-    }
-  }
-  return literal.test(sourceHead.slice(i));
+export function classifyFile(relativePath: string): RoleClassification {
+  const rule = ROLE_RULES[firstMatchingRule(relativePath, ROLE_RULES)];
+  return rule === undefined
+    ? { role: 'UNKNOWN', confidence: 0, matchedRule: null }
+    : { role: rule.role, confidence: rule.confidence, matchedRule: rule.id };
 }
 
-export function hasUseServerDirective(sourceHead: string): boolean {
-  return hasLeadingDirective(sourceHead, USE_SERVER_LITERAL);
-}
+export const hasUseServerDirective = (sourceHead: string): boolean =>
+  hasLeadingDirective(sourceHead, 'use server');
 
-export function hasUseClientDirective(sourceHead: string): boolean {
-  return hasLeadingDirective(sourceHead, USE_CLIENT_LITERAL);
-}
+export const hasUseClientDirective = (sourceHead: string): boolean =>
+  hasLeadingDirective(sourceHead, 'use client');
 
 export function classifyFileWithDirective(
   relativePath: string,

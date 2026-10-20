@@ -40,11 +40,13 @@ describe('mcp tools', () => {
     expect(apps.map((a) => a.app).sort()).toEqual(['app-a', 'app-b']);
   });
 
-  it('recommendTool returns every tier, with cycles reported rather than enforced', () => {
+  it('recommendTool returns every tier, with cycles enforced by archprint check', () => {
     const apps = recommendTool(auto);
     expect(apps).toHaveLength(1);
-    expect(Array.isArray(apps[0]!.enforceNow)).toBe(true);
-    expect(apps[0]!.reportOnly.map((r) => r.title)).toEqual(['Circular dependencies']);
+    expect(apps[0]!.enforceNow.find((r) => r.title === 'Circular dependencies')?.enforcer).toBe(
+      'archprint check',
+    );
+    expect(apps[0]!.reportOnly).toEqual([]);
     expect(Array.isArray(apps[0]!.review)).toBe(true);
     expect(Array.isArray(apps[0]!.adopt)).toBe(true);
   });
@@ -56,7 +58,7 @@ describe('mcp tools', () => {
     expect(adoption).toMatchObject({
       'AP-001': ['AUTO', 'enforce'],
       'console-isolation': ['AUTO', 'enforce'],
-      cycles: ['AUTO', 'report-only'],
+      cycles: ['AUTO', 'enforce'],
       'entry-purity': ['AUTO', 'review'],
     });
   });
