@@ -1,5 +1,19 @@
 # archprint
 
+## 0.14.0
+
+### Minor Changes
+
+- Undeclared (phantom) dependencies and the server/client boundary can now be enforced with plain ESLint, like layer boundaries. When your repo does not use dependency-cruiser, `generate --include-structural` writes them into `.archprint/eslint.mjs` as `archprint/no-phantom-dependencies` and `archprint/no-server-only-in-client`, with no extra plugin, and they pass on the code they were generated from. The phantom-dependency rule reads your `package.json` each time ESLint starts, so declaring a package is enough; no regenerate. Both rules are now adopted, whichever tool enforces them: `archprint check` reports a new break and `archprint allow` accepts one.
+
+  Circular dependencies are now enforced. When your code has no cycle (and enough files to say so), `generate` and `init` adopt the rule `no-cycles`, without `--include-structural`, and `archprint check` reports each import that closes a new cycle in a pull request; to accept a cycle, allow every file in it. There is no lint rule for cycles, because finding one needs the whole import graph. The phantom-dependency and server/client rules still need `--include-structural`. Older archprint versions do not recognize these adopted rules, so update archprint in CI (for example the GitHub Action's `archprint-version`) before you regenerate.
+
+  Fixes: the server/client rule written for dependency-cruiser flagged every server module that correctly imports `server-only`, and missed the client component importing it; it now covers exactly the client components and server-only modules the scan found. A module that only mentions "server-only" in a comment or a string is no longer treated as server-only. A "use client" directive after a byte-order mark or a shebang line is recognized. `#` subpath imports and `scheme:` specifiers (such as `bun:test`) are no longer reported as undeclared packages.
+
+- Package internals and entry purity can now be enforced with plain ESLint too. When your repo does not use dependency-cruiser, `generate --include-structural` writes `archprint/no-dependency-internals` (importing a package's `src` or `internal` folders) and `archprint/no-import-framework-entry` (importing a page, layout or route handler from other code) into `.archprint/eslint.mjs`. Both pass on the code they were generated from and are adopted, so `archprint check` reports a new break and `archprint allow` accepts one. The entry rule recognizes pages and routes by their path, so new routes are covered without regenerating.
+
+  Fixes: the entry-purity rule written for dependency-cruiser flagged a page importing another page, test files, and the imports that already existed when it was generated; it now exempts all three. Package-internals evidence no longer counts `#` subpath imports or `scheme:` specifiers as packages.
+
 ## 0.13.1
 
 ### Patch Changes

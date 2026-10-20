@@ -1,9 +1,0 @@
----
-'archprint': minor
----
-
-Undeclared (phantom) dependencies and the server/client boundary can now be enforced with plain ESLint, like layer boundaries. When your repo does not use dependency-cruiser, `generate --include-structural` writes them into `.archprint/eslint.mjs` as `archprint/no-phantom-dependencies` and `archprint/no-server-only-in-client`, with no extra plugin, and they pass on the code they were generated from. The phantom-dependency rule reads your `package.json` each time ESLint starts, so declaring a package is enough; no regenerate. Both rules are now adopted, whichever tool enforces them: `archprint check` reports a new break and `archprint allow` accepts one.
-
-Circular dependencies are now enforced. When your code has no cycle (and enough files to say so), `generate` and `init` adopt the rule `no-cycles`, without `--include-structural`, and `archprint check` reports each import that closes a new cycle in a pull request; to accept a cycle, allow every file in it. There is no lint rule for cycles, because finding one needs the whole import graph. The phantom-dependency and server/client rules still need `--include-structural`. Older archprint versions do not recognize these adopted rules, so update archprint in CI (for example the GitHub Action's `archprint-version`) before you regenerate.
-
-Fixes: the server/client rule written for dependency-cruiser flagged every server module that correctly imports `server-only`, and missed the client component importing it; it now covers exactly the client components and server-only modules the scan found. A module that only mentions "server-only" in a comment or a string is no longer treated as server-only. A "use client" directive after a byte-order mark or a shebang line is recognized. `#` subpath imports and `scheme:` specifiers (such as `bun:test`) are no longer reported as undeclared packages.
