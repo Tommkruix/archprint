@@ -67,6 +67,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   entryPurity: {
     appDir: '/app',
     entryCount: 0,
+    imports: [],
     offenderCount: 0,
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
     violations: [],

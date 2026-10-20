@@ -5,14 +5,18 @@ import {
   SERVER_ONLY_PACKAGE,
   type ServerClientAnalysis,
 } from '../detector/server-client-detector.js';
+import type { DependencyInternalsAnalysis } from '../detector/dependency-internals-detector.js';
+import { ENTRY_ROLES, type EntryPurityAnalysis } from '../detector/entry-purity-detector.js';
 import type { PhantomDependencyAnalysis } from '../detector/phantom-dependency-detector.js';
 import { hasLeadingDirective } from '../scanner/directives.js';
-import { declaredPackages, packageName } from '../scanner/package-name.js';
+import { declaredPackages, isPackageInternal, packageName } from '../scanner/package-name.js';
 import { firstPartyCandidates } from '../scanner/resolve-import.js';
-import { ROLE_PATTERNS } from '../scanner/role-classifier.js';
+import { firstMatchingRule, ROLE_PATTERNS, ROLE_RULE_SOURCES } from '../scanner/role-classifier.js';
 import { isSkippedFolder, isSourceFileName } from '../scanner/source-paths.js';
 import { LINTED_FILES } from './eslint-plugin-emitter.js';
 import { layerRuleName } from './layer-emitters.js';
+import { DEPENDENCY_INTERNALS_RULE } from './dependency-internals-emitters.js';
+import { ENTRY_PURITY_RULE } from './entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from './phantom-dependency-emitters.js';
 import { SERVER_CLIENT_RULE } from './server-client-emitters.js';
 
@@ -38,6 +42,12 @@ export interface ServerClientRuleSpec extends AppRule {
   serverModules: string[];
 }
 
+export interface EntryRuleSpec extends AppRule {
+  entryRoles: string[];
+  /** The `importer -> entry` imports that existed when the rule was generated. */
+  exemptImports: string[];
+}
+
 /** The app the rules enforce: where it is, its import aliases, and the gitignored paths the scan left out. */
 export interface AppScope {
   appDir: string;
@@ -49,6 +59,8 @@ export interface EslintAppRules extends AppScope {
   layers: LayerRuleSpec[];
   phantom: PhantomRuleSpec | null;
   serverClient: ServerClientRuleSpec | null;
+  internals: AppRule | null;
+  entry: EntryRuleSpec | null;
 }
 
 type AllowedFor = (ruleId: string) => readonly string[];
@@ -106,8 +118,37 @@ export const serverClientRuleSpec = (
   serverModules: [...analysis.serverModules],
 });
 
+export const internalsRuleSpec = (
+  analysis: DependencyInternalsAnalysis,
+  allowedFor: AllowedFor,
+): AppRule => ({
+  name: DEPENDENCY_INTERNALS_RULE,
+  message:
+    'Import a package by its public entry, not its src or internal folders (archprint: the code already does).',
+  ignore: exempting(
+    DEPENDENCY_INTERNALS_RULE,
+    analysis.violations.map((violation) => violation.file),
+    allowedFor,
+  ),
+});
+
+const importPair = (importer: string, entry: string): string => `${importer} -> ${entry}`;
+
+export const entryRuleSpec = (
+  analysis: EntryPurityAnalysis,
+  allowedFor: AllowedFor,
+): EntryRuleSpec => ({
+  name: ENTRY_PURITY_RULE,
+  message:
+    'A page, layout or route handler is loaded by the framework; do not import it (archprint: the code already does not).',
+  ignore: exempting(ENTRY_PURITY_RULE, [], allowedFor),
+  entryRoles: [...ENTRY_ROLES],
+  exemptImports: analysis.imports.map(({ importer, file }) => importPair(importer, file)).sort(),
+});
+
 export const hasAppRules = (rules: EslintAppRules): boolean =>
-  rules.layers.length > 0 || rules.phantom !== null || rules.serverClient !== null;
+  rules.layers.length > 0 ||
+  [rules.phantom, rules.serverClient, rules.internals, rules.entry].some((spec) => spec !== null);
 
 const APP_RUNTIME = `function realPathOf(filename) {
   try {
@@ -158,13 +199,17 @@ function importVisitors(check) {
   };
 }
 
+function isTestFile(file) {
+  return APP_TESTS.some((test) => test.test(file));
+}
+
 function appRule(spec, create) {
   return {
     meta: { type: 'problem', schema: [], messages: { forbidden: spec.message } },
     create(context) {
       const file = appRelativePath(context.physicalFilename);
       if (file === null || !isScanned(file)) return {};
-      if (APP_TESTS.some((test) => test.test(file)) || spec.ignore.includes(file)) return {};
+      if (isTestFile(file) || spec.ignore.includes(file)) return {};
       return create(context, file);
     },
   };
@@ -183,6 +228,49 @@ const LAYER_RUNTIME = `function makeLayerRule(spec) {
   );
 }`;
 
+const PACKAGE_RUNTIME = `const APP_ALIAS_PREFIXES = APP.aliases.map((alias) => alias.prefix);
+const BUILTINS = new Set(builtinModules);`;
+
+const TARGET_RUNTIME = `function firstPartyTarget(file, specifier) {
+  const base = resolveImportPath(file, specifier, APP.aliases);
+  if (base === null) return null;
+  return firstPartyCandidates(base).find((candidate) => existsSync(join(APP_DIR, candidate))) ?? null;
+}`;
+
+const INTERNALS_RUNTIME = `function makeInternalsRule(spec) {
+  return appRule(spec, (context) =>
+    importVisitors((node, specifier) => {
+      const name = packageName(specifier, APP_ALIAS_PREFIXES, BUILTINS);
+      if (name !== null && isPackageInternal(specifier, name)) context.report({ node, messageId: 'forbidden' });
+    }),
+  );
+}`;
+
+const ENTRY_RUNTIME = `const APP_ROLES = APP_ROLE_RULES.map(({ role, source }) => ({ role, test: new RegExp(source) }));
+
+function roleOf(file) {
+  return APP_ROLES[firstMatchingRule(file, APP_ROLES)]?.role ?? 'UNKNOWN';
+}
+
+function makeEntryRule(spec) {
+  return appRule(spec, (context, file) =>
+    spec.entryRoles.includes(roleOf(file))
+      ? {}
+      : importVisitors((node, specifier) => {
+          const target = firstPartyTarget(file, specifier);
+          if (
+            target !== null &&
+            isScanned(target) &&
+            !isTestFile(target) &&
+            spec.entryRoles.includes(roleOf(target)) &&
+            !spec.exemptImports.includes(file + ' -> ' + target)
+          ) {
+            context.report({ node, messageId: 'forbidden' });
+          }
+        }),
+  );
+}`;
+
 const PHANTOM_RUNTIME = `const PHANTOM_DECLARED = new Set([
   ...PHANTOM.workspacePackages,
   ...PHANTOM.packageJsons.flatMap((file) => {
@@ -193,25 +281,17 @@ const PHANTOM_RUNTIME = `const PHANTOM_DECLARED = new Set([
     }
   }),
 ]);
-const PHANTOM_ALIASES = APP.aliases.map((alias) => alias.prefix);
-const PHANTOM_BUILTINS = new Set(builtinModules);
 
 function makePhantomRule(spec) {
   return appRule(spec, (context) =>
     importVisitors((node, specifier) => {
-      const name = packageName(specifier, PHANTOM_ALIASES, PHANTOM_BUILTINS);
+      const name = packageName(specifier, APP_ALIAS_PREFIXES, BUILTINS);
       if (name !== null && !PHANTOM_DECLARED.has(name)) context.report({ node, messageId: 'forbidden' });
     }),
   );
 }`;
 
 const SERVER_CLIENT_RUNTIME = `const SERVER_MODULES = new Set(SERVER_CLIENT.serverModules);
-
-function firstPartyTarget(file, specifier) {
-  const base = resolveImportPath(file, specifier, APP.aliases);
-  if (base === null) return null;
-  return firstPartyCandidates(base).find((candidate) => existsSync(join(APP_DIR, candidate))) ?? null;
-}
 
 function makeServerClientRule(spec) {
   return appRule(spec, (context, file) =>
@@ -242,13 +322,17 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     ignored: rules.ignored,
     tests: (ROLE_PATTERNS.get('TEST') ?? []).map((pattern) => pattern.source),
   };
-  const { layers, phantom, serverClient } = rules;
+  const { layers, phantom, serverClient, internals, entry } = rules;
   const json = (value: unknown): string => JSON.stringify(value, null, 2);
   const specs = [
     ...layers.map((spec) => ({ spec, make: 'makeLayerRule' })),
     ...(phantom === null ? [] : [{ spec: phantom, make: 'makePhantomRule' }]),
     ...(serverClient === null ? [] : [{ spec: serverClient, make: 'makeServerClientRule' }]),
+    ...(internals === null ? [] : [{ spec: internals, make: 'makeInternalsRule' }]),
+    ...(entry === null ? [] : [{ spec: entry, make: 'makeEntryRule' }]),
   ];
+  const needsPackages = phantom !== null || internals !== null;
+  const needsTargets = serverClient !== null || entry !== null;
   const source = [
     `const APP = ${json(app)};`,
     `const APP_RULES = ${json(specs.map(({ spec, make }) => ({ ...spec, make })))};`,
@@ -260,11 +344,12 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     resolveImportPath.toString(),
     APP_RUNTIME,
     ...(layers.length === 0 ? [] : [layerRootOf.toString(), LAYER_RUNTIME]),
+    ...(needsPackages ? [packageName.toString(), PACKAGE_RUNTIME] : []),
+    ...(needsTargets ? [firstPartyCandidates.toString(), TARGET_RUNTIME] : []),
     ...(phantom === null
       ? []
       : [
           `const PHANTOM = ${json({ packageJsons: phantom.packageJsons.map(relativeToConfig), workspacePackages: phantom.workspacePackages })};`,
-          packageName.toString(),
           declaredPackages.toString(),
           PHANTOM_RUNTIME,
         ]),
@@ -273,8 +358,15 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
       : [
           `const SERVER_CLIENT = ${json({ serverModules: serverClient.serverModules })};`,
           hasLeadingDirective.toString(),
-          firstPartyCandidates.toString(),
           SERVER_CLIENT_RUNTIME,
+        ]),
+    ...(internals === null ? [] : [isPackageInternal.toString(), INTERNALS_RUNTIME]),
+    ...(entry === null
+      ? []
+      : [
+          `const APP_ROLE_RULES = ${json(ROLE_RULE_SOURCES)};`,
+          firstMatchingRule.toString(),
+          ENTRY_RUNTIME,
         ]),
     `const APP_MAKERS = { ${[...new Set(specs.map(({ make }) => make))].join(', ')} };`,
   ].join('\n\n');

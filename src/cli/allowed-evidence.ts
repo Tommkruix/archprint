@@ -1,5 +1,8 @@
 import { evaluateGate, wilsonLowerBound } from '../detector/confidence-gate.js';
+import { importedEntries } from '../detector/entry-purity-detector.js';
 import { layerRuleName } from '../generator/layer-emitters.js';
+import { DEPENDENCY_INTERNALS_RULE } from '../generator/dependency-internals-emitters.js';
+import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from '../generator/phantom-dependency-emitters.js';
 import { SERVER_CLIENT_RULE } from '../generator/server-client-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
@@ -40,6 +43,36 @@ function regatedCycles(scan: ScanResult, allowedFiles: readonly string[]) {
   if (cycles.length === analysis.cycles.length) return analysis;
   const filesInCycles = new Set(cycles.flatMap((cycle) => cycle.files)).size;
   return { ...analysis, cycles, filesInCycles, gate: regate(analysis.fileCount, filesInCycles) };
+}
+
+function regatedInternals(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.dependencyInternals;
+  const internals = exclude(analysis.violations, allowedFiles);
+  if (internals.removedFiles === 0) return analysis;
+  const externalImporterCount = analysis.externalImporterCount - internals.removedFiles;
+  return {
+    ...analysis,
+    externalImporterCount,
+    offenderCount: internals.keptFiles,
+    violations: internals.kept,
+    gate: regate(externalImporterCount, internals.keptFiles),
+  };
+}
+
+/** Allowed importers leave the evidence; an entry still counts while another file imports it. */
+function regatedEntryPurity(scan: ScanResult, allowedImporters: readonly string[]) {
+  const analysis = scan.entryPurity;
+  const allowed = new Set(allowedImporters);
+  const imports = analysis.imports.filter((entry) => !allowed.has(entry.importer));
+  if (imports.length === analysis.imports.length) return analysis;
+  const violations = importedEntries(imports);
+  return {
+    ...analysis,
+    imports,
+    violations,
+    offenderCount: violations.length,
+    gate: regate(analysis.entryCount, violations.length),
+  };
 }
 
 function regatedPhantom(scan: ScanResult, allowedFiles: readonly string[]) {
@@ -184,6 +217,8 @@ export function excludeAllowed(scan: ScanResult, allowed: AllowedByRule): ScanRe
     },
     cycles: regatedCycles(scan, allowedFor(NO_CYCLES_RULE)),
     phantomDependencies: regatedPhantom(scan, allowedFor(PHANTOM_DEPENDENCY_RULE)),
+    dependencyInternals: regatedInternals(scan, allowedFor(DEPENDENCY_INTERNALS_RULE)),
+    entryPurity: regatedEntryPurity(scan, allowedFor(ENTRY_PURITY_RULE)),
     serverClient: regatedServerClient(scan, allowedFor(SERVER_CLIENT_RULE)),
     layerBoundaries: scan.layerBoundaries.map((boundary) => {
       const layer = exclude(boundary.violations, allowedFor(layerRuleName(boundary)));

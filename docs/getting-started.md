@@ -210,6 +210,11 @@ jobs:
   `generate`, and checks only the rules recorded there: the mechanical rules, plus layer boundaries once you adopt
   them with `--include-structural`. Rules adopted in the same
   pull request are listed but never counted against it.
+- **Imports that resolve to nothing are TypeScript's job.** Run `tsc --noEmit` in CI, or rely on the type check
+  `next build` runs by default: it reports a missing module (TS2307) with your project's own module resolution.
+  Archprint does not generate this rule, and on a TypeScript app `import/no-unresolved` or dependency-cruiser's
+  `not-to-unresolvable` tend to report false errors on `paths` aliases, package `exports` and bundler suffixes such
+  as `?raw`.
 - **A justified exception needs a reason.** When a file has a real reason to break a rule, record it:
   `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`.
   It goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason

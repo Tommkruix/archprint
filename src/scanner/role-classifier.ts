@@ -155,14 +155,25 @@ export const REQUEST_ENTRY_ROLES: readonly Role[] = [
   'TRPC_ROUTER',
 ];
 
-export function classifyFile(relativePath: string): RoleClassification {
+/** The index of the first rule whose pattern matches the path, or -1. Self-contained: the ESLint rules embed it. */
+export function firstMatchingRule(
+  relativePath: string,
+  rules: readonly { test: RegExp }[],
+): number {
   const normalizedPath = relativePath.replace(/\\/g, '/');
-  for (const rule of ROLE_RULES) {
-    if (rule.test.test(normalizedPath)) {
-      return { role: rule.role, confidence: rule.confidence, matchedRule: rule.id };
-    }
-  }
-  return { role: 'UNKNOWN', confidence: 0, matchedRule: null };
+  return rules.findIndex((rule) => rule.test.test(normalizedPath));
+}
+
+/** The role rules in the order classifyFile tries them, as regex sources. */
+export const ROLE_RULE_SOURCES: readonly { role: Role; source: string }[] = ROLE_RULES.map(
+  (rule) => ({ role: rule.role, source: rule.test.source }),
+);
+
+export function classifyFile(relativePath: string): RoleClassification {
+  const rule = ROLE_RULES[firstMatchingRule(relativePath, ROLE_RULES)];
+  return rule === undefined
+    ? { role: 'UNKNOWN', confidence: 0, matchedRule: null }
+    : { role: rule.role, confidence: rule.confidence, matchedRule: rule.id };
 }
 
 export const hasUseServerDirective = (sourceHead: string): boolean =>

@@ -61,15 +61,19 @@ when a barrel actually exists. **When not to use:** modules you intentionally ex
 ## Held for review families
 
 These are held for review even at AUTO. The structural ones infer a layer or role from paths that can be
-wrong; the dependency families are held because their enforcement matches resolved paths and can over-flag.
+wrong; the dependency families are held because their dependency-cruiser enforcement matches resolved paths and
+can over-flag (their ESLint rules read the import as written).
 Emit any of them with `--include-structural` after reading the evidence.
 
 ### Dependency hygiene (no build/impl internals) (Review)
 
 Detects code reaching into a dependency's `/src/` or `/internal(s)/` rather than its public entry. Held for
 review because the dependency-cruiser rule matches resolved paths, so it can flag a package whose own public
-entry resolves through `src/`. **When not to use:** if a dependency documents a deep path (or its entry) under
-`src` as public API.
+entry resolves through `src/`. It is the rule `no-dependency-internals`: dependency-cruiser enforces it when your
+repo uses it, otherwise `.archprint/eslint.mjs` does as `archprint/no-dependency-internals`. The ESLint rule reads
+the import as written (`next/src/server` is reported, `next/navigation` is not), so it does not have that
+resolved-path problem. Adopted, so `check` and `allow` apply. **When not to use:** if a dependency documents a deep
+path (or its entry) under `src` as public API.
 
 ### Dependency declaration (no phantom deps) (Review)
 
@@ -121,13 +125,19 @@ Detects a semantic tier importing against its direction (for example `SERVICE` m
 Detects a reusable UI component importing the DB/data layer directly. Components are recognized across React
 (`.tsx`), Angular (`.component.ts`, `.directive.ts`), and Vue/Svelte single-file components. Because the
 component role is still inferred from those conventions, this never auto-enforces, it is always a suggestion.
-**When not to use:** a `.tsx` file that exports plain functions rather than a component may be miscounted.
+When `recommend` lists it under "adopt from day one", that is a share of comparable repos, not a rule Archprint
+writes for yours. **When not to use:** a `.tsx` file that exports plain functions rather than a component may be
+miscounted, and in the Next.js App Router a server component in `components/` that fetches its own data is idiomatic, not a leak.
 
 ### Entry purity (Review)
 
 Detects non-entry first-party code importing a framework entry (a page, route, or layout). Entry-to-entry
-re-exports (legacy URL aliases) are allowed. **When not to use:** frameworks where importing an entry from
-elsewhere is idiomatic.
+re-exports (legacy URL aliases) are allowed. It is the rule `no-import-framework-entry`: dependency-cruiser enforces
+it when your repo uses it, otherwise `.archprint/eslint.mjs` does as `archprint/no-import-framework-entry`. The
+ESLint rule recognizes pages and routes by their path, so a new route is covered without regenerating, and it
+exempts each import of an entry that existed when you generated. Dependency-cruiser cannot exempt a single import,
+so there an entry imported at generation is exempt as a target. Adopted, so `check` and `allow` apply (allow the
+importing file). **When not to use:** frameworks where importing an entry from elsewhere is idiomatic.
 
 ### Server / client boundary (Review)
 

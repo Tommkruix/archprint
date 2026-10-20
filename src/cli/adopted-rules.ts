@@ -4,6 +4,8 @@ import type { GateResult } from '../detector/confidence-gate.js';
 import type { Role } from '../scanner/role-classifier.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import { layerRuleName } from '../generator/layer-emitters.js';
+import { DEPENDENCY_INTERNALS_RULE } from '../generator/dependency-internals-emitters.js';
+import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from '../generator/phantom-dependency-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
 import { SERVER_CLIENT_RULE } from '../generator/server-client-emitters.js';
@@ -48,6 +50,8 @@ export interface SingleFamilyRule extends RuleBase {
     | 'import-style'
     | 'phantom-deps'
     | 'server-client'
+    | 'dependency-hygiene'
+    | 'entry-purity'
     | 'cycles';
 }
 
@@ -133,6 +137,28 @@ export function serverClientRule(scan: ScanResult): AdoptedRule {
   };
 }
 
+export function dependencyInternalsRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.dependencyInternals;
+  return {
+    id: DEPENDENCY_INTERNALS_RULE,
+    family: 'dependency-hygiene',
+    statement: FAMILY_STATEMENTS['dependency-hygiene'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.externalImporterCount, analysis.offenderCount),
+  };
+}
+
+export function entryPurityRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.entryPurity;
+  return {
+    id: ENTRY_PURITY_RULE,
+    family: 'entry-purity',
+    statement: FAMILY_STATEMENTS['entry-purity'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.entryCount, analysis.offenderCount),
+  };
+}
+
 export const NO_CYCLES_RULE = 'no-cycles';
 
 /** Whether the code has no cycle and enough files to say so: only then is no-cycles a rule it follows. */
@@ -190,6 +216,8 @@ const FAMILIES: ReadonlySet<string> = new Set([
   'layer',
   'phantom-deps',
   'server-client',
+  'dependency-hygiene',
+  'entry-purity',
   'cycles',
   'test-isolation',
   'console-isolation',

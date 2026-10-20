@@ -32,3 +32,9 @@ export function declaredPackages(packageJsonText: string): string[] {
     },
   );
 }
+
+/** Whether an import of package `name` reaches into its build or implementation folders. Self-contained. */
+export function isPackageInternal(specifier: string, name: string): boolean {
+  const subpath = specifier.slice(name.length + 1).split('/')[0] ?? '';
+  return ['src', 'internal', 'internals'].includes(subpath);
+}
