@@ -125,7 +125,9 @@ Detects a semantic tier importing against its direction (for example `SERVICE` m
 Detects a reusable UI component importing the DB/data layer directly. Components are recognized across React
 (`.tsx`), Angular (`.component.ts`, `.directive.ts`), and Vue/Svelte single-file components. Because the
 component role is still inferred from those conventions, this never auto-enforces, it is always a suggestion.
-**When not to use:** a `.tsx` file that exports plain functions rather than a component may be miscounted.
+When `recommend` lists it under "adopt from day one", that is a share of comparable repos, not a rule Archprint
+writes for yours. **When not to use:** a `.tsx` file that exports plain functions rather than a component may be
+miscounted, and in the Next.js App Router a server component in `components/` that fetches its own data is idiomatic, not a leak.
 
 ### Entry purity (Review)
 
