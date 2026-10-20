@@ -29,6 +29,7 @@ import type {
   UiDataIsolationAnalysis,
   WorkspacePackageAnalysis,
 } from '../../src/index.js';
+import { excludeAllowed } from '../../src/cli/allowed-evidence.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
@@ -181,6 +182,8 @@ function fakePhantom(
   return {
     appDir: 'x',
     externalImporterCount,
+    declaringPackageJsons: [],
+    workspacePackages: [],
     offenderCount,
     gate: evaluateGate({
       roleFileCount: externalImporterCount,
@@ -311,6 +314,8 @@ function fakeServerClient(clientCount: number, offenderCount: number): ServerCli
   return {
     appDir: 'x',
     clientCount,
+    clients: [],
+    serverModules: [],
     offenderCount,
     gate: evaluateGate({
       roleFileCount: clientCount,
@@ -786,9 +791,7 @@ describe('cli scan', () => {
       aliasCount: 1,
       cycles: withCycles([], 40),
     });
-    expect(renderReport(scan, '1.0.0')).toContain(
-      'No circular dependencies (report only, no rule written yet).',
-    );
+    expect(renderReport(scan, '1.0.0')).toContain('No circular dependencies (enforceable).');
   });
 
   it('reports nothing-generatable and omits the footer in deep mode', () => {
@@ -904,6 +907,41 @@ describe('cli generate', () => {
     const unknown = collect(scan, { enforcers: both, ruleIds: ['AP-002', 'nope'] });
     expect(unknown.unknownRules).toEqual(['nope']);
     expect(unknown.availableRules).toEqual(['AP-002', 'no-utils-to-api']);
+  });
+
+  it('adopts no-cycles for a cycle-free codebase only', () => {
+    const fileCount = 60;
+    const clean = emptyScan({
+      cycles: {
+        ...emptyCycles(),
+        fileCount,
+        gate: evaluateGate({ roleFileCount: fileCount, violatingFileCount: 0, roleConfidence: 1 }),
+      },
+    });
+    expect(collect(clean).adopted.map((rule) => rule.id)).toContain('no-cycles');
+    const cyclic = emptyScan({ cycles: withCycles([['lib/a.ts', 'lib/b.ts']], 300) });
+    expect(cyclic.cycles.gate.status).toBe('AUTO');
+    expect(collect(cyclic).adopted.map((rule) => rule.id)).not.toContain('no-cycles');
+  });
+
+  it('leaves a cycle out of the evidence once every file in it is allowed, and counts the rest', () => {
+    const scan = emptyScan({
+      cycles: withCycles(
+        [
+          ['lib/a.ts', 'lib/b.ts'],
+          ['lib/c.ts', 'lib/d.ts', 'lib/e.ts'],
+        ],
+        60,
+      ),
+    });
+    const oneFile = excludeAllowed(scan, new Map([['no-cycles', ['lib/a.ts']]])).cycles;
+    expect(oneFile.cycles).toHaveLength(2);
+    const allowed = excludeAllowed(scan, new Map([['no-cycles', ['lib/a.ts', 'lib/b.ts']]])).cycles;
+    expect(allowed.cycles.map((cycle) => cycle.files)).toEqual([
+      ['lib/c.ts', 'lib/d.ts', 'lib/e.ts'],
+    ]);
+    expect(allowed.filesInCycles).toBe(3);
+    expect(allowed.gate.conditions.exceptions.value).toBe(3);
   });
 
   it('leaves out layer rules whose names would collide', () => {

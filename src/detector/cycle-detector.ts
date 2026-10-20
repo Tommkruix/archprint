@@ -84,3 +84,22 @@ export function detectCycles(appDir: string, options: CycleDetectorOptions = {})
     gate,
   };
 }
+
+/** The imports that close a cycle: every import between two files of one cyclic group, and self-imports. */
+export function cycleEdges(graph: ImportGraph): { file: string; target: string }[] {
+  const nodes = graph.files.map((file) => file.relativePath);
+  const groupOf = new Map<string, number>();
+  stronglyConnectedComponents(nodes, graph.adjacency).forEach((component, index) => {
+    if (component.length > 1) for (const file of component) groupOf.set(file, index);
+  });
+  const edges: { file: string; target: string }[] = [];
+  for (const file of nodes) {
+    for (const target of graph.adjacency.get(file) ?? []) {
+      const group = groupOf.get(file);
+      if (target === file || (group !== undefined && groupOf.get(target) === group)) {
+        edges.push({ file, target });
+      }
+    }
+  }
+  return edges.sort((a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target));
+}

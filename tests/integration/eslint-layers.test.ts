@@ -1,43 +1,18 @@
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { ESLint } from 'eslint';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { emitLayout } from '../../src/cli/generate.js';
 import { layerRule } from '../../src/cli/adopted-rules.js';
 import { evaluateRules } from '../../src/cli/check-evaluate.js';
 import { scanRepo, type ScanResult } from '../../src/cli/scan.js';
+import { eslintOnly, lintConfig, ruleHits as hits } from './eslint-harness.js';
 import { nextApp, writeTree } from './layer-app.js';
 
-const eslintOnly = {
-  eslint: true,
-  eslintPluginImport: false,
-  dependencyCruiser: false,
-  biome: false,
-};
 const RULE = 'archprint/no-lib-to-app';
-const TS_ESLINT = pathToFileURL(createRequire(import.meta.url).resolve('typescript-eslint')).href;
-
-function lintConfig(root: string, archprintPath: string): string {
-  const configPath = path.join(root, 'eslint.config.mjs');
-  writeFileSync(
-    configPath,
-    [
-      `import tseslint from '${TS_ESLINT}';`,
-      `import archprint from '${archprintPath}';`,
-      "export default [{ files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.parser } }, ...archprint];",
-      '',
-    ].join('\n'),
-  );
-  return configPath;
-}
-
-const ruleHits = async (eslint: ESLint, source: string, filePath: string): Promise<number> =>
-  (await eslint.lintText(source, { filePath }))[0]!.messages.filter(
-    (message) => message.ruleId === RULE,
-  ).length;
+const ruleHits = (eslint: ESLint, source: string, filePath: string): Promise<number> =>
+  hits(eslint, RULE, source, filePath);
 
 describe('generated ESLint layer rules (end to end)', () => {
   let root: string;

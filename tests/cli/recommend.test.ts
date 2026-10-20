@@ -1,3 +1,4 @@
+import { evaluateGate } from '../../src/detector/confidence-gate.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -65,10 +66,12 @@ describe('resolveEnforcer', () => {
     expect(resolveEnforcer('phantom-deps', only({ dependencyCruiser: true }))).toBe(
       'dependency-cruiser',
     );
-    expect(resolveEnforcer('phantom-deps', only({ eslint: true }))).toBe(
-      'needs dependency-cruiser',
+    expect(resolveEnforcer('phantom-deps', only({ eslint: true }))).toBe('eslint');
+    expect(resolveEnforcer('server-client', only({ eslint: true }))).toBe('eslint');
+    expect(resolveEnforcer('server-client', only({ eslint: true, dependencyCruiser: true }))).toBe(
+      'dependency-cruiser',
     );
-    expect(resolveEnforcer('cycles', only({ eslint: true }))).toBe('');
+    expect(resolveEnforcer('cycles', only({ eslint: true }))).toBe('archprint check');
   });
 });
 
@@ -121,17 +124,39 @@ describe('buildRecommendations', () => {
     expect(typeof layer?.rate).toBe('number');
   });
 
-  it('reports a followed family that no tool can enforce instead of claiming to enforce it', () => {
+  it('names archprint check as the enforcer of a cycle-free codebase, not a linter', () => {
     const rec = buildRecommendations(
       scanRepo(fixture('cli-auto'), { deep: false }),
       new Set(),
       allTools,
     );
-    expect(rec.reportOnly.map((r) => r.title)).toEqual(['Circular dependencies']);
-    expect(rec.enforceNow.some((r) => r.title === 'Circular dependencies')).toBe(false);
+    expect(rec.reportOnly).toEqual([]);
+    expect(rec.enforceNow.find((r) => r.title === 'Circular dependencies')?.enforcer).toBe(
+      'archprint check',
+    );
     const out = renderRecommendations(rec, '1.0.0');
-    expect(out).toContain('REPORT ONLY');
-    expect(out.indexOf('Circular dependencies')).toBeGreaterThan(out.indexOf('REPORT ONLY'));
+    expect(out).not.toContain('REPORT ONLY');
+  });
+
+  it('reports cycles as followed, not enforced, while the code still has some', () => {
+    const scan = scanRepo(fixture('cli-auto'), { deep: false });
+    const fileCount = 300;
+    const cyclic = {
+      ...scan,
+      cycles: {
+        ...scan.cycles,
+        fileCount,
+        cycles: [{ files: ['lib/a.ts', 'lib/b.ts'], path: ['lib/a.ts', 'lib/b.ts', 'lib/a.ts'] }],
+        filesInCycles: 2,
+        gate: evaluateGate({ roleFileCount: fileCount, violatingFileCount: 2, roleConfidence: 1 }),
+      },
+    };
+    expect(cyclic.cycles.gate.status).toBe('AUTO');
+    const rec = buildRecommendations(cyclic, new Set(), allTools);
+    expect(rec.enforceNow.map((r) => r.title)).not.toContain('Circular dependencies');
+    expect(rec.reportOnly).toEqual([
+      expect.objectContaining({ title: 'Circular dependencies', enforcer: '' }),
+    ]);
   });
 
   it('adopts families common in comparable repos, drops rare ones, sorted by rate', () => {

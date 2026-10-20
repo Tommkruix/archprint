@@ -1,3 +1,5 @@
+import { hasLeadingDirective } from './directives.js';
+
 export type Role =
   | 'CONTROLLER'
   | 'SERVICE'
@@ -163,38 +165,11 @@ export function classifyFile(relativePath: string): RoleClassification {
   return { role: 'UNKNOWN', confidence: 0, matchedRule: null };
 }
 
-const USE_SERVER_LITERAL = /^["']use server["']/;
-const USE_CLIENT_LITERAL = /^["']use client["']/;
-const isWhitespace = (c: string): boolean =>
-  c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
+export const hasUseServerDirective = (sourceHead: string): boolean =>
+  hasLeadingDirective(sourceHead, 'use server');
 
-function hasLeadingDirective(sourceHead: string, literal: RegExp): boolean {
-  let i = 0;
-  const n = sourceHead.length;
-  for (;;) {
-    while (i < n && isWhitespace(sourceHead[i]!)) i++;
-    if (sourceHead.startsWith('//', i)) {
-      const newline = sourceHead.indexOf('\n', i);
-      if (newline === -1) return false;
-      i = newline + 1;
-    } else if (sourceHead.startsWith('/*', i)) {
-      const end = sourceHead.indexOf('*/', i + 2);
-      if (end === -1) return false;
-      i = end + 2;
-    } else {
-      break;
-    }
-  }
-  return literal.test(sourceHead.slice(i));
-}
-
-export function hasUseServerDirective(sourceHead: string): boolean {
-  return hasLeadingDirective(sourceHead, USE_SERVER_LITERAL);
-}
-
-export function hasUseClientDirective(sourceHead: string): boolean {
-  return hasLeadingDirective(sourceHead, USE_CLIENT_LITERAL);
-}
+export const hasUseClientDirective = (sourceHead: string): boolean =>
+  hasLeadingDirective(sourceHead, 'use client');
 
 export function classifyFileWithDirective(
   relativePath: string,

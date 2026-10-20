@@ -6,6 +6,7 @@ the tiering explained in [concepts.md](./concepts.md#mechanical-vs-structural-fa
 - **Auto**: mechanical family; an AUTO result auto-generates as enforcement (0 false positives across the
   correctness audit).
 - **Review**: structural-inference family; held for human review, emit with `--include-structural`.
+- **Check**: enforced by `archprint check` on each pull request, not by a lint rule.
 - **Report**: surfaced only, never enforced.
 
 Each generated rule ships with its evidence (conforming vs. total files, confidence floor) and grandfathers the
@@ -24,12 +25,15 @@ modules that create one, such as a `lib/db.ts` or a helper that creates a Supaba
 different but valid convention; AP-001 is treated as a case study (idiomatic direct-ORM is common), AP-002 is
 the confirmatory rule.
 
-### Circular dependencies (Report)
+### Circular dependencies (Check)
 
 Detects runtime import cycles in the module graph; gated on how cycle-free the repo already is. Type-only edges
-are excluded, so a cycle closed only by an `import type` is not flagged. The family is trusted, but Archprint does
-not write a lint rule for it yet; dependency-cruiser's `no-circular` rule enforces it if you need that now. **When not to use:** rarely, cycles are
-a near-universal smell.
+are excluded, so a cycle closed only by an `import type` is not flagged. When the code has no cycle and enough
+files for the confidence gate, `generate` and `init` adopt the rule `no-cycles` (no `--include-structural`
+needed), and `archprint check` reports each import that closes a new cycle in a pull request. To accept a cycle,
+allow every file in it: `archprint allow no-cycles <file>` accepts that file's imports in the cycle. A cycle needs the whole import graph, so there is no lint
+rule for it; dependency-cruiser's `no-circular` rule is the editor-time option. A codebase that already has cycles
+does not adopt the rule. **When not to use:** rarely, cycles are a near-universal smell.
 
 ### Test isolation (Auto)
 
@@ -70,10 +74,19 @@ entry resolves through `src/`. **When not to use:** if a dependency documents a 
 ### Dependency declaration (no phantom deps) (Review)
 
 Detects an imported third-party package that is not declared in `package.json` (a phantom/transitive
-dependency). Resolves monorepo hoisting to the workspace root. Held for review because the dependency-cruiser
-rule matches resolved dependency types, so a workspace package with no local `package.json` entry can surface
-as phantom. **When not to use:** rarely; undeclared deps are a real fragility once the workspace edge cases are
-reviewed.
+dependency). Resolves monorepo hoisting to the workspace root. Node builtins, tsconfig aliases, `#` subpath
+imports and `scheme:` specifiers (such as `bun:` or `virtual:`) are not packages. Held for review because the
+dependency-cruiser rule matches resolved dependency types, so a workspace package with no local `package.json`
+entry can surface as phantom.
+
+It is the rule `no-phantom-dependencies`: dependency-cruiser enforces it when your repo uses it, otherwise
+`.archprint/eslint.mjs` does as `archprint/no-phantom-dependencies`. The ESLint rule reads your `package.json` (and
+the workspace root's) each time ESLint starts, so a package you declare is allowed without regenerating. Workspace
+package names are recorded when you generate: until you regenerate, the ESLint rule reports an import of a newly
+added workspace package that your `package.json` does not declare (pnpm requires declaring it anyway), while
+`archprint check`, which reads the workspace each run, does not. Like the layer rules, it is adopted (`check` and `allow` apply), exempts
+the files that already broke it, and skips type-only imports and test files. **When not to use:** rarely;
+undeclared deps are a real fragility once the workspace edge cases are reviewed.
 
 ### Layer boundaries (Review)
 
@@ -118,8 +131,13 @@ elsewhere is idiomatic.
 
 ### Server / client boundary (Review)
 
-Detects a `"use client"` module importing a `server-only` module. Vacuous when no `server-only` module exists
-(rejected). **When not to use:** a type-only import missing the `type` keyword is counted as a value edge; a
+Detects a `"use client"` module importing a module that imports `server-only`, or importing `server-only` itself.
+Vacuous when no `server-only` module exists (rejected). It is the rule `no-server-only-in-client`, enforced by
+dependency-cruiser when your repo uses it and otherwise by `.archprint/eslint.mjs` as
+`archprint/no-server-only-in-client`; adopted, so `check` and `allow` apply. The ESLint rule finds client
+modules as they are written; the server-only modules are the ones found when you generated (regenerate after
+adding one). Next.js already fails the build on this import; the rule moves the feedback to your editor and pull
+request. **When not to use:** a type-only import missing the `type` keyword is counted as a value edge; a
 defensible lint smell, but confirm it is a real runtime concern.
 
 ### Feature-slice isolation (Review)

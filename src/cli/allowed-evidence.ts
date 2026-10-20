@@ -1,7 +1,9 @@
 import { evaluateGate, wilsonLowerBound } from '../detector/confidence-gate.js';
 import { layerRuleName } from '../generator/layer-emitters.js';
+import { PHANTOM_DEPENDENCY_RULE } from '../generator/phantom-dependency-emitters.js';
+import { SERVER_CLIENT_RULE } from '../generator/server-client-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
-import { readAdoptedRules } from './adopted-rules.js';
+import { NO_CYCLES_RULE, readAdoptedRules } from './adopted-rules.js';
 import { allowedFilesByRule, readAllowed } from './allowed-exceptions.js';
 import type { ScanResult } from './scan.js';
 
@@ -30,6 +32,43 @@ const regate = (population: number, violating: number, roleConfidence = 1, appli
     roleConfidence,
     applicable,
   });
+
+function regatedCycles(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.cycles;
+  const allowed = new Set(allowedFiles);
+  const cycles = analysis.cycles.filter((cycle) => !cycle.files.every((file) => allowed.has(file)));
+  if (cycles.length === analysis.cycles.length) return analysis;
+  const filesInCycles = new Set(cycles.flatMap((cycle) => cycle.files)).size;
+  return { ...analysis, cycles, filesInCycles, gate: regate(analysis.fileCount, filesInCycles) };
+}
+
+function regatedPhantom(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.phantomDependencies;
+  const phantom = exclude(analysis.violations, allowedFiles);
+  if (phantom.removedFiles === 0) return analysis;
+  const externalImporterCount = analysis.externalImporterCount - phantom.removedFiles;
+  return {
+    ...analysis,
+    externalImporterCount,
+    offenderCount: phantom.keptFiles,
+    violations: phantom.kept,
+    gate: regate(externalImporterCount, phantom.keptFiles),
+  };
+}
+
+function regatedServerClient(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.serverClient;
+  const boundary = exclude(analysis.violations, allowedFiles);
+  if (boundary.removedFiles === 0) return analysis;
+  const clientCount = analysis.clientCount - boundary.removedFiles;
+  return {
+    ...analysis,
+    clientCount,
+    offenderCount: boundary.keptFiles,
+    violations: boundary.kept,
+    gate: regate(clientCount, boundary.keptFiles, 1, analysis.serverModules.length > 0),
+  };
+}
 
 /** Allowed files of the rules already adopted: an allowance can keep an adopted rule, never promote another. */
 export function adoptedAllowances(outDir: string): AllowedByRule {
@@ -143,6 +182,9 @@ export function excludeAllowed(scan: ScanResult, allowed: AllowedByRule): ScanRe
         };
       }),
     },
+    cycles: regatedCycles(scan, allowedFor(NO_CYCLES_RULE)),
+    phantomDependencies: regatedPhantom(scan, allowedFor(PHANTOM_DEPENDENCY_RULE)),
+    serverClient: regatedServerClient(scan, allowedFor(SERVER_CLIENT_RULE)),
     layerBoundaries: scan.layerBoundaries.map((boundary) => {
       const layer = exclude(boundary.violations, allowedFor(layerRuleName(boundary)));
       if (layer.removedFiles === 0) return boundary;
