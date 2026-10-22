@@ -194,6 +194,33 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(process.exitCode).toBe(1);
   });
 
+  it('reports the imports of a new circular dependency against a cycle-free base', async () => {
+    write('lib/cycle-a.ts', "import { b } from './cycle-b';\nexport const a = () => b();\n");
+    write('lib/cycle-b.ts', "import { a } from './cycle-a';\nexport const b = () => a();\n");
+    write('lib/one-way.ts', "import { a } from './cycle-a';\nexport const c = a;\n");
+    commitAll('add two modules that import each other');
+    await run(['check', '--base', 'main', '--format', 'json']);
+    const json = JSON.parse(output()) as {
+      introduced: { rule: string; file: string; subject: string }[];
+    };
+    expect(
+      json.introduced
+        .filter((finding) => finding.rule === 'no-cycles')
+        .map((finding) => `${finding.file} -> ${finding.subject}`),
+    ).toEqual(['lib/cycle-a.ts -> lib/cycle-b.ts', 'lib/cycle-b.ts -> lib/cycle-a.ts']);
+
+    logSpy.mockClear();
+    await run([
+      'allow',
+      'no-cycles',
+      `${app}/lib/cycle-a.ts`,
+      '--reason',
+      'untangling next sprint',
+    ]);
+    expect(output()).toContain('archprint check accepts it now.');
+    expect(output()).not.toContain('archprint generate');
+  });
+
   it('reports nothing new for a change that keeps every rule', async () => {
     write('lib/extra.ts', 'export const extra = 2;\n');
     commitAll('add a helper');

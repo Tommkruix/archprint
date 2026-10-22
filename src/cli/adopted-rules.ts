@@ -4,7 +4,11 @@ import type { GateResult } from '../detector/confidence-gate.js';
 import type { Role } from '../scanner/role-classifier.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import { layerRuleName } from '../generator/layer-emitters.js';
+import { DEPENDENCY_INTERNALS_RULE } from '../generator/dependency-internals-emitters.js';
+import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
+import { PHANTOM_DEPENDENCY_RULE } from '../generator/phantom-dependency-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
+import { SERVER_CLIENT_RULE } from '../generator/server-client-emitters.js';
 import { configPath, configSection, readConfigSection } from './archprint-config.js';
 import { FAMILY_STATEMENTS } from './rule-statements.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
@@ -40,7 +44,15 @@ export interface PublicApiRule extends RuleBase {
 }
 
 export interface SingleFamilyRule extends RuleBase {
-  family: 'test-isolation' | 'console-isolation' | 'import-style';
+  family:
+    | 'test-isolation'
+    | 'console-isolation'
+    | 'import-style'
+    | 'phantom-deps'
+    | 'server-client'
+    | 'dependency-hygiene'
+    | 'entry-purity'
+    | 'cycles';
 }
 
 export interface LayerRule extends RuleBase {
@@ -103,6 +115,68 @@ export function importStyleRule(scan: ScanResult): AdoptedRule {
   };
 }
 
+export function phantomDependencyRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.phantomDependencies;
+  return {
+    id: PHANTOM_DEPENDENCY_RULE,
+    family: 'phantom-deps',
+    statement: FAMILY_STATEMENTS['phantom-deps'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.externalImporterCount, analysis.offenderCount),
+  };
+}
+
+export function serverClientRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.serverClient;
+  return {
+    id: SERVER_CLIENT_RULE,
+    family: 'server-client',
+    statement: FAMILY_STATEMENTS['server-client'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.clientCount, analysis.offenderCount),
+  };
+}
+
+export function dependencyInternalsRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.dependencyInternals;
+  return {
+    id: DEPENDENCY_INTERNALS_RULE,
+    family: 'dependency-hygiene',
+    statement: FAMILY_STATEMENTS['dependency-hygiene'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.externalImporterCount, analysis.offenderCount),
+  };
+}
+
+export function entryPurityRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.entryPurity;
+  return {
+    id: ENTRY_PURITY_RULE,
+    family: 'entry-purity',
+    statement: FAMILY_STATEMENTS['entry-purity'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.entryCount, analysis.offenderCount),
+  };
+}
+
+export const NO_CYCLES_RULE = 'no-cycles';
+
+/** Whether the code has no cycle and enough files to say so: only then is no-cycles a rule it follows. */
+export const isCycleFree = (scan: ScanResult): boolean =>
+  scan.cycles.cycles.length === 0 && scan.cycles.gate.status === 'AUTO';
+
+/** Adopted only while the code has no cycle: then it is a rule the code already follows. */
+export function cycleRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.cycles;
+  return {
+    id: NO_CYCLES_RULE,
+    family: 'cycles',
+    statement: FAMILY_STATEMENTS.cycles,
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.fileCount, analysis.filesInCycles),
+  };
+}
+
 export function publicApiRules(scan: ScanResult): AdoptedRule[] {
   return scan.publicApi.groups
     .filter((group) => group.gate.status === 'AUTO')
@@ -140,6 +214,11 @@ const FAMILIES: ReadonlySet<string> = new Set([
   'forbidden-imports',
   'public-api',
   'layer',
+  'phantom-deps',
+  'server-client',
+  'dependency-hygiene',
+  'entry-purity',
+  'cycles',
   'test-isolation',
   'console-isolation',
   'import-style',

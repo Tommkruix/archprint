@@ -7,40 +7,28 @@ import {
   walkRepo,
   type WalkedFile,
 } from '../scanner/file-walker.js';
+import { declaredPackages, packageName } from '../scanner/package-name.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 
 const BUILTINS = new Set(builtinModules);
-const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 
-function packageName(specifier: string, aliasPrefixes: readonly string[]): string | null {
-  if (specifier.startsWith('.')) return null;
-  const bare = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
-  if (specifier.startsWith('node:') || BUILTINS.has(bare) || BUILTINS.has(bare.split('/')[0]!)) {
-    return null;
-  }
-  for (const prefix of aliasPrefixes) {
-    if (specifier === prefix || specifier.startsWith(`${prefix}/`)) return null;
-  }
-  const parts = specifier.split('/');
-  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!;
+/** The names of the workspace's packages, which count as declared. */
+export const workspacePackageNames = (appDir: string): string[] =>
+  Object.keys(buildWorkspacePackageMap(findWorkspaceRoot(path.resolve(appDir)))).sort();
+
+/** The package.json files whose dependencies count as declared: the app's, and the workspace root's. */
+export function declaringPackageJsons(appDir: string): string[] {
+  const root = path.resolve(appDir);
+  const workspaceRoot = findWorkspaceRoot(root);
+  return [root, ...(workspaceRoot === root ? [] : [workspaceRoot])].map((dir) =>
+    path.join(dir, 'package.json'),
+  );
 }
 
-function declaredIn(packageJsonPath: string, into: Set<string>): void {
-  if (!existsSync(packageJsonPath)) return;
-  try {
-    const json = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as Record<string, unknown>;
-    for (const field of DEP_FIELDS) {
-      const deps = json[field];
-      if (deps && typeof deps === 'object') {
-        for (const name of Object.keys(deps as Record<string, unknown>)) into.add(name);
-      }
-    }
-  } catch {
-    /* v8 ignore next -- unreadable/invalid package.json is treated as declaring nothing */
-  }
-}
+const readIfPresent = (file: string): string =>
+  existsSync(file) ? readFileSync(file, 'utf-8') : '';
 
 export interface PhantomDependencyViolation {
   file: string;
@@ -51,6 +39,9 @@ export interface PhantomDependencyViolation {
 export interface PhantomDependencyAnalysis {
   appDir: string;
   externalImporterCount: number;
+  /** The package.json files and workspace packages that count as declared. */
+  declaringPackageJsons: string[];
+  workspacePackages: string[];
   offenderCount: number;
   gate: GateResult;
   violations: PhantomDependencyViolation[];
@@ -71,11 +62,12 @@ export function detectPhantomDependencies(
     key.replace(/\/?\*$/, ''),
   );
 
-  const declared = new Set<string>();
-  declaredIn(path.join(root, 'package.json'), declared);
-  const workspaceRoot = findWorkspaceRoot(root);
-  if (workspaceRoot !== root) declaredIn(path.join(workspaceRoot, 'package.json'), declared);
-  for (const name of Object.keys(buildWorkspacePackageMap(workspaceRoot))) declared.add(name);
+  const packageJsons = declaringPackageJsons(root);
+  const workspacePackages = workspacePackageNames(root);
+  const declared = new Set([
+    ...packageJsons.flatMap((file) => declaredPackages(readIfPresent(file))),
+    ...workspacePackages,
+  ]);
 
   const analyze = createImportAnalyzer(root, { resolve });
   const externalImporters = new Set<string>();
@@ -91,7 +83,7 @@ export function detectPhantomDependencies(
     }
     for (const imp of imports) {
       if (!imp.hasValueBinding) continue;
-      const name = packageName(imp.specifier, aliasPrefixes);
+      const name = packageName(imp.specifier, aliasPrefixes, BUILTINS);
       if (name === null) continue;
       externalImporters.add(file.relativePath);
       if (!declared.has(name)) {
@@ -104,6 +96,8 @@ export function detectPhantomDependencies(
   return {
     appDir: root,
     externalImporterCount: externalImporters.size,
+    declaringPackageJsons: packageJsons,
+    workspacePackages,
     offenderCount: offenders.size,
     gate: evaluateGate({
       roleFileCount: externalImporters.size,

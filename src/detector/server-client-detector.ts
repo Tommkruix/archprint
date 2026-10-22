@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
+import { importLocations } from '../scanner/file-walker.js';
 import { buildImportGraph, type ImportGraph } from '../scanner/import-graph.js';
 import { hasUseClientDirective } from '../scanner/role-classifier.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 
-const SERVER_ONLY = /(^|[^.\w])['"]server-only['"]/;
+/** The package that marks a module as server-only in React Server Components (Next.js). */
+export const SERVER_ONLY_PACKAGE = 'server-only';
 
 export interface ServerClientViolation {
   file: string;
@@ -13,6 +15,9 @@ export interface ServerClientViolation {
 export interface ServerClientAnalysis {
   appDir: string;
   clientCount: number;
+  /** The "use client" files and the modules importing "server-only", relative to the app. */
+  clients: string[];
+  serverModules: string[];
   offenderCount: number;
   gate: GateResult;
   violations: ServerClientViolation[];
@@ -41,7 +46,9 @@ export function detectServerClientBoundary(
       continue;
     }
     if (hasUseClientDirective(text)) clients.add(file.relativePath);
-    if (SERVER_ONLY.test(text)) serverModules.add(file.relativePath);
+    if (importLocations(file.absolutePath).some((imp) => imp.specifier === SERVER_ONLY_PACKAGE)) {
+      serverModules.add(file.relativePath);
+    }
   }
 
   const offenders = new Set<string>();
@@ -49,7 +56,7 @@ export function detectServerClientBoundary(
   for (const file of clients) {
     if (serverModules.has(file)) {
       offenders.add(file);
-      violations.push({ file, target: 'server-only' });
+      violations.push({ file, target: SERVER_ONLY_PACKAGE });
     }
     for (const target of adjacency.get(file) ?? []) {
       if (serverModules.has(target)) {
@@ -62,6 +69,8 @@ export function detectServerClientBoundary(
   return {
     appDir: root,
     clientCount: clients.size,
+    clients: [...clients].sort(),
+    serverModules: [...serverModules].sort(),
     offenderCount: offenders.size,
     gate: evaluateGate({
       roleFileCount: clients.size,

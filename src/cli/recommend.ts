@@ -5,10 +5,16 @@ import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { type FamilyKey, isStableFamily } from '../detector/family-maturity.js';
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
+import { isCycleFree } from './adopted-rules.js';
 import type { ScanResult } from './scan.js';
 
 type ToolCategory =
-  'eslint' | 'dependency-cruiser' | 'eslint-or-depcruise' | 'depcruise-or-eslint' | 'none';
+  | 'eslint'
+  | 'dependency-cruiser'
+  | 'eslint-or-depcruise'
+  | 'depcruise-or-eslint'
+  | 'check'
+  | 'none';
 
 const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   'forbidden-imports': 'eslint',
@@ -17,18 +23,18 @@ const FAMILY_TOOL: Record<FamilyKey, ToolCategory> = {
   'env-access': 'eslint',
   'workspace-package-api': 'eslint',
   'test-isolation': 'eslint-or-depcruise',
-  'phantom-deps': 'dependency-cruiser',
-  'dependency-hygiene': 'dependency-cruiser',
+  'phantom-deps': 'depcruise-or-eslint',
+  'dependency-hygiene': 'depcruise-or-eslint',
   layer: 'depcruise-or-eslint',
   'role-layering': 'dependency-cruiser',
   'public-api': 'dependency-cruiser',
   'feature-slice': 'dependency-cruiser',
   'app-isolation': 'dependency-cruiser',
-  'entry-purity': 'dependency-cruiser',
+  'entry-purity': 'depcruise-or-eslint',
   'stories-isolation': 'dependency-cruiser',
   'ui-data': 'dependency-cruiser',
-  'server-client': 'dependency-cruiser',
-  cycles: 'none',
+  'server-client': 'depcruise-or-eslint',
+  cycles: 'check',
   orphans: 'none',
   reachability: 'none',
 };
@@ -52,6 +58,8 @@ export function resolveEnforcer(key: FamilyKey, enforcers: InstalledEnforcers): 
       return depcruise ? 'dependency-cruiser' : 'needs dependency-cruiser';
     case 'eslint-or-depcruise':
       return eslint ? 'eslint' : 'dependency-cruiser';
+    case 'check':
+      return 'archprint check';
     case 'depcruise-or-eslint':
       return depcruise ? 'dependency-cruiser' : 'eslint';
   }
@@ -65,6 +73,8 @@ interface Family {
   title: string;
   key: FamilyKey;
   status: (scan: ScanResult) => FamilyStatus;
+  /** Whether this scan adopts the family when it would be enforced; reported as followed otherwise. */
+  adoptable?: (scan: ScanResult) => boolean;
 }
 
 const groupsStatus = (groups: readonly { gate: { status: GenerationStatus } }[]): FamilyStatus => {
@@ -94,6 +104,7 @@ const FAMILIES: readonly Family[] = [
     title: 'Circular dependencies',
     key: 'cycles',
     status: (s) => gatedStatus(s.cycles.fileCount, s.cycles.gate.status),
+    adoptable: isCycleFree,
   },
   {
     title: 'Public API (barrels)',
@@ -247,12 +258,14 @@ export function buildRecommendations(
   const adopt: Recommendation[] = [];
   for (const family of FAMILIES) {
     const status = family.status(scan);
+    const baseTier = autoTier(family.key);
+    const tier =
+      baseTier === 'enforce' && family.adoptable?.(scan) === false ? 'report-only' : baseTier;
     const entry: Recommendation = {
       title: family.title,
       rate: adoptionRate(family.title, stack),
-      enforcer: resolveEnforcer(family.key, enforcers),
+      enforcer: tier === 'report-only' ? '' : resolveEnforcer(family.key, enforcers),
     };
-    const tier = autoTier(family.key);
     if (status === 'AUTO' && tier !== 'review')
       (tier === 'report-only' ? reportOnly : enforceNow).push(entry);
     else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);

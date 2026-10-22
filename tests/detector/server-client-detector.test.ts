@@ -1,3 +1,5 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -26,5 +28,30 @@ describe('detectServerClientBoundary', () => {
     const analysis = detectServerClientBoundary(path.join(here, '..', 'fixtures', 'layers'));
     expect(analysis.clientCount).toBe(0);
     expect(analysis.offenderCount).toBe(0);
+  });
+
+  it('counts a module as server-only when it imports the package, not when it mentions it', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'archprint-server-client-'));
+    try {
+      const files: Record<string, string> = {
+        'lib/db.ts': "import 'server-only';\nexport const q = 1;\n",
+        'lib/note.ts':
+          "// imported by clients, never 'server-only'\nexport const n = 'server-only docs';\n",
+        'components/ok.tsx':
+          "'use client';\nimport { n } from '../lib/note';\nexport const A = n;\n",
+        'components/bad.tsx':
+          "'use client';\nimport { q } from '../lib/db';\nexport const B = q;\n",
+      };
+      for (const [file, source] of Object.entries(files)) {
+        mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+        writeFileSync(path.join(dir, file), source);
+      }
+      const analysis = detectServerClientBoundary(dir);
+      expect(analysis.serverModules).toEqual(['lib/db.ts']);
+      expect(analysis.clients).toEqual(['components/bad.tsx', 'components/ok.tsx']);
+      expect(analysis.violations).toEqual([{ file: 'components/bad.tsx', target: 'lib/db.ts' }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
