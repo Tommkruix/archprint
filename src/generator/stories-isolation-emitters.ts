@@ -12,6 +12,8 @@ export interface StoriesIsolationConfig {
   forbidden: StoriesIsolationRule[];
 }
 
+export const STORIES_ISOLATION_RULE = 'no-import-stories';
+
 const STORY_PATH = '\\.stories\\.(ts|tsx)$';
 
 export function toDependencyCruiserStoriesIsolation(
@@ -23,7 +25,7 @@ export function toDependencyCruiserStoriesIsolation(
   return {
     forbidden: [
       {
-        name: 'no-import-stories',
+        name: STORIES_ISOLATION_RULE,
         comment: `Archprint inferred stories isolation: ${conform}/${analysis.storyCount} Storybook stories are loaded by Storybook and imported by nothing; importing a .stories file from other code is forbidden (confidence ${floor}).`,
         severity: 'error',
         from: { pathNot: STORY_PATH },

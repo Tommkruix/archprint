@@ -6,7 +6,8 @@ import { ARCHPRINT_DIR, collectEnforcement, type CollectOptions, emitLayout } fr
 import { buildConfig, readConfig, writeConfig, type ManagedOutputs } from './archprint-config.js';
 import { injectAdoptionSection } from './adoption-readme.js';
 import { ensureIgnoreEntry } from './ignore-file.js';
-import type { Recommendations } from './recommend.js';
+import { reconcileWithAdopted, type Recommendations } from './recommend.js';
+import { renderAdoptionBody } from './report.js';
 import type { ScanResult } from './scan.js';
 import { LEGACY_RULES_FILE, type ResolutionMode } from './adopted-rules.js';
 import {
@@ -28,7 +29,7 @@ export interface WriteLayoutOptions {
   recommendations: Recommendations;
   app: string;
   cwd: string;
-  readmeBody?: string;
+  readme?: boolean;
 }
 
 export interface WriteLayoutResult {
@@ -105,6 +106,7 @@ export function writeLayout(
     graph: options.graph,
     version: options.version,
   });
+  const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
     (file): file is string => file !== null,
   );
@@ -112,8 +114,11 @@ export function writeLayout(
 
   let readme: WriteLayoutResult['readme'] = 'off';
   let readmeCreated = prior?.managed.readmeCreated ?? false;
-  if (options.readmeBody !== undefined && files.length > 0) {
-    const result = injectAdoptionSection(path.join(options.cwd, 'README.md'), options.readmeBody);
+  if (options.readme && files.length > 0) {
+    const result = injectAdoptionSection(
+      path.join(options.cwd, 'README.md'),
+      renderAdoptionBody(adoption),
+    );
     readme = result.status;
     if (result.status === 'created') readmeCreated = true;
   }
@@ -146,7 +151,7 @@ export function writeLayout(
   const configPath = writeConfig(
     outDir,
     buildConfig(
-      options.recommendations,
+      adoption,
       options.version,
       {
         app: options.app,

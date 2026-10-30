@@ -8,6 +8,9 @@ const rolePath = (role: Role): string => {
   return sources.length === 1 ? sources[0]! : `(${sources.join('|')})`;
 };
 
+export const roleLayeringRuleName = (from: Role, to: Role): string =>
+  `no-${from.toLowerCase()}-to-${to.toLowerCase()}`;
+
 const confidencePct = (boundary: RoleBoundary): string =>
   `${(boundary.gate.conditions.confidence.value * 100).toFixed(0)}%`;
 
@@ -30,7 +33,7 @@ export function toDependencyCruiserRoleLayering(
   const forbidden = boundaries
     .filter((boundary) => include.includes(boundary.gate.status))
     .map((boundary) => ({
-      name: `no-${boundary.from.toLowerCase()}-to-${boundary.to.toLowerCase()}`,
+      name: roleLayeringRuleName(boundary.from, boundary.to),
       comment: `Archprint inferred role layering: ${boundary.reverseFlow} ${boundary.to} file(s) depend on ${boundary.from}, not the reverse; a ${boundary.from} must not import a ${boundary.to} (confidence ${confidencePct(boundary)}).`,
       severity: 'error' as const,
       from: { path: rolePath(boundary.from) },

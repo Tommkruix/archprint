@@ -2,6 +2,8 @@ import type { EnvAccessAnalysis } from '../detector/env-access-detector.js';
 import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
 import { CONFIG_GLOBS, TEST_GLOBS } from './eslint-scope.js';
 
+export const ENV_ACCESS_RULE = 'env-access';
+
 export function toEslintEnvAccess(analysis: EnvAccessAnalysis): EslintFlatConfigBlock | null {
   if (analysis.subjectFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {

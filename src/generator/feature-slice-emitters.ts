@@ -6,6 +6,9 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 const slug = (container: string): string =>
   container.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+export const featureSliceRuleName = (container: string): string =>
+  `no-cross-slice-${slug(container)}`;
+
 const confidencePct = (group: FeatureSliceGroup): string =>
   `${(group.gate.conditions.confidence.value * 100).toFixed(0)}%`;
 
@@ -30,7 +33,7 @@ export function toDependencyCruiserFeatureSlice(
     .map((group) => {
       const container = escapeRegExp(group.container);
       return {
-        name: `no-cross-slice-${slug(group.container)}`,
+        name: featureSliceRuleName(group.container),
         comment: `Archprint inferred slice isolation: the ${group.sliceCount} slices under "${group.container}" do not import each other (${group.sliceFileCount - group.crossImporterCount}/${group.sliceFileCount} slice files conform); cross-slice imports are forbidden (confidence ${confidencePct(group)}).`,
         severity: 'error' as const,
         from: { path: `^${container}/([^/]+)/` },

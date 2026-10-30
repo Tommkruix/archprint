@@ -2,6 +2,8 @@ import type { UiDataIsolationAnalysis } from '../detector/ui-data-isolation-dete
 import { ROLE_PATTERNS } from '../scanner/role-classifier.js';
 import type { Role } from '../scanner/role-classifier.js';
 
+export const UI_DATA_RULE = 'no-ui-to-data';
+
 const DATA_ROLES: readonly Role[] = ['DB_MODULE', 'DATA_ACCESS'];
 
 const dataPath = (): string => {
@@ -35,7 +37,7 @@ export function toDependencyCruiserUiData(analysis: UiDataIsolationAnalysis): Ui
   return {
     forbidden: [
       {
-        name: 'no-ui-to-data',
+        name: UI_DATA_RULE,
         comment: `Archprint inferred UI/data separation: ${conform}/${analysis.componentCount} UI components never import the data layer (files under db, database or prisma folders, or a prisma, drizzle or kysely client file) directly; a component importing it is forbidden (confidence ${floor}).`,
         severity: 'error',
         from: { path: componentPath() },

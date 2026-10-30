@@ -1,15 +1,23 @@
+import { detectAppIsolation } from '../detector/app-isolation-detector.js';
 import { detectConsoleIsolation } from '../detector/console-isolation-detector.js';
 import { cycleEdges } from '../detector/cycle-detector.js';
 import { detectDependencyInternals } from '../detector/dependency-internals-detector.js';
 import { detectEntryPurity } from '../detector/entry-purity-detector.js';
+import { detectEnvAccess } from '../detector/env-access-detector.js';
+import { detectFeatureSliceIsolation } from '../detector/feature-slice-detector.js';
+import type { SiblingViolation } from '../detector/sibling-isolation.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
 import { detectDeepRelativeImports } from '../detector/deep-relative-detector.js';
 import { layerImports } from '../detector/layer-detector.js';
 import { detectForbiddenImports, type PatternConfig } from '../detector/pattern-detector.js';
 import { detectPhantomDependencies } from '../detector/phantom-dependency-detector.js';
 import { detectPublicApiBoundaries } from '../detector/public-api-detector.js';
+import { detectRoleLayering } from '../detector/role-layering-detector.js';
 import { detectServerClientBoundary } from '../detector/server-client-detector.js';
+import { detectStoriesIsolation } from '../detector/stories-isolation-detector.js';
 import { detectTestIsolation } from '../detector/test-isolation-detector.js';
+import { detectUiDataIsolation } from '../detector/ui-data-isolation-detector.js';
+import { detectWorkspacePackageApi } from '../detector/workspace-package-detector.js';
 import type { AdoptedRule, ForbiddenImportRule, ResolutionMode } from './adopted-rules.js';
 
 export type SubjectKind = 'specifier' | 'target' | 'file';
@@ -50,6 +58,22 @@ function forbiddenImportFindings(appDir: string, rules: readonly ForbiddenImport
     });
   }
   return findings;
+}
+
+function containerFindings(
+  rules: readonly AdoptedRule[],
+  groups: readonly { container: string; violations: readonly SiblingViolation[] }[],
+): Finding[] {
+  return rules.flatMap((rule) => {
+    if (rule.family !== 'feature-slice' && rule.family !== 'app-isolation') return [];
+    const group = groups.find((candidate) => candidate.container === rule.container);
+    return (group?.violations ?? []).map((violation) => ({
+      ruleId: rule.id,
+      file: violation.file,
+      subject: violation.target,
+      kind: 'target' as const,
+    }));
+  });
 }
 
 export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Finding[] {
@@ -125,6 +149,64 @@ export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Fi
       });
     }
   }
+  for (const rule of byFamily('env-access')) {
+    for (const violation of detectEnvAccess(appDir).violations) {
+      findings.push({ ruleId: rule.id, file: violation.file, subject: '', kind: 'file' });
+    }
+  }
+  for (const rule of byFamily('workspace-package-api')) {
+    for (const violation of detectWorkspacePackageApi(appDir).violations) {
+      findings.push({
+        ruleId: rule.id,
+        file: violation.file,
+        subject: violation.specifier,
+        kind: 'specifier',
+      });
+    }
+  }
+  for (const rule of byFamily('stories-isolation')) {
+    for (const violation of detectStoriesIsolation(appDir).violations) {
+      findings.push({
+        ruleId: rule.id,
+        file: violation.importer,
+        subject: violation.file,
+        kind: 'target',
+      });
+    }
+  }
+  for (const rule of byFamily('ui-data')) {
+    for (const violation of detectUiDataIsolation(appDir).violations) {
+      findings.push({
+        ruleId: rule.id,
+        file: violation.file,
+        subject: violation.target,
+        kind: 'target',
+      });
+    }
+  }
+  const roleLayering = byFamily('role-layering');
+  if (roleLayering.length > 0) {
+    const boundaries = detectRoleLayering(appDir).boundaries;
+    for (const rule of roleLayering) {
+      if (rule.family !== 'role-layering') continue;
+      const boundary = boundaries.find(
+        (candidate) => candidate.from === rule.from && candidate.to === rule.to,
+      );
+      for (const violation of boundary?.violations ?? []) {
+        findings.push({
+          ruleId: rule.id,
+          file: violation.file,
+          subject: violation.target,
+          kind: 'target',
+        });
+      }
+    }
+  }
+  const slices = byFamily('feature-slice');
+  if (slices.length > 0)
+    findings.push(...containerFindings(slices, detectFeatureSliceIsolation(appDir).groups));
+  const apps = byFamily('app-isolation');
+  if (apps.length > 0) findings.push(...containerFindings(apps, detectAppIsolation(appDir).groups));
   const layers = byFamily('layer');
   if (layers.length > 0) {
     const importsAcross = layerImports(appDir);
