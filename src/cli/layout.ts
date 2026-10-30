@@ -9,7 +9,12 @@ import { ensureIgnoreEntry } from './ignore-file.js';
 import { reconcileWithAdopted, type Recommendations } from './recommend.js';
 import { renderAdoptionBody } from './report.js';
 import type { ScanResult } from './scan.js';
-import { LEGACY_RULES_FILE, type ResolutionMode } from './adopted-rules.js';
+import {
+  type AdoptedRule,
+  LEGACY_RULES_FILE,
+  readAdoptedRules,
+  type ResolutionMode,
+} from './adopted-rules.js';
 import {
   allowedFilesByRule,
   LEGACY_ALLOW_FILE,
@@ -38,6 +43,9 @@ export interface WriteLayoutResult {
   folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
+  /** Previously adopted rules a scoped run kept, and those the current scan no longer generates. */
+  kept: string[];
+  dropped: string[];
 }
 
 export class UnknownRulesError extends Error {
@@ -80,6 +88,34 @@ function removeFoldedFiles(outDir: string, cwd: string): string[] {
   return folded;
 }
 
+/** The rules a scoped run (--only, --rules) keeps from the previous adoption: it adds to them, never replaces them. */
+function carriedRuleIds(
+  outDir: string,
+  options: CollectOptions,
+  requested: readonly AdoptedRule[],
+): string[] {
+  if (options.only === undefined && options.ruleIds === undefined) return [];
+  const requestedIds = new Set(requested.map((rule) => rule.id));
+  return (readAdoptedRules(outDir) ?? [])
+    .map((rule) => rule.id)
+    .filter((id) => !requestedIds.has(id));
+}
+
+/** Selects the requested and carried rules by id, across every family: a carried rule was adopted, held or not. */
+function withCarried(
+  options: CollectOptions,
+  requested: readonly AdoptedRule[],
+  carried: readonly string[],
+): CollectOptions {
+  if (carried.length === 0) return options;
+  return {
+    ...options,
+    structural: true,
+    only: undefined,
+    ruleIds: [...requested.map((rule) => rule.id), ...carried],
+  };
+}
+
 export function writeLayout(
   scan: ScanResult,
   outDir: string,
@@ -96,16 +132,22 @@ export function writeLayout(
     ruleIds: options.ruleIds,
     mode: options.mode,
   };
-  const { unknownRules, availableRules } = collectEnforcement(scan, collectOptions);
-  if (unknownRules.length > 0)
-    throw new UnknownRulesError(unknownRules, availableRules, options.structural ?? false);
+  const requested = collectEnforcement(scan, collectOptions);
+  if (requested.unknownRules.length > 0)
+    throw new UnknownRulesError(
+      requested.unknownRules,
+      requested.availableRules,
+      options.structural ?? false,
+    );
+  const carried = carriedRuleIds(outDir, collectOptions, requested.adopted);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
-    ...collectOptions,
+    ...withCarried(collectOptions, requested.adopted, carried),
     expand: options.expand,
-    graph: options.graph,
+    graph: options.only === undefined && options.graph !== false,
     version: options.version,
   });
+  const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
   const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
     (file): file is string => file !== null,
@@ -162,5 +204,13 @@ export function writeLayout(
     ),
   );
   const folded = removeFoldedFiles(outDir, options.cwd);
-  return { files, removed, folded, readme, configPath };
+  return {
+    files,
+    removed,
+    folded,
+    readme,
+    configPath,
+    kept: carried.filter((id) => emittedIds.has(id)),
+    dropped: carried.filter((id) => !emittedIds.has(id)),
+  };
 }
