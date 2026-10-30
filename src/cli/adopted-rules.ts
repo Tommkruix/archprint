@@ -2,15 +2,30 @@ import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import type { GateResult } from '../detector/confidence-gate.js';
 import type { Role } from '../scanner/role-classifier.js';
+import type { AppIsolationGroup } from '../detector/app-isolation-detector.js';
+import type { FeatureSliceGroup } from '../detector/feature-slice-detector.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
+import type { RoleBoundary } from '../detector/role-layering-detector.js';
+import { appIsolationRuleName } from '../generator/app-isolation-emitters.js';
+import { ENV_ACCESS_RULE } from '../generator/env-access-emitters.js';
+import { featureSliceRuleName } from '../generator/feature-slice-emitters.js';
 import { layerRuleName } from '../generator/layer-emitters.js';
 import { DEPENDENCY_INTERNALS_RULE } from '../generator/dependency-internals-emitters.js';
 import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from '../generator/phantom-dependency-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
+import { roleLayeringRuleName } from '../generator/role-layering-emitters.js';
 import { SERVER_CLIENT_RULE } from '../generator/server-client-emitters.js';
+import { STORIES_ISOLATION_RULE } from '../generator/stories-isolation-emitters.js';
+import { UI_DATA_RULE } from '../generator/ui-data-isolation-emitters.js';
+import { WORKSPACE_PACKAGE_RULE } from '../generator/workspace-package-emitters.js';
 import { configPath, configSection, readConfigSection } from './archprint-config.js';
-import { FAMILY_STATEMENTS } from './rule-statements.js';
+import {
+  appIsolationStatement,
+  boundaryStatement,
+  FAMILY_STATEMENTS,
+  sliceStatement,
+} from './rule-statements.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 
 /** Where 0.9.0 to 0.11.x kept the adopted rules, before they moved into config.json. */
@@ -52,7 +67,11 @@ export interface SingleFamilyRule extends RuleBase {
     | 'server-client'
     | 'dependency-hygiene'
     | 'entry-purity'
-    | 'cycles';
+    | 'cycles'
+    | 'env-access'
+    | 'workspace-package-api'
+    | 'stories-isolation'
+    | 'ui-data';
 }
 
 export interface LayerRule extends RuleBase {
@@ -61,7 +80,24 @@ export interface LayerRule extends RuleBase {
   to: string;
 }
 
-export type AdoptedRule = ForbiddenImportRule | PublicApiRule | LayerRule | SingleFamilyRule;
+export interface RoleLayeringRule extends RuleBase {
+  family: 'role-layering';
+  from: Role;
+  to: Role;
+}
+
+export interface SiblingIsolationRule extends RuleBase {
+  family: 'feature-slice' | 'app-isolation';
+  container: string;
+}
+
+export type AdoptedRule =
+  | ForbiddenImportRule
+  | PublicApiRule
+  | LayerRule
+  | RoleLayeringRule
+  | SiblingIsolationRule
+  | SingleFamilyRule;
 
 const evidenceOf = (gate: GateResult, total: number, violating: number): AdoptionEvidence => ({
   conforming: total - violating,
@@ -159,6 +195,84 @@ export function entryPurityRule(scan: ScanResult): AdoptedRule {
   };
 }
 
+export function envAccessRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.envAccess;
+  return {
+    id: ENV_ACCESS_RULE,
+    family: 'env-access',
+    statement: FAMILY_STATEMENTS['env-access'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.subjectFileCount, analysis.offenderCount),
+  };
+}
+
+export function workspacePackageRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.workspacePackageApi;
+  return {
+    id: WORKSPACE_PACKAGE_RULE,
+    family: 'workspace-package-api',
+    statement: FAMILY_STATEMENTS['workspace-package-api'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.consumerCount, analysis.offenderCount),
+  };
+}
+
+export function storiesIsolationRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.storiesIsolation;
+  return {
+    id: STORIES_ISOLATION_RULE,
+    family: 'stories-isolation',
+    statement: FAMILY_STATEMENTS['stories-isolation'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.storyCount, analysis.offenderCount),
+  };
+}
+
+export function uiDataRule(scan: ScanResult): AdoptedRule {
+  const analysis = scan.uiDataIsolation;
+  return {
+    id: UI_DATA_RULE,
+    family: 'ui-data',
+    statement: FAMILY_STATEMENTS['ui-data'],
+    mode: 'fast',
+    evidence: evidenceOf(analysis.gate, analysis.componentCount, analysis.offenderCount),
+  };
+}
+
+export function roleLayeringRule(boundary: RoleBoundary): RoleLayeringRule {
+  return {
+    id: roleLayeringRuleName(boundary.from, boundary.to),
+    family: 'role-layering',
+    from: boundary.from,
+    to: boundary.to,
+    statement: boundaryStatement(boundary.from, boundary.to),
+    mode: 'fast',
+    evidence: evidenceOf(boundary.gate, boundary.roleFileCount, boundary.violatingFileCount),
+  };
+}
+
+export function featureSliceRule(group: FeatureSliceGroup): SiblingIsolationRule {
+  return {
+    id: featureSliceRuleName(group.container),
+    family: 'feature-slice',
+    container: group.container,
+    statement: sliceStatement(group.container),
+    mode: 'fast',
+    evidence: evidenceOf(group.gate, group.sliceFileCount, group.crossImporterCount),
+  };
+}
+
+export function appIsolationRule(group: AppIsolationGroup): SiblingIsolationRule {
+  return {
+    id: appIsolationRuleName(group.container),
+    family: 'app-isolation',
+    container: group.container,
+    statement: appIsolationStatement(group.container),
+    mode: 'fast',
+    evidence: evidenceOf(group.gate, group.appFileCount, group.crossImporterCount),
+  };
+}
+
 export const NO_CYCLES_RULE = 'no-cycles';
 
 /** Whether the code has no cycle and enough files to say so: only then is no-cycles a rule it follows. */
@@ -222,6 +336,13 @@ const FAMILIES: ReadonlySet<string> = new Set([
   'test-isolation',
   'console-isolation',
   'import-style',
+  'env-access',
+  'workspace-package-api',
+  'stories-isolation',
+  'ui-data',
+  'role-layering',
+  'feature-slice',
+  'app-isolation',
 ]);
 const MAX_PATTERN_LENGTH = 200;
 const PATTERN_FLAGS = /^[imsu]*$/;
@@ -240,6 +361,7 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
     dir?: unknown;
     from?: unknown;
     to?: unknown;
+    container?: unknown;
   };
   if (typeof candidate.id !== 'string' || !FAMILIES.has(String(candidate.family))) {
     return invalid('a rule has no valid id or family');
@@ -271,10 +393,16 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
     return invalid(`rule ${candidate.id} has no directory`);
   }
   if (
-    candidate.family === 'layer' &&
+    (candidate.family === 'layer' || candidate.family === 'role-layering') &&
     (typeof candidate.from !== 'string' || typeof candidate.to !== 'string')
   ) {
     return invalid(`rule ${candidate.id} has no layers`);
+  }
+  if (
+    (candidate.family === 'feature-slice' || candidate.family === 'app-isolation') &&
+    typeof candidate.container !== 'string'
+  ) {
+    return invalid(`rule ${candidate.id} has no directory`);
   }
   return rule as AdoptedRule;
 }
@@ -325,7 +453,11 @@ export function ruleDefinitionKey(rule: AdoptedRule): string {
     case 'public-api':
       return JSON.stringify([...common, rule.dir]);
     case 'layer':
+    case 'role-layering':
       return JSON.stringify([...common, rule.from, rule.to]);
+    case 'feature-slice':
+    case 'app-isolation':
+      return JSON.stringify([...common, rule.container]);
     default:
       return JSON.stringify(common);
   }

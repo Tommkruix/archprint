@@ -4,7 +4,6 @@ import { detectEnforcers } from '../scanner/enforcers.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { hasTsConfig, scanRepo } from './scan.js';
 import { buildRecommendations, detectStack } from './recommend.js';
-import { renderAdoptionBody } from './report.js';
 import { writeLayout } from './layout.js';
 import {
   ARCHPRINT_DIR,
@@ -212,7 +211,7 @@ export function runMigration(
     recommendations,
     app: path.relative(cwd, plan.appDir) || '.',
     cwd,
-    readmeBody: renderAdoptionBody(recommendations),
+    readme: true,
   });
   for (const edit of edits)
     if (staysInsideItsFolder(edit.path)) writeFileSync(edit.path, edit.content);

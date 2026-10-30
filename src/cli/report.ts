@@ -562,7 +562,7 @@ export function renderAdoptionBody(rec: Recommendations): string {
     ),
     ...adoptionSection(
       'Report only',
-      'Your code already follows these, but archprint does not write a rule for them yet, so nothing enforces them.',
+      'Your code already follows these, but no adopted rule enforces them.',
       rec.reportOnly,
     ),
     ...adoptionSection(

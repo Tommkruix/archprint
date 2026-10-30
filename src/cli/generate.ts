@@ -17,17 +17,26 @@ import {
   serverClientRuleSpec,
 } from '../generator/eslint-app-emitter.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
-import { toDependencyCruiserFeatureSlice } from '../generator/feature-slice-emitters.js';
+import {
+  featureSliceRuleName,
+  toDependencyCruiserFeatureSlice,
+} from '../generator/feature-slice-emitters.js';
 import {
   toDependencyCruiserTestIsolation,
   toEslintTestIsolation,
 } from '../generator/test-isolation-emitters.js';
-import { toDependencyCruiserAppIsolation } from '../generator/app-isolation-emitters.js';
+import {
+  appIsolationRuleName,
+  toDependencyCruiserAppIsolation,
+} from '../generator/app-isolation-emitters.js';
 import {
   DEPENDENCY_INTERNALS_RULE,
   toDependencyCruiserDependencyInternals,
 } from '../generator/dependency-internals-emitters.js';
-import { toDependencyCruiserRoleLayering } from '../generator/role-layering-emitters.js';
+import {
+  roleLayeringRuleName,
+  toDependencyCruiserRoleLayering,
+} from '../generator/role-layering-emitters.js';
 import {
   ENTRY_PURITY_RULE,
   toDependencyCruiserEntryPurity,
@@ -39,8 +48,11 @@ import {
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { toEslintDeepRelative } from '../generator/deep-relative-emitters.js';
 import { toEslintConsoleIsolation } from '../generator/console-isolation-emitters.js';
-import { toEslintEnvAccess } from '../generator/env-access-emitters.js';
-import { toEslintWorkspacePackageApi } from '../generator/workspace-package-emitters.js';
+import { ENV_ACCESS_RULE, toEslintEnvAccess } from '../generator/env-access-emitters.js';
+import {
+  toEslintWorkspacePackageApi,
+  WORKSPACE_PACKAGE_RULE,
+} from '../generator/workspace-package-emitters.js';
 import { toDependencyCruiserStoriesIsolation } from '../generator/stories-isolation-emitters.js';
 import { toDependencyCruiserUiData } from '../generator/ui-data-isolation-emitters.js';
 import {
@@ -63,7 +75,10 @@ import {
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 import {
+  appIsolationRule,
   consoleIsolationRule,
+  envAccessRule,
+  featureSliceRule,
   forbiddenImportRule,
   importStyleRule,
   cycleRule,
@@ -76,7 +91,11 @@ import {
   serverClientRule,
   publicApiRules,
   byRuleId,
+  roleLayeringRule,
+  storiesIsolationRule,
   testIsolationRule,
+  uiDataRule,
+  workspacePackageRule,
   type AdoptedRule,
   type ResolutionMode,
 } from './adopted-rules.js';
@@ -254,11 +273,14 @@ export function collectEnforcement(
     pushBlock('console', block);
     if (block !== null) adopted.push(consoleIsolationRule(scan));
   }
-  if (structural && emitEslint && pick('env-access'))
-    pushBlock(
-      'env-access',
-      chosen('env-access', allowing(toEslintEnvAccess(scan.envAccess), 'env-access')),
+  if (structural && emitEslint && pick('env-access')) {
+    const block = chosen(
+      ENV_ACCESS_RULE,
+      allowing(toEslintEnvAccess(scan.envAccess), ENV_ACCESS_RULE),
     );
+    pushBlock('env-access', block);
+    if (block !== null) adopted.push(envAccessRule(scan));
+  }
   const noRestricted: (NoRestrictedImportsBlock | null)[] = [];
   if (emitEslint && pick('import-style')) {
     const block = chosen(
@@ -276,13 +298,14 @@ export function collectEnforcement(
     noRestricted.push(block);
     if (block !== null) adopted.push(testIsolationRule(scan));
   }
-  if (structural && emitEslint && pick('workspace-package'))
-    noRestricted.push(
-      chosen(
-        'workspace-package',
-        allowing(toEslintWorkspacePackageApi(scan.workspacePackageApi), 'workspace-package'),
-      ),
+  if (structural && emitEslint && pick('workspace-package')) {
+    const block = chosen(
+      WORKSPACE_PACKAGE_RULE,
+      allowing(toEslintWorkspacePackageApi(scan.workspacePackageApi), WORKSPACE_PACKAGE_RULE),
     );
+    noRestricted.push(block);
+    if (block !== null) adopted.push(workspacePackageRule(scan));
+  }
   mergeNoRestrictedImports(noRestricted).forEach((block, index) =>
     pushBlock(
       index === 0 ? 'no-restricted-imports' : `no-restricted-imports-exceptions-${index}`,
@@ -374,26 +397,34 @@ export function collectEnforcement(
   if (serverClient !== null) adopted.push(serverClientRule(scan));
   if (internals !== null) adopted.push(dependencyInternalsRule(scan));
   if (entry !== null) adopted.push(entryPurityRule(scan));
-  if (structural && emitDepcruise && pick('role-layering'))
-    pushNamedDc(
-      'role-layering',
-      toDependencyCruiserRoleLayering(scan.roleLayering.boundaries, ['AUTO']).forbidden,
+  const isAuto = (candidate: { gate: { status: string } }): boolean =>
+    candidate.gate.status === 'AUTO';
+  if (structural && emitDepcruise && pick('role-layering')) {
+    const boundaries = scan.roleLayering.boundaries.filter(
+      (boundary) => isAuto(boundary) && selects(roleLayeringRuleName(boundary.from, boundary.to)),
     );
+    pushDc('role-layering', toDependencyCruiserRoleLayering(boundaries).forbidden);
+    adopted.push(...boundaries.map(roleLayeringRule));
+  }
   if (emitDepcruise && pick('public-api')) {
     const forbidden = toDependencyCruiserPublicApi(scan.publicApi.groups, ['AUTO']).forbidden;
     pushNamedDc('public-api', forbidden);
     adopted.push(...publicApiRules(scan).filter((rule) => selects(rule.id)));
   }
-  if (structural && emitDepcruise && pick('feature-slice'))
-    pushNamedDc(
-      'feature-slice',
-      toDependencyCruiserFeatureSlice(scan.featureSlices.groups, ['AUTO']).forbidden,
+  if (structural && emitDepcruise && pick('feature-slice')) {
+    const groups = scan.featureSlices.groups.filter(
+      (group) => isAuto(group) && selects(featureSliceRuleName(group.container)),
     );
-  if (structural && emitDepcruise && pick('app-isolation'))
-    pushNamedDc(
-      'app-isolation',
-      toDependencyCruiserAppIsolation(scan.appIsolation.groups, ['AUTO']).forbidden,
+    pushDc('feature-slice', toDependencyCruiserFeatureSlice(groups).forbidden);
+    adopted.push(...groups.map(featureSliceRule));
+  }
+  if (structural && emitDepcruise && pick('app-isolation')) {
+    const groups = scan.appIsolation.groups.filter(
+      (group) => isAuto(group) && selects(appIsolationRuleName(group.container)),
     );
+    pushDc('app-isolation', toDependencyCruiserAppIsolation(groups).forbidden);
+    adopted.push(...groups.map(appIsolationRule));
+  }
   if (pick('test-isolation') && !emitEslint && emitDepcruise) {
     const forbidden = toDependencyCruiserTestIsolation(scan.testIsolation).forbidden;
     if (forbidden.length > 0 && selects('test-isolation')) {
@@ -401,13 +432,18 @@ export function collectEnforcement(
       adopted.push(testIsolationRule(scan));
     }
   }
-  if (structural && emitDepcruise && pick('stories-isolation'))
-    pushNamedDc(
-      'stories-isolation',
+  if (structural && emitDepcruise && pick('stories-isolation')) {
+    const forbidden = selected(
       toDependencyCruiserStoriesIsolation(scan.storiesIsolation).forbidden,
     );
-  if (structural && emitDepcruise && pick('ui-data'))
-    pushNamedDc('ui-data', toDependencyCruiserUiData(scan.uiDataIsolation).forbidden);
+    pushDc('stories-isolation', forbidden);
+    if (forbidden.length > 0) adopted.push(storiesIsolationRule(scan));
+  }
+  if (structural && emitDepcruise && pick('ui-data')) {
+    const forbidden = selected(toDependencyCruiserUiData(scan.uiDataIsolation).forbidden);
+    pushDc('ui-data', forbidden);
+    if (forbidden.length > 0) adopted.push(uiDataRule(scan));
+  }
 
   const bundles = options.only === undefined;
   const boundaries = emitDepcruise

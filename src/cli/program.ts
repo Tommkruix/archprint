@@ -10,13 +10,7 @@ import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import {
-  renderAdoptionBody,
-  renderExplain,
-  renderInit,
-  renderReport,
-  renderRecommendations,
-} from './report.js';
+import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
 import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
@@ -262,7 +256,7 @@ export function buildProgram(version = readVersion()): Command {
           recommendations,
           app: displayPath(appDir, cwd),
           cwd,
-          readmeBody: renderAdoptionBody(recommendations),
+          readme: true,
         });
         const config = readConfig(outDir);
         /* v8 ignore next -- writeLayout always writes a readable config */
@@ -443,7 +437,7 @@ export function buildProgram(version = readVersion()): Command {
           recommendations,
           app: displayPath(scan.appDir, cwd),
           cwd,
-          readmeBody: options.readme ? renderAdoptionBody(recommendations) : undefined,
+          readme: options.readme,
         });
         if (removed.length > 0) {
           console.log(

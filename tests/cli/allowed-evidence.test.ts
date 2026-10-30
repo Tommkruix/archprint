@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { excludeAllowed } from '../../src/cli/allowed-evidence.js';
 import { scanRepo, type ScanResult } from '../../src/cli/scan.js';
+import { appIsolationRuleName } from '../../src/generator/app-isolation-emitters.js';
+import { featureSliceRuleName } from '../../src/generator/feature-slice-emitters.js';
 import { publicApiRuleName } from '../../src/generator/public-api-emitters.js';
 import { nextApp, writeTree } from '../integration/layer-app.js';
 
@@ -98,7 +100,10 @@ describe('excludeAllowed for each adoptable family', () => {
     content: string;
     rule: (scan: ScanResult) => string;
     view: (scan: ScanResult) => { files: string[]; population: number };
+    populationDrop?: number;
   };
+  const repositoryToService = (s: ScanResult) =>
+    s.roleLayering.boundaries.find((b) => b.from === 'REPOSITORY' && b.to === 'SERVICE')!;
   const families: Family[] = [
     {
       name: 'console isolation',
@@ -146,6 +151,87 @@ describe('excludeAllowed for each adoptable family', () => {
         population: s.publicApi.groups[0]!.consumerCount,
       }),
     },
+    {
+      name: 'env access',
+      fixture: 'env-access-auto',
+      file: 'src/app/leak.ts',
+      content: 'export const leak = (): string | undefined => process.env.SECRET;\n',
+      rule: () => 'env-access',
+      view: (s) => ({
+        files: s.envAccess.violations.map((v) => v.file),
+        population: s.envAccess.subjectFileCount,
+      }),
+    },
+    {
+      name: 'workspace package',
+      fixture: 'workspace-package-auto',
+      file: 'packages/pkg-a/src/leak.ts',
+      content:
+        "import { b } from '@scope/pkg-b/src/index';\nexport const leak = (): number => b();\n",
+      rule: () => 'workspace-package',
+      view: (s) => ({
+        files: s.workspacePackageApi.violations.map((v) => v.file),
+        population: s.workspacePackageApi.consumerCount,
+      }),
+    },
+    {
+      name: 'UI/data',
+      fixture: 'ui-data-auto',
+      file: 'src/components/Leak.tsx',
+      content: "import { q } from '@/src/db/queries';\nexport const Leak = (): number => q();\n",
+      rule: () => 'no-ui-to-data',
+      view: (s) => ({
+        files: s.uiDataIsolation.violations.map((v) => v.file),
+        population: s.uiDataIsolation.componentCount,
+      }),
+    },
+    {
+      name: 'stories isolation',
+      fixture: 'stories-isolation-auto',
+      file: 'src/use.ts',
+      content:
+        "import { Story2 } from './c2.stories';\nexport const use = (): number => Story2();\n",
+      rule: () => 'no-import-stories',
+      view: (s) => ({
+        files: s.storiesIsolation.violations.map((v) => v.importer),
+        population: s.storiesIsolation.storyCount,
+      }),
+      populationDrop: 0,
+    },
+    {
+      name: 'role layering',
+      fixture: 'role-layering-auto',
+      file: 'src/m99.repository.ts',
+      content:
+        "import { svc25 } from '@/src/m25.service';\nexport const repo99 = (): unknown => svc25;\n",
+      rule: () => 'no-repository-to-service',
+      view: (s) => ({
+        files: repositoryToService(s).violations.map((v) => v.file),
+        population: repositoryToService(s).roleFileCount,
+      }),
+    },
+    {
+      name: 'feature slice',
+      fixture: 'feature-slice-auto',
+      file: 'src/features/alpha/leak.ts',
+      content: "import { beta2 } from '../beta/f2';\nexport const leak = (): number => beta2();\n",
+      rule: (s) => featureSliceRuleName(s.featureSlices.groups[0]!.container),
+      view: (s) => ({
+        files: s.featureSlices.groups[0]!.violations.map((v) => v.file),
+        population: s.featureSlices.groups[0]!.sliceFileCount,
+      }),
+    },
+    {
+      name: 'app isolation',
+      fixture: 'app-isolation-auto',
+      file: 'apps/alpha/leak.ts',
+      content: "import { beta2 } from '../beta/f2';\nexport const leak = (): number => beta2();\n",
+      rule: (s) => appIsolationRuleName(s.appIsolation.groups[0]!.container),
+      view: (s) => ({
+        files: s.appIsolation.groups[0]!.violations.map((v) => v.file),
+        population: s.appIsolation.groups[0]!.appFileCount,
+      }),
+    },
   ];
 
   for (const family of families) {
@@ -157,7 +243,7 @@ describe('excludeAllowed for each adoptable family', () => {
         excludeAllowed(scan, new Map([[family.rule(scan), [family.file]]])),
       );
       expect(after.files).not.toContain(family.file);
-      expect(after.population).toBe(before.population - 1);
+      expect(after.population).toBe(before.population - (family.populationDrop ?? 1));
     });
   }
 });

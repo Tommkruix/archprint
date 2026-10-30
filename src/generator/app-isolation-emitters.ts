@@ -6,6 +6,9 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 const slug = (container: string): string =>
   container.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+export const appIsolationRuleName = (container: string): string =>
+  `no-cross-app-${slug(container)}`;
+
 const confidencePct = (group: AppIsolationGroup): string =>
   `${(group.gate.conditions.confidence.value * 100).toFixed(0)}%`;
 
@@ -30,7 +33,7 @@ export function toDependencyCruiserAppIsolation(
     .map((group) => {
       const container = escapeRegExp(group.container);
       return {
-        name: `no-cross-app-${slug(group.container)}`,
+        name: appIsolationRuleName(group.container),
         comment: `Archprint inferred app isolation: the ${group.appCount} apps under "${group.container}" do not import each other (${group.appFileCount - group.crossImporterCount}/${group.appFileCount} app files conform); cross-app imports are forbidden (confidence ${confidencePct(group)}).`,
         severity: 'error' as const,
         from: { path: `^${container}/([^/]+)/` },

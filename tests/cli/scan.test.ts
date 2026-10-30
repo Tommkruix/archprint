@@ -910,6 +910,34 @@ describe('cli generate', () => {
     expect(unknown.availableRules).toEqual(['AP-002', 'no-utils-to-api']);
   });
 
+  it('records an adopted rule for each structural rule it writes, so config.json matches the output', () => {
+    const ids = (c: CollectedEnforcement) => c.adopted.map((rule) => rule.id).sort();
+    const eslint = collect(
+      emptyScan({ envAccess: fakeEnv(40, 0), workspacePackageApi: fakeWpkg(40, 0) }),
+      { enforcers: ESLINT },
+    );
+    expect(es(eslint, 'env-access')).toBe(true);
+    expect(ids(eslint)).toEqual(['env-access', 'workspace-package']);
+
+    const scan = emptyScan({
+      roleLayering: { appDir: 'x', boundaries: [fakeRoleBoundary('REPOSITORY', 'SERVICE', 40, 0)] },
+      featureSlices: { appDir: 'x', groups: [fakeSliceGroup('src/features', 40, 0)] },
+      appIsolation: { appDir: 'x', groups: [fakeAppGroup('apps', 40, 0)] },
+      storiesIsolation: fakeStories(40, 0),
+      uiDataIsolation: fakeUiData(40, 0),
+    });
+    const depcruise = collect(scan);
+    const written = depcruise.depcruise.flatMap((entry) =>
+      entry.forbidden.map((rule) => rule.name),
+    );
+    expect(written).toHaveLength(5);
+    expect(ids(depcruise)).toEqual([...written].sort());
+
+    const one = collect(scan, { ruleIds: ['no-ui-to-data'] });
+    expect(ids(one)).toEqual(['no-ui-to-data']);
+    expect(one.depcruise.map((entry) => entry.family)).toEqual(['ui-data']);
+  });
+
   it('adopts no-cycles for a cycle-free codebase only', () => {
     const fileCount = 60;
     const clean = emptyScan({
