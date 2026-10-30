@@ -330,10 +330,13 @@ export function buildProgram(version = readVersion()): Command {
     .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz, with --expand)')
     .option('--expand', 'also write the per-family files, rule cards, fixtures, and graph')
     .option('--readme', 'also add an archprint section to README.md summarizing what is enforced')
-    .option('--only <family>', `emit only one rule family (${FAMILY_NAMES.join(', ')})`)
+    .option(
+      '--only <family>',
+      `adopt one rule family, keeping the rules adopted before (${FAMILY_NAMES.join(', ')})`,
+    )
     .option(
       '--rules <ids>',
-      'emit only these rules (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
+      'adopt these rules, keeping the rules adopted before (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
     )
     .option(
       '--check',
@@ -425,7 +428,7 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const { files, removed, folded, configPath } = writeLayout(scan, outDir, {
+        const { files, removed, folded, configPath, kept, dropped } = writeLayout(scan, outDir, {
           structural,
           enforcers,
           graph: options.graph,
@@ -445,6 +448,12 @@ export function buildProgram(version = readVersion()): Command {
           );
         }
         reportFolded(folded, displayPath(configPath, cwd));
+        if (kept.length > 0)
+          console.log(`Kept ${kept.length} previously adopted rule(s): ${kept.join(', ')}.`);
+        if (dropped.length > 0)
+          console.log(
+            `Dropped ${dropped.length} previously adopted rule(s) the current scan no longer generates: ${dropped.join(', ')}. Review their evidence with 'archprint scan'.`,
+          );
         if (files.length === 0) {
           if (heldStructuralAuto > 0) {
             console.log(
