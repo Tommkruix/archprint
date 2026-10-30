@@ -72,7 +72,7 @@ has rules to enforce: a typical ESLint project gets two files, `config.json` and
 dependency-cruiser rules are adopted too gets a third. Archprint detects ESLint and dependency-cruiser, so you are
 never left with config for a tool you do not have (`--emit all` forces every format):
 
-- `.archprint/config.json` (always): the system file recording the exact definition of each adopted mechanical
+- `.archprint/config.json` (always): the system file recording the exact definition of each adopted
   rule (its resolution mode and the evidence recorded when it was adopted, which `archprint check` uses in CI), the
   exceptions allowed with a reason, what is enforced, followed but only reported, held for review, worth adopting,
   and the managed outputs `eject` removes,

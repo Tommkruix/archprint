@@ -366,7 +366,7 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
 
   it('exits 2 when the rules have been tampered with', async () => {
     editConfig((config) => {
-      config.rules = [{ id: 'x', family: 'role-layering' }];
+      config.rules = [{ id: 'x', family: 'orphans' }];
     });
     await run(['check', '--base', 'main']);
     expect(errSpy.mock.calls.flat().join(' ')).toContain('no valid id or family');

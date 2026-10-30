@@ -120,14 +120,14 @@ archprint generate apps/web --check
 # Emit one specific rule after reviewing it (including a SUGGEST rule)
 archprint generate apps/web --rule AP-001
 
-# Narrow the output, or force a format regardless of detected tooling
+# Adopt one more family (keeps the rules you adopted before), or force a format regardless of detected tooling
 archprint generate apps/web --only console
 archprint generate apps/web --emit all
 
 # Also emit the structural-inference families (review these first)
 archprint generate apps/web --include-structural
 
-# Adopt only the rules you choose, by id
+# Adopt the rules you choose, by id (added to the rules you adopted before)
 archprint generate apps/web --include-structural --rules no-lib-to-app,import-style
 
 # Also write the granular per-family files, rule cards, fixtures, and graph
@@ -135,6 +135,8 @@ archprint generate apps/web --expand
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
+A plain `generate` writes the default rule set; `--only` and `--rules` add to the rules you adopted before and say
+which they kept, and name any earlier rule the current code no longer supports.
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
 `import archprint from './.archprint/eslint.mjs'`) and, when dependency-cruiser is present, one
 `.archprint/dependency-cruiser.json`; `--expand` adds the per-family configs, per-rule cards and fixtures, and

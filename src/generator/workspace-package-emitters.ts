@@ -3,6 +3,8 @@ import { exemptImporters, type EslintNoRestrictedImportsConfig } from './deep-re
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+export const WORKSPACE_PACKAGE_RULE = 'workspace-package';
+
 export function toEslintWorkspacePackageApi(
   analysis: WorkspacePackageAnalysis,
 ): EslintNoRestrictedImportsConfig | null {

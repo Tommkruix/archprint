@@ -490,8 +490,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   fresh repo too), and names the installed tool that will enforce each rule it can write.
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
-  `--only <family>` and `--rules <ids>` narrow the output (`--rules` keeps only the rules it names, such as
-  `AP-002`, `import-style` or the layer rule `no-lib-to-app`), `--check` runs the generated rules against your repo,
+  `--only <family>` and `--rules <ids>` adopt one family or the rules they name (such as `AP-002`, `import-style`
+  or the layer rule `no-lib-to-app`) and keep the rules you adopted before, `--check` runs the generated rules against your repo,
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
@@ -564,8 +564,8 @@ Without dependency-cruiser, each boundary becomes an ESLint rule in `.archprint/
 `archprint/no-utils-to-app`, with no extra plugin; with dependency-cruiser, it goes there instead. The rule
 exempts the files that already break the boundary, so your lint stays green, and it catches a new import across
 the boundary, by relative path or alias. `archprint check` reports a new break in a pull request, and
-`archprint allow` records a justified exception. `--rules` keeps only the rules it names, so list every rule you
-want in the same run. If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
+`archprint allow` records a justified exception. `--rules` adds the rules it names to the ones you adopted before,
+so you can adopt boundaries one run at a time; a plain `archprint generate` resets to the default rule set. If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
 or later there first. The [rules reference](https://tommkruix.github.io/archprint/rules#layer-boundaries-review)
 says exactly which imports and files the rule reads.
 

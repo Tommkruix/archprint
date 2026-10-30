@@ -6,6 +6,14 @@ import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from '../generator/phantom-dependency-emitters.js';
 import { SERVER_CLIENT_RULE } from '../generator/server-client-emitters.js';
 import { publicApiRuleName } from '../generator/public-api-emitters.js';
+import { appIsolationRuleName } from '../generator/app-isolation-emitters.js';
+import { ENV_ACCESS_RULE } from '../generator/env-access-emitters.js';
+import { featureSliceRuleName } from '../generator/feature-slice-emitters.js';
+import { roleLayeringRuleName } from '../generator/role-layering-emitters.js';
+import { STORIES_ISOLATION_RULE } from '../generator/stories-isolation-emitters.js';
+import { UI_DATA_RULE } from '../generator/ui-data-isolation-emitters.js';
+import { WORKSPACE_PACKAGE_RULE } from '../generator/workspace-package-emitters.js';
+import type { SiblingViolation } from '../detector/sibling-isolation.js';
 import { NO_CYCLES_RULE, readAdoptedRules } from './adopted-rules.js';
 import { allowedFilesByRule, readAllowed } from './allowed-exceptions.js';
 import type { ScanResult } from './scan.js';
@@ -100,6 +108,77 @@ function regatedServerClient(scan: ScanResult, allowedFiles: readonly string[]) 
     offenderCount: boundary.keptFiles,
     violations: boundary.kept,
     gate: regate(clientCount, boundary.keptFiles, 1, analysis.serverModules.length > 0),
+  };
+}
+
+function regatedEnvAccess(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.envAccess;
+  const env = exclude(analysis.violations, allowedFiles);
+  if (env.removedFiles === 0) return analysis;
+  const subjectFileCount = analysis.subjectFileCount - env.removedFiles;
+  return {
+    ...analysis,
+    subjectFileCount,
+    offenderCount: env.keptFiles,
+    violations: env.kept,
+    gate: regate(subjectFileCount, env.keptFiles),
+  };
+}
+
+function regatedWorkspacePackage(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.workspacePackageApi;
+  const deep = exclude(analysis.violations, allowedFiles);
+  if (deep.removedFiles === 0) return analysis;
+  const consumerCount = analysis.consumerCount - deep.removedFiles;
+  return {
+    ...analysis,
+    consumerCount,
+    offenderCount: deep.keptFiles,
+    violations: deep.kept,
+    gate: regate(consumerCount, deep.keptFiles),
+  };
+}
+
+/** Allowed importers leave the evidence; the stories stay, as each is reported once, by its importer. */
+function regatedStories(scan: ScanResult, allowedImporters: readonly string[]) {
+  const analysis = scan.storiesIsolation;
+  const allowed = new Set(allowedImporters);
+  const violations = analysis.violations.filter((story) => !allowed.has(story.importer));
+  if (violations.length === analysis.violations.length) return analysis;
+  return {
+    ...analysis,
+    offenderCount: violations.length,
+    violations,
+    gate: regate(analysis.storyCount, violations.length),
+  };
+}
+
+function regatedUiData(scan: ScanResult, allowedFiles: readonly string[]) {
+  const analysis = scan.uiDataIsolation;
+  const ui = exclude(analysis.violations, allowedFiles);
+  if (ui.removedFiles === 0) return analysis;
+  const componentCount = analysis.componentCount - ui.removedFiles;
+  return {
+    ...analysis,
+    componentCount,
+    offenderCount: ui.keptFiles,
+    violations: ui.kept,
+    gate: regate(componentCount, ui.keptFiles, analysis.gate.conditions.roleConfidence.value),
+  };
+}
+
+function regatedSiblingGroup<
+  T extends { crossImporterCount: number; violations: SiblingViolation[] },
+>(group: T, allowedFiles: readonly string[], memberFiles: keyof T): T {
+  const cross = exclude(group.violations, allowedFiles);
+  if (cross.removedFiles === 0) return group;
+  const memberFileCount = (group[memberFiles] as number) - cross.removedFiles;
+  return {
+    ...group,
+    [memberFiles]: memberFileCount,
+    crossImporterCount: cross.keptFiles,
+    violations: cross.kept,
+    gate: regate(memberFileCount, cross.keptFiles),
   };
 }
 
@@ -220,6 +299,49 @@ export function excludeAllowed(scan: ScanResult, allowed: AllowedByRule): ScanRe
     dependencyInternals: regatedInternals(scan, allowedFor(DEPENDENCY_INTERNALS_RULE)),
     entryPurity: regatedEntryPurity(scan, allowedFor(ENTRY_PURITY_RULE)),
     serverClient: regatedServerClient(scan, allowedFor(SERVER_CLIENT_RULE)),
+    envAccess: regatedEnvAccess(scan, allowedFor(ENV_ACCESS_RULE)),
+    workspacePackageApi: regatedWorkspacePackage(scan, allowedFor(WORKSPACE_PACKAGE_RULE)),
+    storiesIsolation: regatedStories(scan, allowedFor(STORIES_ISOLATION_RULE)),
+    uiDataIsolation: regatedUiData(scan, allowedFor(UI_DATA_RULE)),
+    featureSlices: {
+      ...scan.featureSlices,
+      groups: scan.featureSlices.groups.map((group) =>
+        regatedSiblingGroup(
+          group,
+          allowedFor(featureSliceRuleName(group.container)),
+          'sliceFileCount',
+        ),
+      ),
+    },
+    appIsolation: {
+      ...scan.appIsolation,
+      groups: scan.appIsolation.groups.map((group) =>
+        regatedSiblingGroup(
+          group,
+          allowedFor(appIsolationRuleName(group.container)),
+          'appFileCount',
+        ),
+      ),
+    },
+    roleLayering: {
+      ...scan.roleLayering,
+      boundaries: scan.roleLayering.boundaries.map((boundary) => {
+        const role = exclude(
+          boundary.violations,
+          allowedFor(roleLayeringRuleName(boundary.from, boundary.to)),
+        );
+        if (role.removedFiles === 0) return boundary;
+        const roleFileCount = boundary.roleFileCount - role.removedFiles;
+        return {
+          ...boundary,
+          roleFileCount,
+          conformingFileCount: roleFileCount - role.keptFiles,
+          violatingFileCount: role.keptFiles,
+          violations: role.kept,
+          gate: regate(roleFileCount, role.keptFiles, boundary.roleConfidence),
+        };
+      }),
+    },
     layerBoundaries: scan.layerBoundaries.map((boundary) => {
       const layer = exclude(boundary.violations, allowedFor(layerRuleName(boundary)));
       if (layer.removedFiles === 0) return boundary;

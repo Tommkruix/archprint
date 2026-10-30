@@ -10,13 +10,7 @@ import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import {
-  renderAdoptionBody,
-  renderExplain,
-  renderInit,
-  renderReport,
-  renderRecommendations,
-} from './report.js';
+import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
 import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
@@ -262,7 +256,7 @@ export function buildProgram(version = readVersion()): Command {
           recommendations,
           app: displayPath(appDir, cwd),
           cwd,
-          readmeBody: renderAdoptionBody(recommendations),
+          readme: true,
         });
         const config = readConfig(outDir);
         /* v8 ignore next -- writeLayout always writes a readable config */
@@ -336,10 +330,13 @@ export function buildProgram(version = readVersion()): Command {
     .option('--no-graph', 'skip the layer dependency graph (Mermaid and Graphviz, with --expand)')
     .option('--expand', 'also write the per-family files, rule cards, fixtures, and graph')
     .option('--readme', 'also add an archprint section to README.md summarizing what is enforced')
-    .option('--only <family>', `emit only one rule family (${FAMILY_NAMES.join(', ')})`)
+    .option(
+      '--only <family>',
+      `adopt one rule family, keeping the rules adopted before (${FAMILY_NAMES.join(', ')})`,
+    )
     .option(
       '--rules <ids>',
-      'emit only these rules (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
+      'adopt these rules, keeping the rules adopted before (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
     )
     .option(
       '--check',
@@ -431,7 +428,7 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const { files, removed, folded, configPath } = writeLayout(scan, outDir, {
+        const { files, removed, folded, configPath, kept, dropped } = writeLayout(scan, outDir, {
           structural,
           enforcers,
           graph: options.graph,
@@ -443,7 +440,7 @@ export function buildProgram(version = readVersion()): Command {
           recommendations,
           app: displayPath(scan.appDir, cwd),
           cwd,
-          readmeBody: options.readme ? renderAdoptionBody(recommendations) : undefined,
+          readme: options.readme,
         });
         if (removed.length > 0) {
           console.log(
@@ -451,6 +448,12 @@ export function buildProgram(version = readVersion()): Command {
           );
         }
         reportFolded(folded, displayPath(configPath, cwd));
+        if (kept.length > 0)
+          console.log(`Kept ${kept.length} previously adopted rule(s): ${kept.join(', ')}.`);
+        if (dropped.length > 0)
+          console.log(
+            `Dropped ${dropped.length} previously adopted rule(s) the current scan no longer generates: ${dropped.join(', ')}. Review their evidence with 'archprint scan'.`,
+          );
         if (files.length === 0) {
           if (heldStructuralAuto > 0) {
             console.log(

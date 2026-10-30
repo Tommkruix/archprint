@@ -4,11 +4,18 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  appIsolationRule,
   consoleIsolationRule,
+  envAccessRule,
+  featureSliceRule,
   forbiddenImportRule,
   importStyleRule,
   publicApiRules,
+  roleLayeringRule,
+  storiesIsolationRule,
   testIsolationRule,
+  uiDataRule,
+  workspacePackageRule,
 } from '../../src/cli/adopted-rules.js';
 import { evaluateRules } from '../../src/cli/check-evaluate.js';
 import { scanRepo } from '../../src/cli/scan.js';
@@ -135,5 +142,91 @@ describe('evaluateRules', () => {
     } finally {
       rmSync(app, { recursive: true, force: true });
     }
+  });
+
+  it('finds env-access findings by file and workspace-package findings by specifier', () => {
+    const env = scanRepo(fixture('env-access'));
+    expect(env.envAccess.violations.length).toBeGreaterThan(0);
+    expect(evaluateRules(env.appDir, [envAccessRule(env)])).toEqual(
+      env.envAccess.violations.map((violation) => ({
+        ruleId: 'env-access',
+        file: violation.file,
+        subject: '',
+        kind: 'file',
+      })),
+    );
+    const wpkg = scanRepo(fixture('workspace-package'));
+    expect(wpkg.workspacePackageApi.violations.length).toBeGreaterThan(0);
+    expect(evaluateRules(wpkg.appDir, [workspacePackageRule(wpkg)])).toEqual(
+      wpkg.workspacePackageApi.violations.map((violation) => ({
+        ruleId: 'workspace-package',
+        file: violation.file,
+        subject: violation.specifier,
+        kind: 'specifier',
+      })),
+    );
+  });
+
+  it('reports a story import against the importing file, and a UI import of the data layer', () => {
+    const stories = scanRepo(fixture('stories-isolation'));
+    expect(stories.storiesIsolation.violations.length).toBeGreaterThan(0);
+    expect(evaluateRules(stories.appDir, [storiesIsolationRule(stories)])).toEqual(
+      stories.storiesIsolation.violations.map((violation) => ({
+        ruleId: 'no-import-stories',
+        file: violation.importer,
+        subject: violation.file,
+        kind: 'target',
+      })),
+    );
+    const ui = scanRepo(fixture('ui-data'));
+    expect(ui.uiDataIsolation.violations.length).toBeGreaterThan(0);
+    expect(evaluateRules(ui.appDir, [uiDataRule(ui)])).toEqual(
+      ui.uiDataIsolation.violations.map((violation) => ({
+        ruleId: 'no-ui-to-data',
+        file: violation.file,
+        subject: violation.target,
+        kind: 'target',
+      })),
+    );
+  });
+
+  it('evaluates a role-layering rule against the boundary it names', () => {
+    const scan = scanRepo(fixture('role-layering'));
+    const boundary = scan.roleLayering.boundaries.find((b) => b.violations.length > 0)!;
+    const findings = evaluateRules(scan.appDir, [roleLayeringRule(boundary)]);
+    expect(findings).toEqual(
+      boundary.violations.map((violation) => ({
+        ruleId: roleLayeringRule(boundary).id,
+        file: violation.file,
+        subject: violation.target,
+        kind: 'target',
+      })),
+    );
+  });
+
+  it('evaluates feature-slice and app-isolation rules against their own container', () => {
+    const slices = scanRepo(fixture('feature-slice'));
+    const slice = slices.featureSlices.groups.find((group) => group.violations.length > 0)!;
+    expect(evaluateRules(slices.appDir, [featureSliceRule(slice)])).toEqual(
+      slice.violations.map((violation) => ({
+        ruleId: featureSliceRule(slice).id,
+        file: violation.file,
+        subject: violation.target,
+        kind: 'target',
+      })),
+    );
+    const apps = scanRepo(fixture('app-isolation'));
+    const group = apps.appIsolation.groups.find((candidate) => candidate.violations.length > 0)!;
+    expect(evaluateRules(apps.appDir, [appIsolationRule(group)])).toEqual(
+      group.violations.map((violation) => ({
+        ruleId: appIsolationRule(group).id,
+        file: violation.file,
+        subject: violation.target,
+        kind: 'target',
+      })),
+    );
+    expect(
+      evaluateRules(apps.appDir, [{ ...appIsolationRule(group), container: 'elsewhere' }]),
+    ).toEqual([]);
   });
 });

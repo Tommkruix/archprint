@@ -5,7 +5,7 @@ import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { type FamilyKey, isStableFamily } from '../detector/family-maturity.js';
 import type { InstalledEnforcers } from '../scanner/enforcers.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
-import { isCycleFree } from './adopted-rules.js';
+import { type AdoptedRule, isCycleFree } from './adopted-rules.js';
 import type { ScanResult } from './scan.js';
 
 type ToolCategory =
@@ -236,6 +236,9 @@ export interface Recommendations {
   adopt: Recommendation[];
 }
 
+const byRate = (a: Recommendation, b: Recommendation): number =>
+  (b.rate ?? -1) - (a.rate ?? -1) || a.title.localeCompare(b.title);
+
 function adoptionRate(title: string, stack: ReadonlySet<string>): number | null {
   const family = ADOPTION_CATALOG.families[title];
   if (!family || family.overall === null) return null;
@@ -271,8 +274,6 @@ export function buildRecommendations(
     else if (status === 'AUTO' || status === 'SUGGEST') review.push(entry);
     else if (entry.rate === null || entry.rate >= ADOPT_THRESHOLD) adopt.push(entry);
   }
-  const byRate = (a: Recommendation, b: Recommendation): number =>
-    (b.rate ?? -1) - (a.rate ?? -1) || a.title.localeCompare(b.title);
   enforceNow.sort(byRate);
   reportOnly.sort(byRate);
   review.sort(byRate);
@@ -284,5 +285,28 @@ export function buildRecommendations(
     reportOnly,
     review,
     adopt,
+  };
+}
+
+const FAMILY_BY_TITLE: ReadonlyMap<string, FamilyKey> = new Map(
+  FAMILIES.map((family) => [family.title, family.key]),
+);
+
+/** The recommendations as adopted: a family is enforced exactly when an adopted rule enforces it. */
+export function reconcileWithAdopted(
+  rec: Recommendations,
+  rules: readonly AdoptedRule[],
+): Recommendations {
+  const families = new Set<FamilyKey>(rules.map((rule) => rule.family));
+  const adopted = (entry: Recommendation): boolean =>
+    families.has(FAMILY_BY_TITLE.get(entry.title)!);
+  const followed = rec.enforceNow
+    .filter((entry) => !adopted(entry))
+    .map((entry) => ({ ...entry, enforcer: '' }));
+  return {
+    ...rec,
+    enforceNow: [...rec.enforceNow, ...rec.review].filter(adopted).sort(byRate),
+    reportOnly: [...rec.reportOnly, ...followed].sort(byRate),
+    review: rec.review.filter((entry) => !adopted(entry)),
   };
 }
