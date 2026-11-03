@@ -119,8 +119,8 @@ describe('diffFindings', () => {
   it('does not report an existing violation as new when its file was renamed', () => {
     const before = finding({
       ruleId: 'console-isolation',
-      kind: 'file',
-      subject: '',
+      kind: 'usage',
+      subject: 'console',
       file: 'lib/log.ts',
     });
     const after = { ...before, file: 'lib/logger.ts' };

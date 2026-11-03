@@ -60,7 +60,7 @@ describe('check line location', () => {
     ).toBe(3);
   });
 
-  it('gives no line when the import appears on more than one line, or for a file-level finding', () => {
+  it('gives no line when the import appears on more than one line', () => {
     write(
       'src/twice.ts',
       "import { x } from '@/lib/db';\nexport const y = () => import('@/lib/db');\n",
@@ -69,8 +69,42 @@ describe('check line location', () => {
     expect(
       locate({ ruleId: 'AP-001', file: 'src/twice.ts', subject: '@/lib/db', kind: 'specifier' }),
     ).toBeNull();
+  });
+
+  it('locates a console or process.env finding on its first access, not a comment or lookalike', () => {
+    write(
+      'src/log.ts',
+      [
+        '// console.log in a comment',
+        'const logger = { console: 1 };',
+        'export const a = logger.console;',
+        'export const env = process.env.KEY;',
+        '',
+        '',
+        "export const f = () => console.log('x');",
+        "export const g = () => console.warn('y');",
+        '',
+      ].join('\n'),
+    );
+    const locate = createLineLocator(app);
     expect(
-      locate({ ruleId: 'console-isolation', file: 'src/route.ts', subject: '', kind: 'file' }),
+      locate({
+        ruleId: 'console-isolation',
+        file: 'src/log.ts',
+        subject: 'console',
+        kind: 'usage',
+      }),
+    ).toBe(7);
+    expect(
+      locate({ ruleId: 'env-access', file: 'src/log.ts', subject: 'process.env', kind: 'usage' }),
+    ).toBe(4);
+    expect(
+      locate({
+        ruleId: 'console-isolation',
+        file: 'src/gone.ts',
+        subject: 'console',
+        kind: 'usage',
+      }),
     ).toBeNull();
   });
 

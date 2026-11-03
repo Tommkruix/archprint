@@ -52,8 +52,8 @@ describe('evaluateRules', () => {
       logs.consoleIsolation.violations.map((violation) => ({
         ruleId: 'console-isolation',
         file: violation.file,
-        subject: '',
-        kind: 'file',
+        subject: 'console',
+        kind: 'usage',
       })),
     );
   });
@@ -151,8 +151,8 @@ describe('evaluateRules', () => {
       env.envAccess.violations.map((violation) => ({
         ruleId: 'env-access',
         file: violation.file,
-        subject: '',
-        kind: 'file',
+        subject: 'process.env',
+        kind: 'usage',
       })),
     );
     const wpkg = scanRepo(fixture('workspace-package'));

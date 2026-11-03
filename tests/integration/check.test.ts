@@ -194,6 +194,17 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(process.exitCode).toBe(1);
   });
 
+  it('annotates a new console call on the line it is on', async () => {
+    expect(adoptedRuleIds()).toContain('console-isolation');
+    write(
+      'lib/log.ts',
+      `${'export const x = 1;\n'.repeat(6)}export const f = () => console.log('x');\n`,
+    );
+    commitAll('log from library code');
+    await run(['check', '--base', 'main', '--format', 'github', '--fail-on', 'new']);
+    expect(output()).toContain('::error file=apps/web/lib/log.ts,line=7,');
+  });
+
   it('reports the imports of a new circular dependency against a cycle-free base', async () => {
     write('lib/cycle-a.ts', "import { b } from './cycle-b';\nexport const a = () => b();\n");
     write('lib/cycle-b.ts', "import { a } from './cycle-a';\nexport const b = () => a();\n");

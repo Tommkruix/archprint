@@ -20,7 +20,8 @@ import { detectUiDataIsolation } from '../detector/ui-data-isolation-detector.js
 import { detectWorkspacePackageApi } from '../detector/workspace-package-detector.js';
 import type { AdoptedRule, ForbiddenImportRule, ResolutionMode } from './adopted-rules.js';
 
-export type SubjectKind = 'specifier' | 'target' | 'file';
+/** What a finding names: an import as written, the file an import resolves to, or what a file reads (`console`, `process.env`). */
+export type SubjectKind = 'specifier' | 'target' | 'usage';
 
 export interface Finding {
   ruleId: string;
@@ -96,7 +97,7 @@ export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Fi
   }
   for (const rule of byFamily('console-isolation')) {
     for (const violation of detectConsoleIsolation(appDir).violations) {
-      findings.push({ ruleId: rule.id, file: violation.file, subject: '', kind: 'file' });
+      findings.push({ ruleId: rule.id, file: violation.file, subject: 'console', kind: 'usage' });
     }
   }
   for (const rule of byFamily('cycles')) {
@@ -151,7 +152,12 @@ export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Fi
   }
   for (const rule of byFamily('env-access')) {
     for (const violation of detectEnvAccess(appDir).violations) {
-      findings.push({ ruleId: rule.id, file: violation.file, subject: '', kind: 'file' });
+      findings.push({
+        ruleId: rule.id,
+        file: violation.file,
+        subject: 'process.env',
+        kind: 'usage',
+      });
     }
   }
   for (const rule of byFamily('workspace-package-api')) {

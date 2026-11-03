@@ -285,7 +285,7 @@ export function findingMessage(rule: AdoptedRule): string {
 }
 
 const describeSubject = (finding: Finding): string =>
-  finding.kind === 'file' ? '' : ` (${finding.subject})`;
+  finding.kind === 'usage' ? '' : ` (${finding.subject})`;
 
 const ruleIds = (rules: readonly AdoptedRule[]): string => rules.map((rule) => rule.id).join(', ');
 
@@ -345,7 +345,7 @@ export function checkReport(result: CheckResult): Record<string, unknown> {
     rule: finding.rule.id,
     file: finding.file,
     line: finding.line,
-    subject: finding.kind === 'file' ? null : finding.subject,
+    subject: finding.kind === 'usage' ? null : finding.subject,
     message: findingMessage(finding.rule),
   });
   return {
