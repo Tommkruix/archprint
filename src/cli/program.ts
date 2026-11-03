@@ -4,7 +4,7 @@ import { AllowError, runAllow } from './allow.js';
 import { InvalidAllowError, LEGACY_ALLOW_FILE } from './allowed-exceptions.js';
 import { adoptedAllowances, excludeAllowed } from './allowed-evidence.js';
 import { InvalidRulesError, LEGACY_RULES_FILE } from './adopted-rules.js';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
@@ -13,8 +13,9 @@ import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './s
 import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
 import { buildRecommendations, detectStack } from './recommend.js';
 import { toScanSummary } from './summary.js';
-import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
+import { ARCHPRINT_DIR, FAMILY_NAMES, emitOne } from './generate.js';
 import { writeLayout } from './layout.js';
+import { runEslintCheck } from './eslint-check.js';
 import { CONFIG_FILE, readConfig, recordManagedFiles } from './archprint-config.js';
 import { assertRealDirectory, ownedPath, staysInsideItsFolder } from '../generator/owned-paths.js';
 import { stripAdoptionSection } from './adoption-readme.js';
@@ -78,65 +79,6 @@ function applyEmitOverride(detected: InstalledEnforcers, emit?: string): Install
     default:
       return detected;
   }
-}
-
-export async function runEslintCheck(appDir: string, outDir: string): Promise<void> {
-  const rulesFile = path.join(outDir, ESLINT_FILE);
-  if (!existsSync(rulesFile)) {
-    console.log('Check: no eslint rules were generated to check.');
-    return;
-  }
-  const [{ ESLint }, tseslint, generated] = await Promise.all([
-    import('eslint'),
-    import('typescript-eslint'),
-    import(pathToFileURL(rulesFile).href) as Promise<{ default: unknown[] }>,
-  ]);
-  const archprintRuleIds = new Set<string>();
-  for (const block of generated.default) {
-    const rules = (block as { rules?: Record<string, unknown> }).rules;
-    if (rules) for (const id of Object.keys(rules)) archprintRuleIds.add(id);
-  }
-  const config = [
-    { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.default.parser } },
-    ...generated.default,
-  ];
-  const eslint = new ESLint({
-    cwd: appDir,
-    overrideConfigFile: true,
-    overrideConfig: config as never,
-  });
-  let results;
-  /* v8 ignore start -- defensive: eslint throws only on an unresolved rule (e.g. an unregistered plugin) */
-  try {
-    results = await eslint.lintFiles(['**/*.{ts,tsx}']);
-  } catch (error) {
-    console.log(`Check: could not run eslint (${(error as Error).message}).`);
-    process.exitCode = 1;
-    return;
-  }
-  /* v8 ignore stop */
-  const offends = (message: { ruleId: string | null; severity: number }): boolean =>
-    message.severity === 2 && message.ruleId !== null && archprintRuleIds.has(message.ruleId);
-  const offenders = results.filter((result) => result.messages.some(offends));
-  const count = offenders.reduce((total, r) => total + r.messages.filter(offends).length, 0);
-  const unparsed = results.filter((result) => result.messages.some((m) => m.fatal));
-  if (unparsed.length > 0) {
-    console.log(`Check: ${unparsed.length} file(s) could not be parsed, so they were not checked:`);
-    for (const result of unparsed.slice(0, 10))
-      console.log(`  ${path.relative(appDir, result.filePath)}`);
-    process.exitCode = 1;
-  }
-  if (count === 0) {
-    if (unparsed.length === 0)
-      console.log('Check: the generated eslint rules pass clean on this repo.');
-    return;
-  }
-  console.log(`Check: ${count} violation(s) of the generated rules:`);
-  for (const result of offenders.slice(0, 10)) {
-    const rules = [...new Set(result.messages.filter(offends).map((m) => m.ruleId))];
-    console.log(`  ${path.relative(appDir, result.filePath)}: ${rules.join(', ')}`);
-  }
-  process.exitCode = 1;
 }
 
 function resolveApp(input: string): string {

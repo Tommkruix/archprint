@@ -301,8 +301,11 @@ remove. `wire` inserts a single managed
 reference into each enforcement tool your repo uses (a flat eslint config, a `.dependency-cruiser.json`), one that
 survives those regenerations; for a config it cannot safely edit (a JS dependency-cruiser config, say), it prints
 the exact snippet to paste. `eject` removes Archprint's files and every wired reference, restoring each config
-exactly. `generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
-can confirm before wiring; on its own it checks the rules already generated and writes nothing. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
+exactly. `generate --check` runs the generated ESLint rules against your repo with your own ESLint (version 9 or
+later, installed in the repo) and reports whether they pass; on its own it checks the rules already generated and
+writes nothing. Once they are wired, it lints through your ESLint config, the one your editor and CI run, and names
+any generated rule that config turns off or overrides for some files. Before wiring, it checks the rules on their
+own. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
 
 ## Use in CI
