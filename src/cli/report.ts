@@ -12,6 +12,7 @@ import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
 import { FAMILY_STATEMENTS } from './rule-statements.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
+import type { RuleSummary } from './summary.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
 const paint =
@@ -498,6 +499,35 @@ function enforceHint(id: string, status: GenerationStatus): string {
   if (status === 'SUGGEST')
     return `review the evidence above, then: archprint generate --rule ${id}  (writes the rule to .archprint/)`;
   return 'this pattern does not meet the confidence gate, so there is nothing to enforce yet.';
+}
+
+function ruleEnforceHint(rule: RuleSummary): string {
+  if (rule.status !== 'AUTO')
+    return 'this rule does not meet the confidence gate, so there is nothing to enforce yet.';
+  const structural = rule.adoption === 'review' ? ' --include-structural' : '';
+  return `archprint generate${structural} --rules ${rule.id}  (adds it to the rules in .archprint/)`;
+}
+
+/** The evidence behind any rule `scan` lists; the AP- rules have their own, fuller explanation. */
+export function renderRuleExplain(rule: RuleSummary): string {
+  const pct = (value: number): string => (value * 100).toFixed(1);
+  const lines = [
+    bold(rule.label === rule.id ? rule.id : `${rule.id}  ${rule.label}`),
+    rule.statement,
+    '',
+    `Status: ${rule.status}${rule.adoption === 'review' ? ' (held for review)' : ''}`,
+    dim(
+      `  observations: ${rule.observations} (${pct(rule.observedConformance)}% conforming); confidence floor ${pct(rule.confidenceFloor)}%, the Wilson 95% lower bound`,
+    ),
+  ];
+  if (rule.exceptions.length > 0) {
+    lines.push('', `Exceptions (${rule.violatingFiles} file(s)):`);
+    lines.push(...rule.exceptions.map((file) => `  ${file}`));
+    if (rule.violatingFiles > rule.exceptions.length)
+      lines.push(dim(`  ... and ${rule.violatingFiles - rule.exceptions.length} more`));
+  }
+  lines.push('', bold('How to enforce'), `  ${ruleEnforceHint(rule)}`);
+  return lines.join('\n');
 }
 
 export function renderExplain(pattern: ScannedPattern, appDir: string): string {

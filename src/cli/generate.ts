@@ -68,6 +68,7 @@ import {
 import { renderEslintPreset } from '../generator/eslint-preset-emitter.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
+import { ruleKey } from './rule-ref.js';
 import {
   appIsolationRule,
   consoleIsolationRule,
@@ -152,9 +153,6 @@ export interface CollectOptions {
   appPath?: string;
 }
 
-const selectorKey = (selector: string): string =>
-  selector.trim().replace(/\s+/g, ' ').toLowerCase();
-
 /** Which emitted rules --rules keeps: every rule when it is absent, else those named by id or label. */
 class RuleSelection {
   private readonly wanted: ReadonlyMap<string, string> | null;
@@ -163,18 +161,18 @@ class RuleSelection {
 
   constructor(ruleIds: readonly string[] | undefined) {
     this.wanted =
-      ruleIds === undefined ? null : new Map(ruleIds.map((id) => [selectorKey(id), id.trim()]));
+      ruleIds === undefined ? null : new Map(ruleIds.map((id) => [ruleKey(id), id.trim()]));
   }
 
   selects(id: string, label?: string): boolean {
-    const keys = [id, label].filter((key): key is string => key !== undefined).map(selectorKey);
+    const keys = [id, label].filter((key): key is string => key !== undefined).map(ruleKey);
     this.ids.add(id);
     for (const key of keys) this.seen.add(key);
     return this.wanted === null || keys.some((key) => this.wanted!.has(key));
   }
 
   keeps(id: string): boolean {
-    return this.wanted === null || this.wanted.has(selectorKey(id));
+    return this.wanted === null || this.wanted.has(ruleKey(id));
   }
 
   available(): string[] {

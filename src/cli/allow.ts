@@ -9,6 +9,7 @@ import {
   type AllowedException,
 } from './allowed-exceptions.js';
 import { readConfig } from './archprint-config.js';
+import { findRule } from './rule-ref.js';
 import { evaluateRules } from './check-evaluate.js';
 
 export class AllowError extends Error {}
@@ -54,7 +55,7 @@ export function runAllow(options: AllowOptions): string {
   if (config === null || adopted === null) {
     throw new AllowError('No adopted rules here. Run archprint init (or generate) first.');
   }
-  const rule = adopted.find((candidate) => candidate.id === options.rule);
+  const rule = findRule(options.rule, adopted);
   if (rule === undefined) {
     const known = adopted.map((candidate) => candidate.id).join(', ');
     throw new AllowError(`No adopted rule "${options.rule}". Adopted rules: ${known || 'none'}.`);

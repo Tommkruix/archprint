@@ -39,6 +39,13 @@ describe('runAllow', () => {
     expect(() => allow()).toThrow(/Run archprint init/);
   });
 
+  it('accepts the rule by its ESLint name, in any case', async () => {
+    await buildProgram('9.9.9').parseAsync(['init', '.'], { from: 'user' });
+    expect(() => allow({ rule: 'archprint/ap-001' })).toThrow(
+      'AP-001 reports nothing in app/api/a/route.ts',
+    );
+  });
+
   it('refuses a file outside the app, and removing an exception that was never allowed', async () => {
     await buildProgram('9.9.9').parseAsync(['init', '.'], { from: 'user' });
     expect(() => allow({ file: '../elsewhere.ts' })).toThrow(/is not a file inside the app/);

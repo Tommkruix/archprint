@@ -516,8 +516,25 @@ describe('cli program', () => {
     await expect(run(['explain', 'AP-002', here])).rejects.toThrow(/No tsconfig/);
   });
 
-  it('errors when the rule id is unknown', async () => {
-    await expect(run(['explain', 'AP-999', auto])).rejects.toThrow(/No pattern/);
+  it('errors when the rule id is unknown, naming the rules it found', async () => {
+    await expect(run(['explain', 'AP-999', auto])).rejects.toThrow(
+      /No rule "AP-999".*Rules found: .*AP-002/,
+    );
+  });
+
+  it('explain resolves a layer rule by id, ESLint name or label, and says how to adopt it', async () => {
+    for (const ref of [
+      'no-helpers-to-views',
+      'archprint/no-helpers-to-views',
+      'HELPERS  !-> views',
+    ]) {
+      logSpy.mockClear();
+      await run(['explain', ref, layerAuto]);
+      expect(output()).toContain('no-helpers-to-views  helpers !-> views');
+    }
+    expect(output()).toContain(
+      'archprint generate --include-structural --rules no-helpers-to-views',
+    );
   });
 
   it('--version is handled by exitOverride', async () => {

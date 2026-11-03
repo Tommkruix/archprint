@@ -252,7 +252,8 @@ success and `1` on error.
 rules your repo already follows before they write code. It exposes read-only `archprint_scan`,
 `archprint_recommend`, `archprint_explain`, and `archprint_check` tools. Each rule comes back stated in plain
 words, with its evidence, the files that break it, and whether archprint enforces it, holds it for review, or only
-reports it. `archprint_explain` takes any rule label from the scan (for example `AP-002` or `env-access`).
+reports it. `archprint_explain` takes any rule from the scan by its id, label or ESLint name (for example `AP-002`,
+`env-access`, `no-lib-to-app` or `lib !-> app`).
 `archprint_check` reports the adopted rules the agent's current change breaks, uncommitted edits included, so it
 can fix them before it finishes. Point any MCP client at it:
 

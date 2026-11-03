@@ -398,8 +398,8 @@ jobs:
 what architecture rules your repo already follows, with the evidence, before it writes code. It exposes four
 read-only tools: `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`. Each rule
 comes back stated in plain words, with its evidence, the files that break it, and whether archprint enforces it,
-holds it for review, or only reports it. `archprint_explain` takes any rule label from the scan (for example
-`AP-002` or `env-access`). `archprint_check` reports the adopted rules the agent's current change breaks,
+holds it for review, or only reports it. `archprint_explain` takes any rule from the scan by its id, label or
+ESLint name (for example `AP-002`, `env-access`, `no-lib-to-app`, `lib !-> app` or `archprint/no-lib-to-app`). `archprint_check` reports the adopted rules the agent's current change breaks,
 uncommitted edits included, so it can fix them before it finishes. Point Claude Desktop, Claude Code, Cursor, or
 any MCP client at it:
 
@@ -492,8 +492,10 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `--out <dir>`, `--fast`, `--force`.
 - **`archprint scan [path]`**: reports the rules the repo already follows, with evidence. Changes nothing.
   `--deep` resolves through barrels and aliases.
-- **`archprint explain <id> [path]`**: shows the gate breakdown for one rule, with a codeframe per exception plus
-  how to fix, when not to use it, and how to enforce it.
+- **`archprint explain <rule> [path]`**: shows the evidence behind one rule, named by its id, label or ESLint name
+  (`AP-002`, `no-lib-to-app`, `"lib !-> app"`, `archprint/no-lib-to-app`): its gate, the files that break it, and how
+  to adopt it. For the forbidden-import (AP-) rules it adds a codeframe per exception, how to fix, and when not to
+  use it.
 - **`archprint recommend [path]`**: recommends a rule set from the repo's evidence and detected stack (works on a
   fresh repo too), and names the installed tool that will enforce each rule it can write.
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
@@ -506,8 +508,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
   with `--base <branch or commit>`. Warning only unless `--fail-on new`. `--format text|json|github`,
   `--out <dir>`. See [Use in CI](#use-in-ci).
-- **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule being broken in one file, with a
-  reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
+- **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule (by id or ESLint name) being broken
+  in one file, with a reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
   `generate` stops the generated rules flagging it. `--remove` takes it back out.
 - **`archprint wire`**: references the generated rules from the enforcement tools your repo uses (flat eslint
   config, `.dependency-cruiser.json`) through a managed, reversible reference. `--out <dir>`, `--dry-run`.

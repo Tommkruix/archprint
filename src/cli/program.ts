@@ -10,9 +10,16 @@ import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
+import {
+  renderExplain,
+  renderInit,
+  renderReport,
+  renderRecommendations,
+  renderRuleExplain,
+} from './report.js';
+import { findRule, ruleNames } from './rule-ref.js';
 import { buildRecommendations, detectStack } from './recommend.js';
-import { toScanSummary } from './summary.js';
+import { summarizeRules, toScanSummary } from './summary.js';
 import { ARCHPRINT_DIR, FAMILY_NAMES, emitOne } from './generate.js';
 import { writeLayout } from './layout.js';
 import { runEslintCheck } from './eslint-check.js';
@@ -489,13 +496,32 @@ export function buildProgram(version = readVersion()): Command {
 
   program
     .command('explain')
-    .description('Show the gate evidence behind a rule id')
-    .argument('<id>', 'rule id, e.g. AP-002')
+    .description('Show the gate evidence behind a rule')
+    .argument(
+      '<rule>',
+      'rule id, label or ESLint name, e.g. AP-002, no-lib-to-app, "lib !-> app" or archprint/no-lib-to-app',
+    )
     .argument('[path]', 'app directory', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
-    .action((id: string, input: string, options: { deep?: boolean }) => {
-      const { appDir, pattern } = findPattern(input, id, Boolean(options.deep));
-      console.log(renderExplain(pattern, appDir));
+    .action((ref: string, input: string, options: { deep?: boolean }) => {
+      const appDir = resolveApp(input);
+      const scan = scanRepo(appDir, { deep: Boolean(options.deep) });
+      const pattern = findRule(
+        ref,
+        scan.patterns.map((candidate) => ({ ...candidate, id: candidate.config.id })),
+      );
+      if (pattern !== undefined) {
+        console.log(renderExplain(pattern, appDir));
+        return;
+      }
+      const rules = summarizeRules(scan);
+      const rule = findRule(ref, rules);
+      if (rule === undefined) {
+        throw new Error(
+          `No rule "${ref}" found in ${appDir}. Rules found: ${ruleNames(rules).join(', ') || 'none'}.`,
+        );
+      }
+      console.log(renderRuleExplain(rule));
     });
 
   program
@@ -708,7 +734,10 @@ export function buildProgram(version = readVersion()): Command {
     .description(
       'Allow one adopted rule to be broken in one file, with a reason. archprint check accepts it, lists it in the pull request, and archprint generate stops the generated rules flagging it.',
     )
-    .argument('<rule>', 'adopted rule id, e.g. AP-001 or console-isolation')
+    .argument(
+      '<rule>',
+      'adopted rule id or ESLint name, e.g. AP-001, console-isolation or archprint/no-lib-to-app',
+    )
     .argument('<file>', 'file the rule reports, relative to the current directory')
     .option('--reason <text>', 'why this file is an exception (required)')
     .option('--remove', 'remove the exception instead')

@@ -11,6 +11,7 @@ import { callTool, createServer, runTool } from '../../src/mcp/server.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => path.join(here, '..', 'fixtures', name);
 const auto = fixture('cli-auto');
+const layerAuto = fixture('layer-auto');
 const multiApp = fixture('multi-app');
 
 const tmpDirs: string[] = [];
@@ -81,6 +82,17 @@ describe('mcp tools', () => {
     expect(result.rule.exceptions).toEqual(['lib/flag.ts']);
     expect(result.pattern).toBeUndefined();
     expect(result.guidance).toBeUndefined();
+  });
+
+  it('explainTool finds a layer rule by the id generate accepts, its ESLint name or its label', () => {
+    for (const ref of [
+      'no-helpers-to-views',
+      'archprint/no-helpers-to-views',
+      'helpers !-> views',
+      'HELPERS  !->  Views',
+    ]) {
+      expect(explainTool(ref, layerAuto).rule.id, ref).toBe('no-helpers-to-views');
+    }
   });
 
   it('explainTool throws for an unknown rule id and lists the rules it found', () => {
