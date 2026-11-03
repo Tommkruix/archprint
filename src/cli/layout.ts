@@ -27,6 +27,8 @@ export interface WriteLayoutOptions {
   enforcers: InstalledEnforcers;
   only?: string;
   ruleIds?: readonly string[];
+  /** Start from the default rule set instead of keeping the rules adopted before. */
+  reset?: boolean;
   expand?: boolean;
   graph?: boolean;
   mode: ResolutionMode;
@@ -43,9 +45,11 @@ export interface WriteLayoutResult {
   folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
-  /** Previously adopted rules a scoped run kept, and those the current scan no longer generates. */
+  /** Previously adopted rules outside this run's selection that it kept, and those the current scan no longer generates. */
   kept: string[];
   dropped: string[];
+  /** Previously adopted rules --reset removed. */
+  reset: string[];
 }
 
 export class UnknownRulesError extends Error {
@@ -88,17 +92,10 @@ function removeFoldedFiles(outDir: string, cwd: string): string[] {
   return folded;
 }
 
-/** The rules a scoped run (--only, --rules) keeps from the previous adoption: it adds to them, never replaces them. */
-function carriedRuleIds(
-  outDir: string,
-  options: CollectOptions,
-  requested: readonly AdoptedRule[],
-): string[] {
-  if (options.only === undefined && options.ruleIds === undefined) return [];
+/** The previously adopted rules outside this run's selection: a run adds to the adoption, never replaces it. */
+function carriedRuleIds(previous: readonly string[], requested: readonly AdoptedRule[]): string[] {
   const requestedIds = new Set(requested.map((rule) => rule.id));
-  return (readAdoptedRules(outDir) ?? [])
-    .map((rule) => rule.id)
-    .filter((id) => !requestedIds.has(id));
+  return previous.filter((id) => !requestedIds.has(id));
 }
 
 /** Selects the requested and carried rules by id, across every family: a carried rule was adopted, held or not. */
@@ -139,7 +136,8 @@ export function writeLayout(
       requested.availableRules,
       options.structural ?? false,
     );
-  const carried = carriedRuleIds(outDir, collectOptions, requested.adopted);
+  const previous = (readAdoptedRules(outDir) ?? []).map((rule) => rule.id);
+  const carried = options.reset ? [] : carriedRuleIds(previous, requested.adopted);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
     ...withCarried(collectOptions, requested.adopted, carried),
@@ -212,5 +210,6 @@ export function writeLayout(
     configPath,
     kept: carried.filter((id) => emittedIds.has(id)),
     dropped: carried.filter((id) => !emittedIds.has(id)),
+    reset: options.reset ? previous.filter((id) => !emittedIds.has(id)) : [],
   };
 }

@@ -153,7 +153,7 @@ archprint explain AP-002 apps/web
 # Structural-inference rules are held for review; add --include-structural to emit them too.
 archprint generate apps/web
 
-# Confirm the generated rules pass on your repo before wiring
+# Confirm the generated rules pass on your repo before wiring (on its own, --check writes nothing)
 archprint generate apps/web --check
 
 # Generate a single rule by id after reviewing it (including a SUGGEST rule)
@@ -294,13 +294,15 @@ format.
 dependency-cruiser JSON, per-rule cards (`.md`) with passing and failing fixtures, the eslint-plugin-boundaries
 element-types config, ts-arch tests, and the Mermaid and Graphviz DOT layer graph.
 
-**Staying in sync, and leaving cleanly.** Re-running `generate` (or `init`) refreshes `.archprint/` and drops any
-rule the evidence no longer supports, so the output never drifts from the code. `wire` inserts a single managed
+**Staying in sync, and leaving cleanly.** Re-running `generate` refreshes `.archprint/`: it keeps every rule you
+adopted, names any the evidence no longer supports and drops it, so the output never drifts from the code.
+`generate --reset` (and `init --force`) start again from the default rule set and list the adopted rules they
+remove. `wire` inserts a single managed
 reference into each enforcement tool your repo uses (a flat eslint config, a `.dependency-cruiser.json`), one that
 survives those regenerations; for a config it cannot safely edit (a JS dependency-cruiser config, say), it prints
 the exact snippet to paste. `eject` removes Archprint's files and every wired reference, restoring each config
 exactly. `generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
-can confirm before wiring. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
+can confirm before wiring; on its own it checks the rules already generated and writes nothing. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
 
 ## Use in CI
@@ -494,7 +496,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
   `--only <family>` and `--rules <ids>` adopt one family or the rules they name (such as `AP-002`, `import-style`
-  or the layer rule `no-lib-to-app`) and keep the rules you adopted before, `--check` runs the generated rules against your repo,
+  or the layer rule `no-lib-to-app`), every run keeps the rules you adopted before and `--reset` returns to the
+  default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
@@ -568,7 +571,8 @@ Without dependency-cruiser, each boundary becomes an ESLint rule in `.archprint/
 exempts the files that already break the boundary, so your lint stays green, and it catches a new import across
 the boundary, by relative path or alias. `archprint check` reports a new break in a pull request, and
 `archprint allow` records a justified exception. `--rules` adds the rules it names to the ones you adopted before,
-so you can adopt boundaries one run at a time; a plain `archprint generate` resets to the default rule set. If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
+so you can adopt boundaries one run at a time, and a plain `archprint generate` keeps them too (`--reset` returns to
+the default rule set). If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
 or later there first. The [rules reference](https://tommkruix.github.io/archprint/rules#layer-boundaries-review)
 says exactly which imports and files the rule reads.
 

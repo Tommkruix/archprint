@@ -164,6 +164,15 @@ function displayPath(target: string, cwd: string = process.cwd()): string {
   return relative === '' ? '.' : relative.startsWith('..') ? target : relative;
 }
 
+/** Whether a flag other than --check and --out was given, so `generate --check` writes before it checks. */
+function generationFlagsPassed(command: Command): boolean {
+  return command.options
+    .map((option) => option.attributeName())
+    .some(
+      (name) => name !== 'check' && name !== 'out' && command.getOptionValueSource(name) === 'cli',
+    );
+}
+
 function findPattern(
   input: string,
   id: string,
@@ -257,6 +266,7 @@ export function buildProgram(version = readVersion()): Command {
           app: displayPath(appDir, cwd),
           cwd,
           readme: true,
+          reset: true,
         });
         const config = readConfig(outDir);
         /* v8 ignore next -- writeLayout always writes a readable config */
@@ -339,8 +349,12 @@ export function buildProgram(version = readVersion()): Command {
       'adopt these rules, keeping the rules adopted before (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
     )
     .option(
+      '--reset',
+      'start from the default rule set instead of keeping the rules adopted before, and list the ones it removes',
+    )
+    .option(
       '--check',
-      'after generating, run the eslint rules against the repo and report pass/fail',
+      'run the generated eslint rules against the repo and report pass/fail; on its own it checks the rules already generated and writes nothing',
     )
     .action(
       async (
@@ -356,9 +370,15 @@ export function buildProgram(version = readVersion()): Command {
           readme?: boolean;
           only?: string;
           rules?: string;
+          reset?: boolean;
           check?: boolean;
         },
+        command: Command,
       ) => {
+        if (options.check && !generationFlagsPassed(command)) {
+          await runEslintCheck(resolveApp(input), path.resolve(options.out));
+          return;
+        }
         if (options.emit !== undefined && !EMIT_TARGETS.includes(options.emit)) {
           console.error(
             `Invalid --emit target '${options.emit}'. Use: ${EMIT_TARGETS.join(', ')}.`,
@@ -428,20 +448,25 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const { files, removed, folded, configPath, kept, dropped } = writeLayout(scan, outDir, {
-          structural,
-          enforcers,
-          graph: options.graph,
-          expand: options.expand,
-          only: options.only,
-          ruleIds,
-          mode: options.fast ? 'fast' : 'deep',
-          version,
-          recommendations,
-          app: displayPath(scan.appDir, cwd),
-          cwd,
-          readme: options.readme,
-        });
+        const { files, removed, folded, configPath, kept, dropped, reset } = writeLayout(
+          scan,
+          outDir,
+          {
+            structural,
+            enforcers,
+            graph: options.graph,
+            expand: options.expand,
+            only: options.only,
+            ruleIds,
+            reset: options.reset,
+            mode: options.fast ? 'fast' : 'deep',
+            version,
+            recommendations,
+            app: displayPath(scan.appDir, cwd),
+            cwd,
+            readme: options.readme,
+          },
+        );
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
@@ -453,6 +478,10 @@ export function buildProgram(version = readVersion()): Command {
         if (dropped.length > 0)
           console.log(
             `Dropped ${dropped.length} previously adopted rule(s) the current scan no longer generates: ${dropped.join(', ')}. Review their evidence with 'archprint scan'.`,
+          );
+        if (reset.length > 0)
+          console.log(
+            `Reset to the default rules: removed ${reset.length} previously adopted rule(s): ${reset.join(', ')}.`,
           );
         if (files.length === 0) {
           if (heldStructuralAuto > 0) {

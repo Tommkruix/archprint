@@ -90,7 +90,8 @@ dependency-cruiser JSON, a plugin, per-rule cards with passing and failing fixtu
 layer graph.
 
 `generate --check` runs the generated ESLint rules against your repo and reports pass/fail, so you can
-confirm they are green before wiring.
+confirm they are green before wiring. On its own it checks the rules already generated and writes nothing; with
+other flags it generates first.
 
 Re-running `generate` **cleans its previous outputs first**, so a rule the evidence no longer supports stops
 being enforced instead of lingering. `wire` inserts a single managed, reversible reference into the enforcement

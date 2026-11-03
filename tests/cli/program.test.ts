@@ -321,9 +321,33 @@ describe('cli program', () => {
     process.exitCode = 0;
   });
 
-  it('generate --check runs the generated eslint rules against the repo', async () => {
-    await run(['generate', auto, '--check', '--out', out]);
+  it('generate with --check and another flag generates, then runs the eslint rules against the repo', async () => {
+    await run(['generate', auto, '--fast', '--check', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.mjs'))).toBe(true);
     expect(output()).toContain('Check: the generated eslint rules pass clean');
+  });
+
+  it('generate --check on its own checks the rules already generated and writes nothing', async () => {
+    await run(['generate', auto, '--fast', '--out', out]);
+    const snapshot = () =>
+      readdirSync(out).map((name) => [name, readFileSync(path.join(out, name), 'utf8')]);
+    const before = snapshot();
+    logSpy.mockClear();
+    await run(['generate', auto, '--check', '--out', out]);
+    expect(snapshot()).toEqual(before);
+    expect(output()).toContain('Check: the generated eslint rules pass clean');
+    expect(output()).not.toMatch(/^generated /m);
+  });
+
+  it('generate --reset returns to the default rules and names the adopted rules it removed', async () => {
+    await run(['generate', layerAuto, '--include-structural', '--only', 'layer', '--out', out]);
+    await run(['generate', layerAuto, '--fast', '--out', out]);
+    expect(output()).toContain('Kept 1 previously adopted rule(s): no-helpers-to-views.');
+    logSpy.mockClear();
+    await run(['generate', layerAuto, '--fast', '--reset', '--out', out]);
+    expect(output()).toContain(
+      'Reset to the default rules: removed 1 previously adopted rule(s): no-helpers-to-views.',
+    );
   });
 
   it('generate --expand writes the app-isolation config for AUTO app isolation', async () => {

@@ -114,7 +114,7 @@ archprint explain AP-002 apps/web
 # Write the auto-trusted mechanical rules (structural ones are held for review)
 archprint generate apps/web
 
-# Check the generated rules pass on your repo before you wire them
+# Check the generated rules pass on your repo before you wire them (writes nothing)
 archprint generate apps/web --check
 
 # Emit one specific rule after reviewing it (including a SUGGEST rule)
@@ -135,8 +135,9 @@ archprint generate apps/web --expand
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
-A plain `generate` writes the default rule set; `--only` and `--rules` add to the rules you adopted before and say
-which they kept, and name any earlier rule the current code no longer supports.
+Every `generate` keeps the rules you adopted before: a plain run refreshes them alongside the default rule set,
+`--only` and `--rules` add to them, and each run says which it kept and names any earlier rule the current code no
+longer supports. `--reset` starts again from the default rule set and lists the adopted rules it removes.
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
 `import archprint from './.archprint/eslint.mjs'`) and, when dependency-cruiser is present, one
 `.archprint/dependency-cruiser.json`; `--expand` adds the per-family configs, per-rule cards and fixtures, and
