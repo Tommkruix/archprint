@@ -286,9 +286,10 @@ format.
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps, server/client) are added only with
   `--include-structural`, after you review them.
-- **A managed section in your `README.md`** summarizing what is enforced now, followed but only reported, held for
-  review, and worth adopting (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so
-  the generated files stay out of your formatter.
+- **A managed `.prettierignore` entry** so the generated files stay out of your formatter, and, only when you pass
+  `--readme` to `init` or `generate`, a managed section in your `README.md` listing each adopted rule with this
+  repo's evidence (for example "45 of 45 files it applies to follow it"), what your code follows but no rule
+  enforces, and what is held for review.
 
 `--expand` additionally writes the granular artifacts inside `.archprint/`: the per-family ESLint and
 dependency-cruiser JSON, per-rule cards (`.md`) with passing and failing fixtures, the eslint-plugin-boundaries
@@ -488,8 +489,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 ## Commands
 
 - **`archprint init [path]`**: zero-config setup. Detects the stack, enforces the rules the code already follows,
-  and writes `.archprint/` plus a managed README section. Options: `--expand`, `--include-structural`,
-  `--out <dir>`, `--fast`, `--force`.
+  writes `.archprint/`, and lists every file it wrote or changed. Options: `--readme` (also add a managed section
+  to `README.md`), `--expand`, `--include-structural`, `--out <dir>`, `--fast`, `--force`.
 - **`archprint scan [path]`**: reports the rules the repo already follows, with evidence. Changes nothing.
   `--deep` resolves through barrels and aliases.
 - **`archprint explain <rule> [path]`**: shows the evidence behind one rule, named by its id, label or ESLint name

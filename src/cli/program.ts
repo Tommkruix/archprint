@@ -158,6 +158,7 @@ export function buildProgram(version = readVersion()): Command {
       'also enforce the structural-inference families (held for review by default)',
     )
     .option('--expand', 'also write the per-family files, rule cards, and fixtures')
+    .option('--readme', 'also add an archprint section to README.md listing the adopted rules')
     .option('--force', `overwrite an existing ${ARCHPRINT_DIR}/${CONFIG_FILE} and rules`)
     .action(
       (
@@ -167,6 +168,7 @@ export function buildProgram(version = readVersion()): Command {
           fast?: boolean;
           includeStructural?: boolean;
           expand?: boolean;
+          readme?: boolean;
           force?: boolean;
         },
       ) => {
@@ -205,7 +207,7 @@ export function buildProgram(version = readVersion()): Command {
         const structural = options.includeStructural ?? false;
         const enforcers = detectEnforcers(scan.appDir);
         const recommendations = buildRecommendations(scan, detectStack(appDir), enforcers);
-        const { files, folded, configPath } = writeLayout(scan, outDir, {
+        const { files, folded, configPath, touched } = writeLayout(scan, outDir, {
           structural,
           enforcers,
           expand: options.expand,
@@ -214,13 +216,13 @@ export function buildProgram(version = readVersion()): Command {
           recommendations,
           app: displayPath(appDir, cwd),
           cwd,
-          readme: true,
+          readme: options.readme,
           reset: true,
         });
         const config = readConfig(outDir);
         /* v8 ignore next -- writeLayout always writes a readable config */
         if (config === null) return;
-        console.log(renderInit(config, files.length, structural, version));
+        console.log(renderInit(config, touched, files.length, structural, version));
         reportFolded(folded, displayPath(configPath, cwd));
         if (options.fast) {
           console.log(

@@ -50,6 +50,8 @@ export interface WriteLayoutResult {
   dropped: string[];
   /** Previously adopted rules --reset removed. */
   reset: string[];
+  /** Every file this run wrote or changed, relative to the working directory. */
+  touched: string[];
 }
 
 export class UnknownRulesError extends Error {
@@ -157,7 +159,7 @@ export function writeLayout(
   if (options.readme && files.length > 0) {
     const result = injectAdoptionSection(
       path.join(options.cwd, 'README.md'),
-      renderAdoptionBody(adoption),
+      renderAdoptionBody(adoption, emitted.rules),
     );
     readme = result.status;
     if (result.status === 'created') readmeCreated = true;
@@ -165,18 +167,25 @@ export function writeLayout(
 
   const outRel = path.relative(options.cwd, outDir) || ARCHPRINT_DIR;
   const ignoreEntry = `${outRel.split(path.sep).join('/')}/`;
+  const changedIgnoreFiles: string[] = [];
   let prettierignore = prior?.managed.prettierignore ?? false;
   let prettierignoreCreated = prior?.managed.prettierignoreCreated ?? false;
   let npmignore = prior?.managed.npmignore ?? false;
   const npmignoreCreated = prior?.managed.npmignoreCreated ?? false;
   if (files.length > 0) {
-    const prettier = ensureIgnoreEntry(path.join(options.cwd, '.prettierignore'), ignoreEntry);
+    const prettierPath = path.join(options.cwd, '.prettierignore');
+    const prettier = ensureIgnoreEntry(prettierPath, ignoreEntry);
     if (prettier !== 'skipped') prettierignore = true;
     if (prettier === 'created') prettierignoreCreated = true;
-    const npm = ensureIgnoreEntry(path.join(options.cwd, '.npmignore'), ignoreEntry, {
-      create: false,
-    });
+    const npmPath = path.join(options.cwd, '.npmignore');
+    const npm = ensureIgnoreEntry(npmPath, ignoreEntry, { create: false });
     if (npm !== 'skipped') npmignore = true;
+    for (const [file, result] of [
+      [prettierPath, prettier],
+      [npmPath, npm],
+    ] as const) {
+      if (result === 'created' || result === 'appended') changedIgnoreFiles.push(file);
+    }
   }
 
   const managed: ManagedOutputs = {
@@ -211,5 +220,13 @@ export function writeLayout(
     kept: carried.filter((id) => emittedIds.has(id)),
     dropped: carried.filter((id) => !emittedIds.has(id)),
     reset: options.reset ? previous.filter((id) => !emittedIds.has(id)) : [],
+    touched: [
+      configPath,
+      ...files,
+      ...(readme === 'created' || readme === 'updated'
+        ? [path.join(options.cwd, 'README.md')]
+        : []),
+      ...changedIgnoreFiles,
+    ].map((file) => path.relative(options.cwd, file)),
   };
 }

@@ -59,7 +59,9 @@ describe('writeLayout', () => {
       'Env access',
     ]);
     expect(config.review.map((entry) => entry.title)).not.toContain('Env access');
-    expect(readmeSection('Adopted rules')).toContain('Env access');
+    expect(readmeSection('Adopted rules')).toContain(
+      '`env-access`: Read process.env only in the config layer',
+    );
     expect(readmeSection('Held for review')).not.toContain('Env access');
     expect(readmeSection('Report only')).toContain('Circular dependencies');
   });

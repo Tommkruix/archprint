@@ -84,11 +84,11 @@ archprint init apps/web
 ```
 
 `init` scans the repo, writes the auto-trusted (mechanical) rules into `.archprint/` (only for the linters
-your repo uses, it detects ESLint and dependency-cruiser), adds a managed section to your `README.md`
-explaining what it did, and prints the tiers: what is enforced now, what your code follows that is reported but
+your repo uses, it detects ESLint and dependency-cruiser), lists every file it wrote or changed, and prints the
+tiers: what is enforced now, what your code follows that is reported but
 not written as a rule yet (circular dependencies today), what to review before enforcing, and what comparable repos
-commonly adopt that you do not yet. Then reference the generated rules from
-your linter:
+commonly adopt that you do not yet. Pass `--readme` to also add a managed section to your `README.md` listing the
+adopted rules with this repo's evidence. Then reference the generated rules from your linter:
 
 ```bash
 archprint wire      # inserts a managed, reversible reference into your eslint / dependency-cruiser config
