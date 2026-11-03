@@ -1,5 +1,6 @@
 import type { TestIsolationAnalysis } from '../detector/test-isolation-detector.js';
-import { withMinedExemptions, type EslintFlatConfigBlock } from './console-isolation-emitters.js';
+import { withMinedExemptions } from './console-isolation-emitters.js';
+import type { EslintFamilyRule } from './eslint-family-rules.js';
 import { TEST_GLOBS } from './eslint-scope.js';
 import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
 
@@ -34,25 +35,12 @@ export function toDependencyCruiserTestIsolation(analysis: TestIsolationAnalysis
   };
 }
 
-export function toEslintTestIsolation(
-  analysis: TestIsolationAnalysis,
-): EslintFlatConfigBlock | null {
+export function toEslintTestIsolation(analysis: TestIsolationAnalysis): EslintFamilyRule | null {
   if (analysis.testFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {
-    files: ['**/*.{ts,tsx}'],
+    name: 'test-isolation',
+    message: 'Do not import a test file from production code.',
     ignores: withMinedExemptions([...TEST_GLOBS], analysis.violations),
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              regex: '\\.(test|spec)(\\.|$)',
-              message: 'Do not import a test file from production code.',
-            },
-          ],
-        },
-      ],
-    },
+    check: { kind: 'import', regex: '\\.(test|spec)(\\.|$)', typeImports: false },
   };
 }

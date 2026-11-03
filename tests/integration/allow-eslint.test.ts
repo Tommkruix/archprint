@@ -6,11 +6,9 @@ import { ESLint } from 'eslint';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emitLayout } from '../../src/cli/generate.js';
 import { scanRepo } from '../../src/cli/scan.js';
-import {
-  exemptionGlobs,
-  literalGlob,
-  mergeNoRestrictedImports,
-} from '../../src/generator/eslint-scope.js';
+import type { EslintFamilyRule } from '../../src/generator/eslint-family-rules.js';
+import { renderEslintPreset } from '../../src/generator/eslint-preset-emitter.js';
+import { exemptionGlobs, literalGlob } from '../../src/generator/eslint-scope.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const eslintOnly = {
@@ -19,9 +17,11 @@ const eslintOnly = {
   dependencyCruiser: false,
   biome: false,
 };
-const restricting = (regex: string, ignores?: string[]) => ({
-  ...(ignores ? { ignores } : {}),
-  rules: { 'no-restricted-imports': ['error', { patterns: [{ regex, message: `no ${regex}` }] }] },
+const restricting = (regex: string, ignores: string[] = []): EslintFamilyRule => ({
+  name: regex,
+  message: `no ${regex}`,
+  ignores,
+  check: { kind: 'import', regex, typeImports: true },
 });
 
 describe('allowed exceptions in ESLint (real ESLint)', () => {
@@ -31,13 +31,18 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
   });
   afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
-  const lint = async (config: unknown[], files: Record<string, string>) => {
+  const lint = async (rules: EslintFamilyRule[], files: Record<string, string>) => {
     for (const [file, content] of Object.entries(files)) {
       mkdirSync(path.dirname(path.join(tmp, file)), { recursive: true });
       writeFileSync(path.join(tmp, file), content);
     }
+    mkdirSync(path.join(tmp, '.archprint'));
+    writeFileSync(path.join(tmp, '.archprint', 'eslint.mjs'), renderEslintPreset([], rules));
     const configPath = path.join(tmp, 'eslint.config.mjs');
-    writeFileSync(configPath, `export default ${JSON.stringify(config)};\n`);
+    writeFileSync(
+      configPath,
+      "import archprint from './.archprint/eslint.mjs';\nexport default [{ files: ['**/*.ts'] }, ...archprint];\n",
+    );
     const eslint = new ESLint({ cwd: tmp, overrideConfigFile: configPath });
     const results = await eslint.lintFiles(Object.keys(files));
     return new Map(
@@ -50,13 +55,13 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
     );
   };
 
-  it('exempts a monorepo app file from one shared-rule family, not the same path in a sibling app', async () => {
+  it('exempts a monorepo app file from one rule family, not the same path in a sibling app', async () => {
     const both = "import a from './deep/x';\nimport b from './y.fixture';\nexport { a, b };\n";
     const messages = await lint(
-      mergeNoRestrictedImports([
+      [
         restricting('deep', exemptionGlobs(literalGlob('src/allowed.ts'), 'apps/web')),
         restricting('fixture'),
-      ]),
+      ],
       {
         'apps/web/src/allowed.ts': both,
         'apps/web/src/other.ts': both,
@@ -72,10 +77,10 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
     const both = "import a from './deep/x';\nimport b from './y.fixture';\nexport { a, b };\n";
     const allowed = 'app/(shop)/@modal/[[...slug]]/[id]/route.ts';
     const messages = await lint(
-      mergeNoRestrictedImports([
+      [
         restricting('deep', exemptionGlobs(literalGlob(allowed), 'apps/(web)')),
         restricting('fixture'),
-      ]),
+      ],
       {
         [`apps/(web)/${allowed}`]: both,
         'apps/(web)/app/(shop)/@modal/[[...slug]]/i/route.ts': both,
@@ -100,14 +105,11 @@ describe('allowed exceptions in ESLint (real ESLint)', () => {
 
   it('exempts a file whose folder name holds braces, not the folders brace expansion would name', async () => {
     const both = "import a from './deep/x';\nexport { a };\n";
-    const messages = await lint(
-      [{ files: ['**/*.ts'] }, restricting('deep', [literalGlob('src/{a,b}/x.ts')])],
-      {
-        'src/{a,b}/x.ts': both,
-        'src/a/x.ts': both,
-        'src/b/x.ts': both,
-      },
-    );
+    const messages = await lint([restricting('deep', [literalGlob('src/{a,b}/x.ts')])], {
+      'src/{a,b}/x.ts': both,
+      'src/a/x.ts': both,
+      'src/b/x.ts': both,
+    });
     expect(messages.get('src/{a,b}/x.ts')).toEqual([]);
     expect(messages.get('src/a/x.ts')).toEqual(['no deep']);
     expect(messages.get('src/b/x.ts')).toEqual(['no deep']);

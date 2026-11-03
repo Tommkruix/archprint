@@ -54,9 +54,14 @@ describe('toDependencyCruiserTestIsolation', () => {
 });
 
 describe('toEslintTestIsolation', () => {
-  it('emits an eslint no-restricted-imports block banning test paths when clean (AUTO)', () => {
+  it('emits the test-isolation rule over value imports of test paths when clean (AUTO)', () => {
     const config = toEslintTestIsolation(analysis(40, 0, 3));
-    expect(config?.rules['no-restricted-imports']).toBeDefined();
+    expect(config?.name).toBe('test-isolation');
+    expect(config?.check).toEqual({
+      kind: 'import',
+      regex: '\\.(test|spec)(\\.|$)',
+      typeImports: false,
+    });
     expect(config?.ignores).toContain('**/*.{test,spec,e2e-spec,e2e}.{ts,tsx}');
     expect(config?.ignores).toContain('**/__tests__/**');
   });

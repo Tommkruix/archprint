@@ -30,12 +30,14 @@ function analysis(
 }
 
 describe('toEslintWorkspacePackageApi', () => {
-  it('emits a no-restricted-imports pattern over the package names when clean (AUTO)', () => {
+  it('emits the workspace-package rule over value imports of the package names when clean (AUTO)', () => {
     const config = toEslintWorkspacePackageApi(analysis(40, 0, ['@scope/pkg-a', '@scope/pkg-b']));
-    expect(config).not.toBeNull();
-    expect(config!.rules['no-restricted-imports'][1].patterns[0]!.regex).toBe(
-      '^(@scope/pkg-a|@scope/pkg-b)/',
-    );
+    expect(config?.name).toBe('workspace-package');
+    expect(config?.check).toEqual({
+      kind: 'import',
+      regex: '^(@scope/pkg-a|@scope/pkg-b)/',
+      typeImports: false,
+    });
   });
 
   it('emits null with no consumers, no packages, or below AUTO', () => {
@@ -48,6 +50,7 @@ describe('toEslintWorkspacePackageApi', () => {
     const config = toEslintWorkspacePackageApi(
       analysis(200, 1, ['@scope/pkg'], ['src/app/deep.ts']),
     );
-    expect(config!.ignores).toEqual(['src/app/deep.ts']);
+    expect(config!.ignores).toContain('src/app/deep.ts');
+    expect(config!.ignores).toContain('**/__tests__/**');
   });
 });

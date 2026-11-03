@@ -1,0 +1,5 @@
+---
+'archprint': minor
+---
+
+The test-isolation, import-style, console-isolation, env-access and workspace-package rules in `.archprint/eslint.mjs` now run under their own names (`archprint/test-isolation`, `archprint/import-style`, `archprint/console-isolation`, `archprint/env-access`, `archprint/workspace-package`) instead of ESLint's `no-restricted-imports`, `no-console` and `no-restricted-properties`. ESLint keeps one setting per core rule for each file, so a repo that configured one of those rules itself, for a folder or the whole project, silently replaced archprint's rule there (or the other way round). Both now apply side by side. Each rule counts imports the way the scan does: test-isolation and workspace-package ignore type-only imports, and all three import rules check `import()` calls. Run `archprint generate` to refresh the file. If you silenced an archprint finding with an `eslint-disable` comment naming the core rule, rename it to the `archprint/` name. Rule ids in `config.json`, `check` and `allow` are unchanged.

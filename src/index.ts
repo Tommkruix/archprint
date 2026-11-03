@@ -240,15 +240,9 @@ export {
   type PhantomDependencyConfig,
   type PhantomDependencyRule,
 } from './generator/phantom-dependency-emitters.js';
-export {
-  toEslintDeepRelative,
-  type EslintNoRestrictedImportsConfig,
-  type NoRestrictedImportsPattern,
-} from './generator/deep-relative-emitters.js';
-export {
-  toEslintConsoleIsolation,
-  type EslintFlatConfigBlock,
-} from './generator/console-isolation-emitters.js';
+export { toEslintDeepRelative } from './generator/deep-relative-emitters.js';
+export { toEslintConsoleIsolation } from './generator/console-isolation-emitters.js';
+export type { EslintFamilyRule, FamilyCheck } from './generator/eslint-family-rules.js';
 export { toEslintEnvAccess } from './generator/env-access-emitters.js';
 export { toEslintWorkspacePackageApi } from './generator/workspace-package-emitters.js';
 export {

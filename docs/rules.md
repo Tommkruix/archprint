@@ -38,19 +38,22 @@ does not adopt the rule. **When not to use:** rarely, cycles are a near-universa
 ### Test isolation (Auto)
 
 Detects production (non-test) code importing a test or spec file. Vacuous on a package with no tests (rejected).
+ESLint reports it as `archprint/test-isolation`; type-only imports are not counted, as in the scan.
 **When not to use:** if you keep shared setup helpers under a test directory and import them from production on
 purpose, add an ignore for those files.
 
 ### Console isolation (Auto)
 
 Detects library (non-CLI) code calling `console.*`. Test files and cli/scripts/bin/tools paths are excluded,
-and the emitted rule is scoped to exactly those measured files so wiring it stays green.
+and the emitted rule, `archprint/console-isolation`, is scoped to exactly those measured files so wiring it stays
+green. It is separate from ESLint's `no-console`, so turning `no-console` off for a folder does not turn it off.
 **When not to use:** if a package legitimately logs to the console as its purpose (a logger, a CLI you did not
 place under those directories), scope or skip it.
 
 ### Import style (deep relatives) (Auto)
 
-Detects `../../../` deep relative imports where a workspace alias exists. A style preference, low risk.
+Detects `../../../` deep relative imports where a workspace alias exists, type-only imports included. A style
+preference, low risk. ESLint reports it as `archprint/import-style`.
 **When not to use:** if your team prefers relative imports over aliases, skip it.
 
 ### Public API (barrels) (Auto)
@@ -162,13 +165,13 @@ same peer-isolation ambiguity as feature-slice.
 
 ### Env access (Review)
 
-Detects non-config code reading `process.env` directly. Vacuous when nothing reads env (rejected). **When not to
-use:** `NEXT_PUBLIC_*` variables read in UI code are idiomatic in Next.js (build-time inlined), not a smell.
+Detects non-config code reading `process.env` directly. Vacuous when nothing reads env (rejected). ESLint reports
+it as `archprint/env-access`. **When not to use:** `NEXT_PUBLIC_*` variables read in UI code are idiomatic in Next.js (build-time inlined), not a smell.
 
 ### Workspace-package API (Review)
 
-Detects importing a workspace package by a deep path into its source rather than by its name. **When not to
-use:** a build-config file consuming a shared preset by path when that is its only entry point.
+Detects importing a workspace package by a deep path into its source rather than by its name. ESLint reports it
+as `archprint/workspace-package`. **When not to use:** a build-config file consuming a shared preset by path when that is its only entry point.
 
 ### Stories isolation (Review)
 

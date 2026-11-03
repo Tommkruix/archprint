@@ -843,8 +843,8 @@ describe('cli generate', () => {
     });
   const dc = (c: CollectedEnforcement, family: string): { name: string }[] | undefined =>
     c.depcruise.find((entry) => entry.family === family)?.forbidden;
-  const es = (c: CollectedEnforcement, family: string): boolean =>
-    c.eslintBlocks.some((entry) => entry.family === family);
+  const es = (c: CollectedEnforcement, rule: string): boolean =>
+    c.eslintFamilies.some((entry) => entry.name === rule);
 
   it('collects forbidden-import specs for AUTO patterns only, and expands per-rule dirs', () => {
     rmSync(outDir, { recursive: true, force: true });
@@ -876,7 +876,7 @@ describe('cli generate', () => {
     expect(path.basename(emitted.eslint!)).toBe('eslint.mjs');
     const source = readFileSync(emitted.eslint!, 'utf8');
     expect(source).toContain(
-      "export default [{ ignores: ['**/.archprint/**'] }, ...BLOCKS, ...pluginConfigs];",
+      "export default [{ ignores: ['**/.archprint/**'] }, ...pluginConfigs];",
     );
     expect(source).toContain("import archprint from './.archprint/eslint.mjs';");
     expect(source).not.toContain('readdirSync');
@@ -1055,10 +1055,8 @@ describe('cli generate', () => {
       structural: true,
       appPath: 'apps/web',
     });
-    const block = collected.eslintBlocks.find((entry) => entry.family === 'env-access')!.block as {
-      ignores: string[];
-    };
-    expect(block.ignores).toEqual(
+    const rule = collected.eslintFamilies.find((entry) => entry.name === 'env-access')!;
+    expect(rule.ignores).toEqual(
       expect.arrayContaining(['apps/web/app/[[]id[]]/env.ts', 'app/[[]id[]]/env.ts']),
     );
   });
@@ -1073,31 +1071,28 @@ describe('cli generate', () => {
       structural: true,
       appPath: 'apps/web',
     });
-    const globs = collected.eslintBlocks.flatMap(({ block }) => {
-      const { ignores = [], files = [] } = block as { ignores?: string[]; files?: string[] };
-      return [...ignores, ...files];
-    });
+    const globs = collected.eslintFamilies.flatMap((rule) => rule.ignores);
     expect(globs).toEqual(expect.arrayContaining(['apps/web/app/[[]id[]]/x.ts']));
   });
 
-  it('collects console, env, and no-restricted-imports eslint blocks when clean, none otherwise', () => {
+  it('collects the console, env, and test-isolation eslint rules when clean, none otherwise', () => {
     expect(
       es(
         collect(emptyScan({ consoleIsolation: fakeConsole(40, 0) }), { enforcers: ESLINT }),
-        'console',
+        'console-isolation',
       ),
     ).toBe(true);
-    expect(es(collect(emptyScan(), { enforcers: ESLINT }), 'console')).toBe(false);
+    expect(es(collect(emptyScan(), { enforcers: ESLINT }), 'console-isolation')).toBe(false);
     expect(
       es(collect(emptyScan({ envAccess: fakeEnv(40, 0) }), { enforcers: ESLINT }), 'env-access'),
     ).toBe(true);
     expect(
       es(
         collect(emptyScan({ testIsolation: fakeTestIsolation(40, 0, 3) }), { enforcers: ESLINT }),
-        'no-restricted-imports',
+        'test-isolation',
       ),
     ).toBe(true);
-    expect(es(collect(emptyScan(), { enforcers: ESLINT }), 'no-restricted-imports')).toBe(false);
+    expect(es(collect(emptyScan(), { enforcers: ESLINT }), 'test-isolation')).toBe(false);
   });
 
   it('collects a phantom-dependency rule when all imports are declared, none otherwise', () => {
