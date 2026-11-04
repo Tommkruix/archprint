@@ -19,6 +19,7 @@ describe('rule references', () => {
     }
     expect(findRule('workspace-package-api', rules)?.id).toBe('workspace-package');
     expect(findRule('ap-002', rules)?.id).toBe('AP-002');
+    expect(findRule('archprint/no-ui-layer-in-server-entry', rules)?.id).toBe('AP-002');
   });
 
   it('finds nothing for a name no rule carries', () => {

@@ -41,7 +41,7 @@ describe('runAllow', () => {
 
   it('accepts the rule by its ESLint name, in any case', async () => {
     await buildProgram('9.9.9').parseAsync(['init', '.'], { from: 'user' });
-    expect(() => allow({ rule: 'archprint/ap-001' })).toThrow(
+    expect(() => allow({ rule: 'archprint/no-db-client-in-request-entry' })).toThrow(
       'AP-001 reports nothing in app/api/a/route.ts',
     );
   });

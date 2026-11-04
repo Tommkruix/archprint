@@ -12,6 +12,12 @@ import {
 
 export { REQUEST_ENTRY_ROLES };
 
+/** The forbidden-import rules' names, which ESLint prints as `archprint/<name>`. */
+export const FORBIDDEN_IMPORT_RULE_NAMES: Readonly<Record<string, string>> = {
+  'AP-001': 'no-db-client-in-request-entry',
+  'AP-002': 'no-ui-layer-in-server-entry',
+};
+
 export const DEFAULT_DB_MARKERS: readonly RegExp[] = KNOWN_DB_LIBRARIES;
 
 const INFRA_PATH = /(^|\/)(health|seed|admin|webhook|webhooks|migration|migrations|cron)(\/|\.|$)/;
