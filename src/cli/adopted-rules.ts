@@ -45,6 +45,8 @@ interface RuleBase {
   statement: string;
   mode: ResolutionMode;
   evidence: AdoptionEvidence;
+  /** The known breaks recorded when the rule was written; `generate` only shrinks the list. Absent in older configs. */
+  exceptions?: string[];
 }
 
 export interface ForbiddenImportRule extends RuleBase {
@@ -362,12 +364,20 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
     from?: unknown;
     to?: unknown;
     container?: unknown;
+    exceptions?: unknown;
   };
   if (typeof candidate.id !== 'string' || !FAMILIES.has(String(candidate.family))) {
     return invalid('a rule has no valid id or family');
   }
   if (candidate.mode !== 'deep' && candidate.mode !== 'fast') {
     return invalid(`rule ${candidate.id} has no valid resolution mode`);
+  }
+  const { exceptions } = candidate;
+  if (
+    exceptions !== undefined &&
+    !(Array.isArray(exceptions) && exceptions.every((item) => typeof item === 'string'))
+  ) {
+    return invalid(`rule ${candidate.id} has exceptions that are not a list of paths`);
   }
   if (candidate.family === 'forbidden-imports') {
     const markers = candidate.forbidden;
