@@ -375,8 +375,11 @@ jobs:
   `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`.
   It goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason
   in the pull request, and the next `archprint generate` stops the generated rules flagging it. An entry without a reason is
-  rejected, and an entry the code no longer needs is pointed out. Rules enforced through dependency-cruiser (public
-  API) are not covered on that side yet.
+  rejected, and an entry the code no longer needs is pointed out.
+- **Existing breaks burn down in the open.** Each adopted rule records the files that already broke it, and `check`
+  says how many are left and which the pull request fixed, for example `Exceptions: 3 left, 1 fixed in this
+change.` When a fixed exception is still recorded, it says to run `archprint generate` so the rule applies there
+  too.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,
   that the base branch has, `check` warns and lists every rule that stops being checked. It does not
   fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,
@@ -505,12 +508,14 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
   `--only <family>` and `--rules <ids>` adopt one family or the rules they name (such as `AP-002`, `import-style`
-  or the layer rule `no-lib-to-app`), every run keeps the rules you adopted before and `--reset` returns to the
-  default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
+  or the layer rule `no-lib-to-app`), `--rules <ids> --baseline` adopts the named rules even below the confidence
+  gate, with what breaks them today recorded as exceptions that only shrink, every run keeps the rules you adopted
+  before and `--reset` returns to the default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
-  with `--base <branch or commit>`. Warning only unless `--fail-on new`. `--format text|json|github`,
+  with `--base <branch or commit>`, and how many recorded exceptions are left and which the change fixed. Warning
+  only unless `--fail-on new`. `--format text|json|github`,
   `--out <dir>`. See [Use in CI](#use-in-ci).
 - **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule (by id or ESLint name) being broken
   in one file, with a reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;

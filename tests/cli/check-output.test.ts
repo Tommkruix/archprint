@@ -45,6 +45,7 @@ const checked = (
   removedInChange: [],
   allowedInChange: [],
   unusedAllows: [],
+  exceptions: { left: 0, fixedInChange: [], stillRecorded: [] },
   ...overrides,
 });
 

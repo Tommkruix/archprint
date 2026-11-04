@@ -33,6 +33,8 @@ export interface GateResult {
   observations: number;
   passes: boolean;
   status: GenerationStatus;
+  /** The measured status of a rule adopted below the gate with `--baseline`, which then generates as AUTO. */
+  promotedFrom?: GenerationStatus;
 }
 
 const round = (value: number): number => Math.round(value * 10000) / 10000;

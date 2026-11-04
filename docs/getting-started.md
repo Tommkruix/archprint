@@ -130,6 +130,9 @@ archprint generate apps/web --include-structural
 # Adopt the rules you choose, by id (added to the rules you adopted before)
 archprint generate apps/web --include-structural --rules no-lib-to-app,import-style
 
+# Adopt a rule your code almost follows, recording today's breaks as exceptions that only shrink
+archprint generate apps/web --include-structural --rules no-lib-to-hooks --baseline
+
 # Also write the granular per-family files, rule cards, fixtures, and graph
 archprint generate apps/web --expand
 ```
@@ -224,8 +227,11 @@ jobs:
   `npx archprint allow AP-001 app/api/health/route.ts --reason "Health check queries the database directly"`.
   It goes in the `allowed` list of `.archprint/config.json`, `check` stops counting it and lists it with its reason
   in the pull request, and the next `archprint generate` stops the generated rules flagging it. An entry without a reason is
-  rejected, and an entry the code no longer needs is pointed out. Rules enforced through dependency-cruiser (public
-  API) are not covered on that side yet.
+  rejected, and an entry the code no longer needs is pointed out.
+- **Existing breaks burn down in the open.** Each adopted rule records the files that already broke it, and `check`
+  says how many are left and which the pull request fixed, for example `Exceptions: 3 left, 1 fixed in this
+change.` When a fixed exception is still recorded, it says to run `archprint generate` so the rule applies there
+  too.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,
   that the base branch has, `check` warns and lists every rule that stops being checked. It does not
   fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,

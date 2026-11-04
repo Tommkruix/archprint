@@ -301,6 +301,10 @@ export function buildProgram(version = readVersion()): Command {
       'adopt these rules, keeping the rules adopted before (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
     )
     .option(
+      '--baseline',
+      'with --rules: adopt the named rules even below the confidence gate, recording what breaks them today as exceptions that generate then only removes as they are fixed',
+    )
+    .option(
       '--reset',
       'start from the default rule set instead of keeping the rules adopted before, and list the ones it removes',
     )
@@ -323,6 +327,7 @@ export function buildProgram(version = readVersion()): Command {
           only?: string;
           rules?: string;
           reset?: boolean;
+          baseline?: boolean;
           check?: boolean;
         },
         command: Command,
@@ -395,6 +400,13 @@ export function buildProgram(version = readVersion()): Command {
           ?.split(',')
           .map((id) => id.trim())
           .filter(Boolean);
+        if (options.baseline && ruleIds === undefined) {
+          console.error(
+            '--baseline adopts only the rules you name; pass them with --rules, e.g. --rules no-lib-to-hooks --baseline.',
+          );
+          process.exitCode = 1;
+          return;
+        }
         if (ruleIds !== undefined && ruleIds.length === 0) {
           console.error('--rules needs at least one rule id, e.g. --rules AP-002,no-lib-to-app.');
           process.exitCode = 1;
@@ -411,6 +423,7 @@ export function buildProgram(version = readVersion()): Command {
           fixed,
           firstRecorded,
           remeasured,
+          baselined,
         } = writeLayout(scan, outDir, {
           structural,
           enforcers,
@@ -419,6 +432,7 @@ export function buildProgram(version = readVersion()): Command {
           only: options.only,
           ruleIds,
           reset: options.reset,
+          baseline: options.baseline,
           mode: options.fast ? 'fast' : 'deep',
           version,
           recommendations,
@@ -445,6 +459,10 @@ export function buildProgram(version = readVersion()): Command {
         if (fixed.length > 0)
           console.log(
             `Fixed since the last run, so the rules now apply to them:\n${formatExceptions(fixed)}`,
+          );
+        if (baselined.length > 0)
+          console.log(
+            `Adopted with a baseline: these break the rules today and are recorded as exceptions, which generate only removes as they are fixed:\n${formatExceptions(baselined)}`,
           );
         if (remeasured.length > 0)
           console.log(
