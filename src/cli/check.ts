@@ -22,6 +22,7 @@ import {
   repoRoot,
 } from './check-git.js';
 import { createLineLocator } from './check-locate.js';
+import { describeBurnDown, exceptionBurnDown, type ExceptionBurnDown } from './check-exceptions.js';
 
 export type FailOn = 'none' | 'new';
 
@@ -64,6 +65,7 @@ export type CheckResult =
       removedInChange: AdoptedRule[];
       allowedInChange: AllowedException[];
       unusedAllows: AllowedException[];
+      exceptions: ExceptionBurnDown;
     };
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
@@ -264,6 +266,13 @@ export function runCheck(options: CheckOptions): CheckResult {
           matchedKeys.has(allowKey(entry.rule, entry.file)),
       ),
       unusedAllows: allowed.filter((entry) => !matchedKeys.has(allowKey(entry.rule, entry.file))),
+      exceptions: exceptionBurnDown(
+        adopted,
+        baseRules,
+        baseFindings,
+        [...headFindings, ...adoptedFindings],
+        renames,
+      ),
     };
   } finally {
     baseTree.dispose();
@@ -305,6 +314,7 @@ export function renderCheckText(result: CheckResult): string {
     lines.push(`    ${findingMessage(finding.rule)}`);
   }
   if (result.fixed.length > 0) lines.push(`Fixed: ${result.fixed.length} violation(s) removed.`);
+  lines.push(...describeBurnDown(result.exceptions));
   for (const entry of result.adoptedInChange) {
     lines.push(
       `Rule ${entry.rule.id} was ${entry.change === 'new' ? 'adopted' : 'changed'} in this change (${entry.count} existing violation(s), not counted).`,
@@ -363,6 +373,7 @@ export function checkReport(result: CheckResult): Record<string, unknown> {
     removedInChange: result.removedInChange.map((rule) => rule.id),
     allowedInChange: result.allowedInChange,
     unusedAllows: result.unusedAllows.map(({ rule, file }) => ({ rule, file })),
+    exceptions: result.exceptions,
   };
 }
 
@@ -430,6 +441,8 @@ export function githubSummary(result: CheckResult): string {
   }
   if (result.fixed.length > 0)
     lines.push('', `Fixed: ${result.fixed.length} violation(s) removed.`);
+  const burnDown = describeBurnDown(result.exceptions);
+  if (burnDown.length > 0) lines.push('', ...burnDown);
   for (const entry of result.adoptedInChange) {
     lines.push(
       '',

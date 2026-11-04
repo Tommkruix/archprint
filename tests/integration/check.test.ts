@@ -250,6 +250,7 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     logSpy.mockClear();
     await run(['check', '--base', 'main']);
     expect(output()).toContain('No new violations.');
+    expect(output()).toContain('Exceptions: 1 left.');
   });
 
   it('reports a violation the change removes as fixed', async () => {
@@ -263,6 +264,26 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     await run(['check', '--base', 'main']);
     expect(output()).toContain('No new violations.');
     expect(output()).toContain('Fixed: 1 violation(s) removed.');
+    expect(output()).toContain(
+      'Exceptions: 0 left, 1 fixed in this change.\n  AP-001: app/api/legacy/route.ts\n1 fixed exception(s) are still recorded; run archprint generate to enforce the rules on them.',
+    );
+  });
+
+  it('counts an exception the change fixes and regenerates as fixed, with nothing left to regenerate', async () => {
+    git('checkout', '-q', 'main');
+    await adoptWithOneException();
+    commitAll('adopt with one known exception');
+    git('checkout', '-q', '-b', 'cleanup');
+    write(
+      'app/api/legacy/route.ts',
+      "export async function GET() { return new Response('ok'); }\n",
+    );
+    await run(['generate', app]);
+    commitAll('fix the legacy route and regenerate');
+    logSpy.mockClear();
+    await run(['check', '--base', 'main']);
+    expect(output()).toContain('Exceptions: 0 left, 1 fixed in this change.');
+    expect(output()).not.toContain('still recorded');
   });
 
   it('lists rules adopted in the change without counting their existing violations', async () => {
