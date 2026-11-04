@@ -99,3 +99,63 @@ describe.each([
     expect(await violations()).toEqual([]);
   });
 });
+
+describe('exemptions in a monorepo with two apps (real dependency-cruiser)', () => {
+  let cwd: string;
+  let repo: string;
+  beforeEach(() => {
+    cwd = process.cwd();
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-depcruise-apps-')));
+    for (const app of ['apps/web', 'apps/api']) {
+      const dir = path.join(repo, app);
+      cpSync(path.join(here, '..', 'fixtures', 'test-isolation-auto'), dir, { recursive: true });
+      for (let index = 0; index < 40; index++) {
+        writeFileSync(path.join(dir, 'src', `pad${index}.ts`), `export const p${index} = 1;\n`);
+      }
+      mkdirSync(path.join(dir, 'src', 'lib'));
+      writeFileSync(
+        path.join(dir, 'src', 'lib', 'legacy.ts'),
+        "import { check0 } from '../m0.test';\nexport const legacy = check0;\n",
+      );
+    }
+    process.chdir(repo);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    process.chdir(cwd);
+    vi.restoreAllMocks();
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it("exempts one app's known exception, not the file at the same path in a sibling app", async () => {
+    await buildProgram('9.9.9').parseAsync(
+      ['generate', 'apps/web', '--emit', 'dependency-cruiser'],
+      { from: 'user' },
+    );
+    const ruleSet = JSON.parse(
+      readFileSync(path.join(repo, '.archprint', 'dependency-cruiser.json'), 'utf8'),
+    ) as IFlattenedRuleSet;
+    const result = await cruise(['apps'], { validate: true, ruleSet, baseDir: repo });
+    expect(
+      (result.output as ICruiseResult).summary.violations.map(
+        (violation) => `${violation.rule.name}: ${violation.from}`,
+      ),
+    ).toEqual(['not-to-test: apps/api/src/lib/legacy.ts']);
+  });
+
+  it('exempts the known exception when dependency-cruiser runs inside the app', async () => {
+    await buildProgram('9.9.9').parseAsync(
+      ['generate', 'apps/web', '--emit', 'dependency-cruiser'],
+      { from: 'user' },
+    );
+    const ruleSet = JSON.parse(
+      readFileSync(path.join(repo, '.archprint', 'dependency-cruiser.json'), 'utf8'),
+    ) as IFlattenedRuleSet;
+    const result = await cruise(['src'], {
+      validate: true,
+      ruleSet,
+      baseDir: path.join(repo, 'apps', 'web'),
+    });
+    expect((result.output as ICruiseResult).summary.violations).toEqual([]);
+  });
+});

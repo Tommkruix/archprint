@@ -48,7 +48,7 @@ export function toDependencyCruiserAppIsolation(
         severity: 'error' as const,
         from: {
           path: `^${container}/([^/]+)/`,
-          ...exemptingFrom(toleratedFiles(group.violations, allowedFor(name))),
+          ...exemptingFrom(toleratedFiles(group.violations, allowedFor(name)), appPath),
         },
         to: { path: `^${container}/([^/]+)/`, pathNot: `^${container}/$1/` },
       };

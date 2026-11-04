@@ -53,10 +53,7 @@ describe('toDependencyCruiserRoleLayering exemptions', () => {
     };
     const allowed = (rule: string) =>
       rule === 'no-repository-to-service' ? ['src/c.repository.ts'] : [];
-    const [rule] = toDependencyCruiserRoleLayering([known], ['AUTO'], allowed).forbidden;
-    expect(rule!.from.pathNot).toEqual([
-      '(^|/)src/a\\.repository\\.ts$',
-      '(^|/)src/c\\.repository\\.ts$',
-    ]);
+    const [rule] = toDependencyCruiserRoleLayering([known], ['AUTO'], '.', allowed).forbidden;
+    expect(rule!.from.pathNot).toBe('^(?:src/a\\.repository\\.ts|src/c\\.repository\\.ts)$');
   });
 });

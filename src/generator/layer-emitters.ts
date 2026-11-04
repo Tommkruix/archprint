@@ -42,10 +42,11 @@ export function toDependencyCruiser(
     severity: 'error' as const,
     from: {
       path: layerPath(boundary.fromDirs, appPath),
-      pathNot: exemptDepcruiseFrom(TEST_ROLE_REGEX, [
-        ...boundary.violations,
-        ...allowedFor(layerRuleName(boundary)).map((file) => ({ file })),
-      ]),
+      pathNot: exemptDepcruiseFrom(
+        TEST_ROLE_REGEX,
+        [...boundary.violations, ...allowedFor(layerRuleName(boundary)).map((file) => ({ file }))],
+        appPath,
+      ),
     },
     to: {
       path: layerPath(boundary.toDirs, appPath),

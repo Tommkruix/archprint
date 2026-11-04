@@ -27,6 +27,7 @@ export interface EntryPurityConfig {
 export function toDependencyCruiserEntryPurity(
   analysis: EntryPurityAnalysis,
   allowedFor: (ruleId: string) => readonly string[],
+  appPath = '.',
 ): EntryPurityConfig {
   if (analysis.entryCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
   const conform = analysis.entryCount - analysis.offenderCount;
@@ -44,13 +45,14 @@ export function toDependencyCruiserEntryPurity(
           pathNot: exemptDepcruiseFrom(
             ['node_modules', TEST_ROLE_REGEX, entryPath()],
             allowedFor(ENTRY_PURITY_RULE).map((file) => ({ file })),
+            appPath,
           ),
         },
         to: {
           path: entryPath(),
           ...(importedEntries.length === 0
             ? {}
-            : { pathNot: exemptDepcruiseFrom([], importedEntries) }),
+            : { pathNot: exemptDepcruiseFrom([], importedEntries, appPath) }),
           dependencyTypesNot: ['type-only'],
         },
       },

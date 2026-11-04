@@ -33,6 +33,7 @@ export interface UiDataConfig {
 
 export function toDependencyCruiserUiData(
   analysis: UiDataIsolationAnalysis,
+  appPath = '.',
   allowedFor: AllowedFor = noneAllowed,
 ): UiDataConfig {
   if (analysis.componentCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
@@ -46,7 +47,7 @@ export function toDependencyCruiserUiData(
         severity: 'error',
         from: {
           path: componentPath(),
-          ...exemptingFrom(toleratedFiles(analysis.violations, allowedFor(UI_DATA_RULE))),
+          ...exemptingFrom(toleratedFiles(analysis.violations, allowedFor(UI_DATA_RULE)), appPath),
         },
         to: { path: dataPath() },
       },
