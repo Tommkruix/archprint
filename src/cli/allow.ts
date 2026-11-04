@@ -23,27 +23,9 @@ export interface AllowOptions {
   remove?: boolean;
 }
 
-const GENERATED_FOR_EITHER_ENFORCER: ReadonlySet<AdoptedRule['family']> = new Set([
-  'layer',
-  'phantom-deps',
-  'server-client',
-]);
-
-/** Families whose generated dependency-cruiser rules do not read the allowed list. */
-const UNEXEMPTED_BY_GENERATE: ReadonlySet<AdoptedRule['family']> = new Set([
-  'public-api',
-  'role-layering',
-  'feature-slice',
-  'app-isolation',
-  'stories-isolation',
-  'ui-data',
-]);
-
-/** What to run so the generated rules follow the change; nothing when regenerating would not change them. */
+/** What to run so the generated rules follow the change; cycles have no generated rule. */
 const regenerateHint = (rule: AdoptedRule): string =>
-  rule.family === 'cycles' || UNEXEMPTED_BY_GENERATE.has(rule.family)
-    ? ''
-    : ` Run archprint generate to update the ${GENERATED_FOR_EITHER_ENFORCER.has(rule.family) ? 'generated' : 'ESLint'} rules.`;
+  rule.family === 'cycles' ? '' : ' Run archprint generate to update the generated rules.';
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
@@ -91,8 +73,5 @@ export function runAllow(options: AllowOptions): string {
   }
   const entry: AllowedException = { rule: rule.id, file, reason };
   writeAllowed(outDir, [...others, entry]);
-  const lint = UNEXEMPTED_BY_GENERATE.has(rule.family)
-    ? ' dependency-cruiser does not read this list, so add the exception there too if you use it.'
-    : regenerateHint(rule);
-  return `Allowed ${rule.id} in ${file}. archprint check accepts it now.${lint}`;
+  return `Allowed ${rule.id} in ${file}. archprint check accepts it now.${regenerateHint(rule)}`;
 }
