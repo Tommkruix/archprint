@@ -9,6 +9,16 @@ import { ensureIgnoreEntry } from './ignore-file.js';
 import { reconcileWithAdopted, type Recommendations } from './recommend.js';
 import { renderAdoptionBody } from './report.js';
 import type { ScanResult } from './scan.js';
+import { currentExceptions } from './summary.js';
+import {
+  comparableIn,
+  firstRecorded,
+  fixedExceptions,
+  newExceptions,
+  NewViolationsError,
+  remeasured,
+  type RuleExceptions,
+} from './ratchet.js';
 import {
   type AdoptedRule,
   LEGACY_RULES_FILE,
@@ -52,6 +62,12 @@ export interface WriteLayoutResult {
   reset: string[];
   /** Every file this run wrote or changed, relative to the working directory. */
   touched: string[];
+  /** Recorded exceptions the code no longer has, so the rules now apply to them. */
+  fixed: RuleExceptions[];
+  /** Exceptions recorded for the first time, for rules an earlier version adopted without them. */
+  firstRecorded: RuleExceptions[];
+  /** Forbidden-import exceptions measured again because this run's resolution mode differs from the rule's. */
+  remeasured: RuleExceptions[];
 }
 
 export class UnknownRulesError extends Error {
@@ -138,7 +154,13 @@ export function writeLayout(
       requested.availableRules,
       options.structural ?? false,
     );
-  const previous = (readAdoptedRules(outDir) ?? []).map((rule) => rule.id);
+  const adoptedBefore = readAdoptedRules(outDir) ?? [];
+  const previousRules = options.reset ? [] : adoptedBefore;
+  const exceptionsNow = currentExceptions(scan);
+  const comparable = previousRules.filter(comparableIn(options.mode));
+  const broken = newExceptions(comparable, exceptionsNow);
+  if (broken.length > 0) throw new NewViolationsError(broken);
+  const previous = adoptedBefore.map((rule) => rule.id);
   const carried = options.reset ? [] : carriedRuleIds(previous, requested.adopted);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
@@ -148,6 +170,8 @@ export function writeLayout(
     version: options.version,
   });
   const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
+  const keptRules = previousRules.filter((rule) => emittedIds.has(rule.id));
+  const keptComparable = keptRules.filter(comparableIn(options.mode));
   const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
     (file): file is string => file !== null,
@@ -206,7 +230,13 @@ export function writeLayout(
         app: options.app,
         rulesDir: path.relative(options.cwd, outDir) || ARCHPRINT_DIR,
       },
-      { rules: emitted.rules, allowed: sortAllowed(allowed) },
+      {
+        rules: emitted.rules.map((rule) => ({
+          ...rule,
+          exceptions: exceptionsNow.get(rule.id) ?? [],
+        })),
+        allowed: sortAllowed(allowed),
+      },
       managed,
     ),
   );
@@ -220,6 +250,9 @@ export function writeLayout(
     kept: carried.filter((id) => emittedIds.has(id)),
     dropped: carried.filter((id) => !emittedIds.has(id)),
     reset: options.reset ? previous.filter((id) => !emittedIds.has(id)) : [],
+    fixed: fixedExceptions(keptComparable, exceptionsNow),
+    firstRecorded: firstRecorded(keptRules, exceptionsNow),
+    remeasured: remeasured(keptRules, exceptionsNow, options.mode),
     touched: [
       configPath,
       ...files,

@@ -213,7 +213,10 @@ that could be wrong is enforced without you opting in.
 
 Generated rules are green by construction: each one lets through the few known exception files it was inferred
 from, so adopting it keeps your lint green while new violations are still caught, and a self-consistency check
-refuses to write a rule whose evidence does not hold together. To run the generated rules against your code before
+refuses to write a rule whose evidence does not hold together. The exceptions are recorded with the rule in
+`.archprint/config.json` and only shrink: when you fix one, the next `generate` enforces the rule there too and
+says so, and a file that breaks an adopted rule later is never added to its exceptions. `generate` stops instead,
+names the file, and writes nothing until you fix it or accept it with `archprint allow` and a reason. To run the generated rules against your code before
 connecting them, use `archprint generate --check`.
 
 ## What it can detect

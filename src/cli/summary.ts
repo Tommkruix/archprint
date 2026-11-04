@@ -3,6 +3,7 @@ import type { FamilyKey } from '../detector/family-maturity.js';
 import { autoTier, type AutoTier } from './recommend.js';
 import type { ScanResult } from './scan.js';
 import { NO_CYCLES_RULE } from './adopted-rules.js';
+import { importPair } from '../generator/eslint-app-emitter.js';
 import { appIsolationRuleName } from '../generator/app-isolation-emitters.js';
 import { DEPENDENCY_INTERNALS_RULE } from '../generator/dependency-internals-emitters.js';
 import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
@@ -163,6 +164,24 @@ function collectGates(scan: ScanResult): GateEntry[] {
       files,
     });
   return entries;
+}
+
+/**
+ * What breaks each rule in this scan, any gate status, keyed as `allow` and `check` name it: the file that breaks
+ * it, the importing file for stories, and `importer -> entry` for entry purity, which ESLint exempts per import.
+ */
+export function currentExceptions(scan: ScanResult): Map<string, string[]> {
+  const byFamily: Partial<Record<FamilyKey, string[]>> = {
+    'entry-purity': scan.entryPurity.imports
+      .map(({ importer, file }) => importPair(importer, file))
+      .sort(),
+    'stories-isolation': [
+      ...new Set(scan.storiesIsolation.violations.map((story) => story.importer)),
+    ].sort(),
+  };
+  return new Map(
+    collectGates(scan).map((entry) => [entry.id, byFamily[entry.family] ?? entry.files]),
+  );
 }
 
 export function summarizeRules(

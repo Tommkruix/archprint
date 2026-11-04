@@ -23,6 +23,7 @@ import { summarizeRules, toScanSummary } from './summary.js';
 import { ARCHPRINT_DIR, FAMILY_NAMES, emitOne } from './generate.js';
 import { writeLayout } from './layout.js';
 import { runEslintCheck } from './eslint-check.js';
+import { formatExceptions } from './ratchet.js';
 import { CONFIG_FILE, readConfig, recordManagedFiles } from './archprint-config.js';
 import { assertRealDirectory, ownedPath, staysInsideItsFolder } from '../generator/owned-paths.js';
 import { stripAdoptionSection } from './adoption-readme.js';
@@ -399,25 +400,32 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const { files, removed, folded, configPath, kept, dropped, reset } = writeLayout(
-          scan,
-          outDir,
-          {
-            structural,
-            enforcers,
-            graph: options.graph,
-            expand: options.expand,
-            only: options.only,
-            ruleIds,
-            reset: options.reset,
-            mode: options.fast ? 'fast' : 'deep',
-            version,
-            recommendations,
-            app: displayPath(scan.appDir, cwd),
-            cwd,
-            readme: options.readme,
-          },
-        );
+        const {
+          files,
+          removed,
+          folded,
+          configPath,
+          kept,
+          dropped,
+          reset,
+          fixed,
+          firstRecorded,
+          remeasured,
+        } = writeLayout(scan, outDir, {
+          structural,
+          enforcers,
+          graph: options.graph,
+          expand: options.expand,
+          only: options.only,
+          ruleIds,
+          reset: options.reset,
+          mode: options.fast ? 'fast' : 'deep',
+          version,
+          recommendations,
+          app: displayPath(scan.appDir, cwd),
+          cwd,
+          readme: options.readme,
+        });
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
@@ -433,6 +441,18 @@ export function buildProgram(version = readVersion()): Command {
         if (reset.length > 0)
           console.log(
             `Reset to the default rules: removed ${reset.length} previously adopted rule(s): ${reset.join(', ')}.`,
+          );
+        if (fixed.length > 0)
+          console.log(
+            `Fixed since the last run, so the rules now apply to them:\n${formatExceptions(fixed)}`,
+          );
+        if (remeasured.length > 0)
+          console.log(
+            `Measured again, since these rules were adopted from a ${options.fast ? 'full' : 'fast'} scan and this run is ${options.fast ? 'fast' : 'full'}; run in the rule's mode to compare:\n${formatExceptions(remeasured)}`,
+          );
+        if (firstRecorded.length > 0)
+          console.log(
+            `Recorded the existing exceptions of rules adopted by an earlier archprint; from now on generate only removes them as they are fixed:\n${formatExceptions(firstRecorded)}`,
           );
         if (files.length === 0) {
           if (heldStructuralAuto > 0) {

@@ -79,6 +79,11 @@ describe('dependency rules through the CLI', () => {
 
     expect(allow(PHANTOM, 'src/lib/new-phantom.ts')).toContain('update the generated rules');
     allow(SERVER_CLIENT, 'src/components/new-client.tsx');
+    await expect(generate('eslint', '--include-structural')).rejects.toThrow(
+      /no-dependency-internals: src\/lib\/new-internal\.ts\n {2}no-import-framework-entry: src\/lib\/new-entry\.ts -> src\/app\/r9\/page\.tsx/,
+    );
+    for (const file of ['src/lib/new-internal.ts', 'src/lib/new-entry.ts'])
+      rmSync(path.join(repo, file));
     await generate('eslint', '--include-structural');
     const eslint = readFileSync(out('eslint.mjs'), 'utf8');
     expect(eslint).toContain('"src/lib/new-phantom.ts"');
