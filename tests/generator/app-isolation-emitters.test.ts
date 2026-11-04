@@ -53,7 +53,7 @@ describe('toDependencyCruiserAppIsolation in an app below the repository root', 
     const [rule] = toDependencyCruiserAppIsolation([known], ['AUTO'], 'web', allowed).forbidden;
     expect(rule!.from.path).toBe('^web/apps/([^/]+)/');
     expect(rule!.to.pathNot).toBe('^web/apps/$1/');
-    expect(rule!.from.pathNot).toBe('^web/(?:apps/a/x\\.ts|apps/a/z\\.ts)$');
+    expect(rule!.from.pathNot).toBe('^(?:web/)?(?:apps/a/x\\.ts|apps/a/z\\.ts)$');
   });
 
   it('adds no exemption when nothing is known or allowed', () => {

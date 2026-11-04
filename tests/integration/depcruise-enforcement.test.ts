@@ -142,4 +142,20 @@ describe('exemptions in a monorepo with two apps (real dependency-cruiser)', () 
       ),
     ).toEqual(['not-to-test: apps/api/src/lib/legacy.ts']);
   });
+
+  it('exempts the known exception when dependency-cruiser runs inside the app', async () => {
+    await buildProgram('9.9.9').parseAsync(
+      ['generate', 'apps/web', '--emit', 'dependency-cruiser'],
+      { from: 'user' },
+    );
+    const ruleSet = JSON.parse(
+      readFileSync(path.join(repo, '.archprint', 'dependency-cruiser.json'), 'utf8'),
+    ) as IFlattenedRuleSet;
+    const result = await cruise(['src'], {
+      validate: true,
+      ruleSet,
+      baseDir: path.join(repo, 'apps', 'web'),
+    });
+    expect((result.output as ICruiseResult).summary.violations).toEqual([]);
+  });
 });

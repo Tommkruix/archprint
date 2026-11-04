@@ -68,7 +68,7 @@ describe('toDependencyCruiserPublicApi in an app below the repository root', () 
     expect(rule!.from.pathNot).toEqual(
       expect.arrayContaining([
         '^apps/web/features/auth/',
-        '^apps/web/(?:src/allowed\\.ts|src/known\\.ts)$',
+        '^(?:apps/web/)?(?:src/allowed\\.ts|src/known\\.ts)$',
       ]),
     );
   });

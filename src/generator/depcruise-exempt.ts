@@ -31,9 +31,15 @@ export const exemptingFrom = (
   tolerated.length === 0 ? {} : { pathNot: exemptDepcruiseFrom([], tolerated, appPath) };
 
 /**
- * The base patterns, plus one regex for exactly the tolerated app files as dependency-cruiser reports them from
- * where archprint ran, never another file whose path ends the same, in this app or a sibling one.
+ * Exactly these app files, whether dependency-cruiser runs where archprint ran (`apps/web/src/a.ts`) or inside the
+ * app (`src/a.ts`), as the ESLint exemptions allow both; never a sibling app's file or one whose path ends the same.
  */
+const toleratedAppFiles = (files: readonly string[], appPath: string): string => {
+  const prefix = appPathPrefix(appPath);
+  return `^${prefix === '' ? '' : `(?:${prefix})?`}(?:${files.map(escapeRegExp).join('|')})$`;
+};
+
+/** The base patterns, plus one regex for exactly the tolerated app files. */
 export function exemptDepcruiseFrom(
   base: string | readonly string[],
   tolerated: readonly { file: string }[],
@@ -42,7 +48,7 @@ export function exemptDepcruiseFrom(
   const files = [...new Set(tolerated.map((item) => item.file))].sort();
   const parts = [
     ...(typeof base === 'string' ? [base] : base),
-    ...(files.length === 0 ? [] : [exactAppFiles(files, appPath)]),
+    ...(files.length === 0 ? [] : [toleratedAppFiles(files, appPath)]),
   ];
   return parts.length === 1 ? parts[0]! : parts;
 }

@@ -24,7 +24,7 @@ describe('exemptDepcruiseFrom', () => {
     expect(pattern.test('mylib/legacy.ts')).toBe(false);
   });
 
-  it('exempts the file in its own app, not the same path in a sibling app', () => {
+  it('exempts the file from the repository root or inside its app, never in a sibling app', () => {
     const [, tolerated] = exemptDepcruiseFrom(
       'node_modules',
       [{ file: 'lib/legacy.ts' }],
@@ -32,7 +32,8 @@ describe('exemptDepcruiseFrom', () => {
     );
     const pattern = new RegExp(tolerated!);
     expect(pattern.test('apps/web/lib/legacy.ts')).toBe(true);
+    expect(pattern.test('lib/legacy.ts')).toBe(true);
     expect(pattern.test('apps/api/lib/legacy.ts')).toBe(false);
-    expect(pattern.test('lib/legacy.ts')).toBe(false);
+    expect(pattern.test('apps/web/src/lib/legacy.ts')).toBe(false);
   });
 });
