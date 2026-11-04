@@ -49,7 +49,7 @@ export interface ScanSummary {
   rules: RuleSummary[];
 }
 
-interface GateEntry {
+export interface GateEntry {
   family: FamilyKey;
   id: string;
   label: string;
@@ -58,7 +58,22 @@ interface GateEntry {
   files: string[];
 }
 
-const SINGLE_RULE_IDS: Record<SingleFamily, string> = {
+/** The scan analysis each single-rule family reads; cycles have their own shape. */
+export const SINGLE_ANALYSES = {
+  'test-isolation': 'testIsolation',
+  'dependency-hygiene': 'dependencyInternals',
+  'phantom-deps': 'phantomDependencies',
+  'entry-purity': 'entryPurity',
+  'import-style': 'deepRelative',
+  'console-isolation': 'consoleIsolation',
+  'env-access': 'envAccess',
+  'workspace-package-api': 'workspacePackageApi',
+  'stories-isolation': 'storiesIsolation',
+  'ui-data': 'uiDataIsolation',
+  'server-client': 'serverClient',
+} as const satisfies Record<Exclude<SingleFamily, 'cycles'>, keyof ScanResult>;
+
+export const SINGLE_RULE_IDS: Record<SingleFamily, string> = {
   cycles: NO_CYCLES_RULE,
   'test-isolation': 'test-isolation',
   'dependency-hygiene': DEPENDENCY_INTERNALS_RULE,
@@ -76,7 +91,7 @@ const SINGLE_RULE_IDS: Record<SingleFamily, string> = {
 const filesOf = (violations: readonly { file: string }[]): string[] =>
   [...new Set(violations.map((violation) => violation.file))].sort();
 
-function collectGates(scan: ScanResult): GateEntry[] {
+export function collectGates(scan: ScanResult): GateEntry[] {
   const entries: GateEntry[] = [];
   for (const pattern of scan.patterns)
     entries.push({
@@ -134,25 +149,13 @@ function collectGates(scan: ScanResult): GateEntry[] {
     });
   const singles: [SingleFamily, GateResult, string[]][] = [
     ['cycles', scan.cycles.gate, [...new Set(scan.cycles.cycles.flatMap((c) => c.files))].sort()],
-    ['test-isolation', scan.testIsolation.gate, filesOf(scan.testIsolation.violations)],
-    [
-      'dependency-hygiene',
-      scan.dependencyInternals.gate,
-      filesOf(scan.dependencyInternals.violations),
-    ],
-    ['phantom-deps', scan.phantomDependencies.gate, filesOf(scan.phantomDependencies.violations)],
-    ['entry-purity', scan.entryPurity.gate, filesOf(scan.entryPurity.violations)],
-    ['import-style', scan.deepRelative.gate, filesOf(scan.deepRelative.violations)],
-    ['console-isolation', scan.consoleIsolation.gate, filesOf(scan.consoleIsolation.violations)],
-    ['env-access', scan.envAccess.gate, filesOf(scan.envAccess.violations)],
-    [
-      'workspace-package-api',
-      scan.workspacePackageApi.gate,
-      filesOf(scan.workspacePackageApi.violations),
-    ],
-    ['stories-isolation', scan.storiesIsolation.gate, filesOf(scan.storiesIsolation.violations)],
-    ['ui-data', scan.uiDataIsolation.gate, filesOf(scan.uiDataIsolation.violations)],
-    ['server-client', scan.serverClient.gate, filesOf(scan.serverClient.violations)],
+    ...Object.entries(SINGLE_ANALYSES).map(
+      ([family, key]): [SingleFamily, GateResult, string[]] => [
+        family as SingleFamily,
+        scan[key].gate,
+        filesOf(scan[key].violations),
+      ],
+    ),
   ];
   for (const [family, gate, files] of singles)
     entries.push({
