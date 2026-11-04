@@ -24,6 +24,7 @@ const STORY_PATH = '\\.stories\\.(ts|tsx)$';
 
 export function toDependencyCruiserStoriesIsolation(
   analysis: StoriesIsolationAnalysis,
+  appPath = '.',
   allowedFor: AllowedFor = noneAllowed,
 ): StoriesIsolationConfig {
   if (analysis.storyCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
@@ -42,6 +43,7 @@ export function toDependencyCruiserStoriesIsolation(
               analysis.violations.map((story) => ({ file: story.importer })),
               allowedFor(STORIES_ISOLATION_RULE),
             ),
+            appPath,
           ),
         },
         to: { path: STORY_PATH },

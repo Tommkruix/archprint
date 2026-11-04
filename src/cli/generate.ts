@@ -349,7 +349,10 @@ export function collectEnforcement(
   if (emitDepcruise) {
     pushDc('layer', toDependencyCruiser(layers, ['AUTO'], appPath, allowedFor).forbidden);
     if (phantom !== null)
-      pushDc('phantom-deps', toDependencyCruiserPhantomDependencies(phantom, allowedFor).forbidden);
+      pushDc(
+        'phantom-deps',
+        toDependencyCruiserPhantomDependencies(phantom, allowedFor, appPath).forbidden,
+      );
     if (serverClient !== null)
       pushDc(
         'server-client',
@@ -358,10 +361,10 @@ export function collectEnforcement(
     if (internals !== null)
       pushDc(
         'dependency-internals',
-        toDependencyCruiserDependencyInternals(internals, allowedFor).forbidden,
+        toDependencyCruiserDependencyInternals(internals, allowedFor, appPath).forbidden,
       );
     if (entry !== null)
-      pushDc('entry-purity', toDependencyCruiserEntryPurity(entry, allowedFor).forbidden);
+      pushDc('entry-purity', toDependencyCruiserEntryPurity(entry, allowedFor, appPath).forbidden);
   }
   adopted.push(...layers.map(layerRule));
   if (phantom !== null) adopted.push(phantomDependencyRule(scan));
@@ -377,7 +380,7 @@ export function collectEnforcement(
     );
     pushDc(
       'role-layering',
-      toDependencyCruiserRoleLayering(boundaries, ['AUTO'], allowedFor).forbidden,
+      toDependencyCruiserRoleLayering(boundaries, ['AUTO'], appPath, allowedFor).forbidden,
     );
     adopted.push(...boundaries.map(roleLayeringRule));
   }
@@ -412,7 +415,11 @@ export function collectEnforcement(
     adopted.push(...groups.map(appIsolationRule));
   }
   if (pick('test-isolation') && !emitEslint && emitDepcruise) {
-    const forbidden = toDependencyCruiserTestIsolation(scan.testIsolation, allowedFor).forbidden;
+    const forbidden = toDependencyCruiserTestIsolation(
+      scan.testIsolation,
+      appPath,
+      allowedFor,
+    ).forbidden;
     if (forbidden.length > 0 && selects('test-isolation')) {
       pushDc('test-isolation', forbidden);
       adopted.push(testIsolationRule(scan));
@@ -420,14 +427,14 @@ export function collectEnforcement(
   }
   if (structural && emitDepcruise && pick('stories-isolation')) {
     const forbidden = selected(
-      toDependencyCruiserStoriesIsolation(scan.storiesIsolation, allowedFor).forbidden,
+      toDependencyCruiserStoriesIsolation(scan.storiesIsolation, appPath, allowedFor).forbidden,
     );
     pushDc('stories-isolation', forbidden);
     if (forbidden.length > 0) adopted.push(storiesIsolationRule(scan));
   }
   if (structural && emitDepcruise && pick('ui-data')) {
     const forbidden = selected(
-      toDependencyCruiserUiData(scan.uiDataIsolation, allowedFor).forbidden,
+      toDependencyCruiserUiData(scan.uiDataIsolation, appPath, allowedFor).forbidden,
     );
     pushDc('ui-data', forbidden);
     if (forbidden.length > 0) adopted.push(uiDataRule(scan));

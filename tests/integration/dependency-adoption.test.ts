@@ -101,7 +101,10 @@ describe('dependency rules through the CLI', () => {
     const names = depcruise.forbidden.map((rule) => rule.name);
     expect(names).toEqual(expect.arrayContaining([PHANTOM, SERVER_CLIENT]));
     const phantom = depcruise.forbidden.find((rule) => rule.name === PHANTOM)!;
-    expect(phantom.from.pathNot).toContain('(^|/)src/lib/new-phantom\\.ts$');
+    const exempts = (file: string): boolean =>
+      phantom.from.pathNot.some((pattern) => new RegExp(pattern).test(file));
+    expect(exempts('src/lib/new-phantom.ts')).toBe(true);
+    expect(exempts('src/lib/other.ts')).toBe(false);
     expect(readAdoptedRules(out())!.map((rule) => rule.id)).toEqual(
       expect.arrayContaining([PHANTOM, SERVER_CLIENT]),
     );

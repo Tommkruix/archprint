@@ -26,6 +26,7 @@ export interface NotToTestConfig {
 
 export function toDependencyCruiserTestIsolation(
   analysis: TestIsolationAnalysis,
+  appPath = '.',
   allowedFor: AllowedFor = noneAllowed,
 ): NotToTestConfig {
   if (analysis.testFileCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
@@ -41,6 +42,7 @@ export function toDependencyCruiserTestIsolation(
           pathNot: exemptDepcruiseFrom(
             TEST_PATH,
             toleratedFiles(analysis.violations, allowedFor('test-isolation')),
+            appPath,
           ),
         },
         to: { path: TEST_PATH },

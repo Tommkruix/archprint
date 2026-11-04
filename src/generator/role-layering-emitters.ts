@@ -30,6 +30,7 @@ export interface RoleLayeringConfig {
 export function toDependencyCruiserRoleLayering(
   boundaries: readonly RoleBoundary[],
   include: readonly GenerationStatus[] = ['AUTO'],
+  appPath = '.',
   allowedFor: AllowedFor = noneAllowed,
 ): RoleLayeringConfig {
   const forbidden = boundaries
@@ -42,7 +43,7 @@ export function toDependencyCruiserRoleLayering(
         severity: 'error' as const,
         from: {
           path: rolePath(boundary.from),
-          ...exemptingFrom(toleratedFiles(boundary.violations, allowedFor(name))),
+          ...exemptingFrom(toleratedFiles(boundary.violations, allowedFor(name)), appPath),
         },
         to: { path: rolePath(boundary.to) },
       };

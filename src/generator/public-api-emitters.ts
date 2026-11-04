@@ -49,6 +49,7 @@ export function toDependencyCruiserPublicApi(
           pathNot: exemptDepcruiseFrom(
             [TEST_ROLE_REGEX, `^${dir}/`],
             toleratedFiles(group.violations, allowedFor(name)),
+            appPath,
           ),
         },
         to: { path: `^${dir}/`, pathNot: `^${dir}/index\\.(ts|tsx)$` },

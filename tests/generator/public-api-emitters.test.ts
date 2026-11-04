@@ -42,7 +42,7 @@ describe('toDependencyCruiserPublicApi', () => {
     const config = toDependencyCruiserPublicApi([
       group('features/auth', 200, 1, ['src/legacy.ts']),
     ]);
-    expect(config.forbidden[0]!.from.pathNot).toContain('(^|/)src/legacy\\.ts$');
+    expect(config.forbidden[0]!.from.pathNot).toContain('^(?:src/legacy\\.ts)$');
   });
 
   it('emits only AUTO groups by default, and SUGGEST when asked', () => {
@@ -68,8 +68,7 @@ describe('toDependencyCruiserPublicApi in an app below the repository root', () 
     expect(rule!.from.pathNot).toEqual(
       expect.arrayContaining([
         '^apps/web/features/auth/',
-        '(^|/)src/known\\.ts$',
-        '(^|/)src/allowed\\.ts$',
+        '^apps/web/(?:src/allowed\\.ts|src/known\\.ts)$',
       ]),
     );
   });

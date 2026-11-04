@@ -26,17 +26,23 @@ export const toleratedFiles = (
 /** A `from` exemption for the tolerated files, or none when there are none. */
 export const exemptingFrom = (
   tolerated: readonly { file: string }[],
+  appPath: string,
 ): { pathNot?: string | string[] } =>
-  tolerated.length === 0 ? {} : { pathNot: exemptDepcruiseFrom([], tolerated) };
+  tolerated.length === 0 ? {} : { pathNot: exemptDepcruiseFrom([], tolerated, appPath) };
 
+/**
+ * The base patterns, plus one regex for exactly the tolerated app files as dependency-cruiser reports them from
+ * where archprint ran, never another file whose path ends the same, in this app or a sibling one.
+ */
 export function exemptDepcruiseFrom(
   base: string | readonly string[],
-  violations: readonly { file: string }[],
+  tolerated: readonly { file: string }[],
+  appPath: string,
 ): string | string[] {
-  const bases = typeof base === 'string' ? [base] : [...base];
+  const files = [...new Set(tolerated.map((item) => item.file))].sort();
   const parts = [
-    ...bases,
-    ...violations.map((violation) => `(^|/)${escapeRegExp(violation.file)}$`),
+    ...(typeof base === 'string' ? [base] : base),
+    ...(files.length === 0 ? [] : [exactAppFiles(files, appPath)]),
   ];
   return parts.length === 1 ? parts[0]! : parts;
 }

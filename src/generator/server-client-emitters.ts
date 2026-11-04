@@ -39,10 +39,11 @@ export function toDependencyCruiserServerClient(
         severity: 'error',
         from: {
           path: exactAppFiles(analysis.clients, appPath),
-          pathNot: exemptDepcruiseFrom(TEST_ROLE_REGEX, [
-            ...analysis.violations,
-            ...allowedFor(SERVER_CLIENT_RULE).map((file) => ({ file })),
-          ]),
+          pathNot: exemptDepcruiseFrom(
+            TEST_ROLE_REGEX,
+            [...analysis.violations, ...allowedFor(SERVER_CLIENT_RULE).map((file) => ({ file }))],
+            appPath,
+          ),
         },
         to: {
           path:

@@ -18,6 +18,7 @@ export interface PhantomDependencyConfig {
 export function toDependencyCruiserPhantomDependencies(
   analysis: PhantomDependencyAnalysis,
   allowedFor: (ruleId: string) => readonly string[] = () => [],
+  appPath = '.',
 ): PhantomDependencyConfig {
   if (analysis.externalImporterCount === 0 || analysis.gate.status !== 'AUTO') {
     return { forbidden: [] };
@@ -37,6 +38,7 @@ export function toDependencyCruiserPhantomDependencies(
               ...analysis.violations,
               ...allowedFor(PHANTOM_DEPENDENCY_RULE).map((file) => ({ file })),
             ],
+            appPath,
           ),
         },
         to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] },

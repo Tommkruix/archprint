@@ -41,10 +41,7 @@ describe('toDependencyCruiserUiData exemptions', () => {
     };
     const allowed = (rule: string) =>
       rule === 'no-ui-to-data' ? ['src/components/admin.tsx'] : [];
-    const [rule] = toDependencyCruiserUiData(known, allowed).forbidden;
-    expect(rule!.from.pathNot).toEqual([
-      '(^|/)src/components/list\\.tsx$',
-      '(^|/)src/components/admin\\.tsx$',
-    ]);
+    const [rule] = toDependencyCruiserUiData(known, '.', allowed).forbidden;
+    expect(rule!.from.pathNot).toBe('^(?:src/components/admin\\.tsx|src/components/list\\.tsx)$');
   });
 });
