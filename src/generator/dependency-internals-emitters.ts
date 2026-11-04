@@ -20,6 +20,7 @@ export interface NoInternalsConfig {
 export function toDependencyCruiserDependencyInternals(
   analysis: DependencyInternalsAnalysis,
   allowedFor: (ruleId: string) => readonly string[],
+  appPath = '.',
 ): NoInternalsConfig {
   if (analysis.externalImporterCount === 0 || analysis.gate.status !== 'AUTO') {
     return { forbidden: [] };
@@ -39,6 +40,7 @@ export function toDependencyCruiserDependencyInternals(
               ...analysis.violations,
               ...allowedFor(DEPENDENCY_INTERNALS_RULE).map((file) => ({ file })),
             ],
+            appPath,
           ),
         },
         to: { path: INTERNAL_PATH },

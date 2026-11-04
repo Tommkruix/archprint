@@ -82,21 +82,32 @@ never left with config for a tool you do not have (`--emit all` forces every for
   rules to your existing ESLint setup, which already parses your TypeScript), so it can be committed, published,
   or shared and adopted in one line,
 - `.archprint/dependency-cruiser.json` (when dependency-cruiser is present): one `forbidden` ruleset,
-- a managed section in your `README.md` explaining what is enforced, followed but only reported, held for review,
-  and worth adopting, plus a managed `.prettierignore` entry so the generated files stay out of your formatter.
+- a managed `.prettierignore` entry so the generated files stay out of your formatter, and, with `--readme`, a
+  managed section in your `README.md` listing each adopted rule with this repo's evidence, what your code follows
+  but no rule enforces, and what is held for review.
 
 `--expand` additionally writes the granular artifacts inside `.archprint/`: per-family ESLint and
 dependency-cruiser JSON, a plugin, per-rule cards with passing and failing fixtures, ts-arch tests, and the
 layer graph.
 
 `generate --check` runs the generated ESLint rules against your repo and reports pass/fail, so you can
-confirm they are green before wiring.
+confirm they are green before wiring. On its own it checks the rules already generated and writes nothing; with
+other flags it generates first. It uses the ESLint installed in your repo (version 9 or later). Once the rules are
+wired, it lints through your own ESLint config and names any generated rule that config turns off or overrides for
+some files, so a rule that is generated but not in force does not pass unnoticed.
 
 Re-running `generate` **cleans its previous outputs first**, so a rule the evidence no longer supports stops
 being enforced instead of lingering. `wire` inserts a single managed, reversible reference into the enforcement
 tools your repo already uses (a flat ESLint config, a `.dependency-cruiser.json`); `eject` removes the files and
 every wired reference, restoring each config exactly. A generated rule also grandfathers the few known exception
 files it was inferred from, so adopting it is green on your current code while new violations are still caught.
+Those exceptions are recorded with the rule in `.archprint/config.json` and only shrink. A fixed exception is
+enforced from the next `generate` on, and that run lists it. A file that breaks an adopted rule after it was written
+never joins the exceptions: `generate` stops, names it, and writes nothing until you fix it or accept it with
+`archprint allow <rule> <file> --reason "..."`. Rules adopted by an earlier archprint version have their current
+exceptions recorded on the first run, and that run lists every one. A forbidden-import (AP-) rule adopted from a full
+scan and regenerated with `--fast`, or the other way round, has its exceptions measured again and listed, because
+the two scans see different imports.
 
 Upgrading from an older `archprint-rules/` layout? `archprint migrate` (alias `upgrade`) moves it to `.archprint/`
 and rewrites the reference in your linter config in place, writing the new files before removing the old ones so

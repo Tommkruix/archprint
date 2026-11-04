@@ -42,7 +42,7 @@ describe('toDependencyCruiserPublicApi', () => {
     const config = toDependencyCruiserPublicApi([
       group('features/auth', 200, 1, ['src/legacy.ts']),
     ]);
-    expect(config.forbidden[0]!.from.pathNot).toContain('(^|/)src/legacy\\.ts$');
+    expect(config.forbidden[0]!.from.pathNot).toContain('^(?:src/legacy\\.ts)$');
   });
 
   it('emits only AUTO groups by default, and SUGGEST when asked', () => {
@@ -50,5 +50,26 @@ describe('toDependencyCruiserPublicApi', () => {
     expect(groups.map((g) => g.gate.status)).toEqual(['AUTO', 'SUGGEST']);
     expect(toDependencyCruiserPublicApi(groups).forbidden).toHaveLength(1);
     expect(toDependencyCruiserPublicApi(groups, ['AUTO', 'SUGGEST']).forbidden).toHaveLength(2);
+  });
+});
+
+describe('toDependencyCruiserPublicApi in an app below the repository root', () => {
+  it('prefixes the app path and exempts the known and the allowed deep importers', () => {
+    const allowed = (rule: string) =>
+      rule === 'no-deep-import-features-auth' ? ['src/allowed.ts'] : [];
+    const [rule] = toDependencyCruiserPublicApi(
+      [group('features/auth', 200, 1, ['src/known.ts'])],
+      ['AUTO'],
+      'apps/web',
+      allowed,
+    ).forbidden;
+    expect(rule!.to.path).toBe('^apps/web/features/auth/');
+    expect(rule!.to.pathNot).toBe('^apps/web/features/auth/index\\.(ts|tsx)$');
+    expect(rule!.from.pathNot).toEqual(
+      expect.arrayContaining([
+        '^apps/web/features/auth/',
+        '^(?:apps/web/)?(?:src/allowed\\.ts|src/known\\.ts)$',
+      ]),
+    );
   });
 });

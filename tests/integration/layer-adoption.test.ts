@@ -122,6 +122,9 @@ describe('layer rules through the CLI', () => {
       forbidden: { name: string; from: { pathNot: string[] } }[];
     };
     const rule = depcruise.forbidden.find((candidate) => candidate.name === LAYER_RULE)!;
-    expect(rule.from.pathNot).toContain('(^|/)src/lib/leak\\.ts$');
+    const exempts = (file: string): boolean =>
+      rule.from.pathNot.some((pattern) => new RegExp(pattern).test(file));
+    expect(exempts('src/lib/leak.ts')).toBe(true);
+    expect(exempts('src/lib/other.ts')).toBe(false);
   });
 });

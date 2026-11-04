@@ -1,44 +1,14 @@
 import type { DeepRelativeAnalysis } from '../detector/deep-relative-detector.js';
-import { literalGlob } from './eslint-scope.js';
+import { withMinedExemptions } from './console-isolation-emitters.js';
+import type { EslintFamilyRule } from './eslint-family-rules.js';
+import { TEST_GLOBS } from './eslint-scope.js';
 
-export interface NoRestrictedImportsPattern {
-  regex: string;
-  message: string;
-}
-
-export interface EslintNoRestrictedImportsConfig {
-  ignores?: string[];
-  rules: {
-    'no-restricted-imports': ['error', { patterns: NoRestrictedImportsPattern[] }];
-  };
-}
-
-export function exemptImporters(
-  violations: readonly { file: string }[],
-): Pick<EslintNoRestrictedImportsConfig, 'ignores'> {
-  return violations.length > 0
-    ? { ignores: violations.map((violation) => literalGlob(violation.file)) }
-    : {};
-}
-
-export function toEslintDeepRelative(
-  analysis: DeepRelativeAnalysis,
-): EslintNoRestrictedImportsConfig | null {
+export function toEslintDeepRelative(analysis: DeepRelativeAnalysis): EslintFamilyRule | null {
   if (analysis.relativeImporterCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {
-    ...exemptImporters(analysis.violations),
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              regex: '^(\\.\\./){3,}',
-              message: 'Deep relative import: use a workspace alias instead of ../../../',
-            },
-          ],
-        },
-      ],
-    },
+    name: 'import-style',
+    message: 'Deep relative import: use a workspace alias instead of ../../../',
+    ignores: withMinedExemptions([...TEST_GLOBS], analysis.violations),
+    check: { kind: 'import', regex: '^(\\.\\./){3,}', typeImports: true },
   };
 }

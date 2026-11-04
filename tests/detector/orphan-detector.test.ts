@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { detectOrphans } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -30,9 +32,45 @@ describe('detectOrphans', () => {
     expect(analysis.orphans).toEqual(['lib/orphan.ts']);
   });
 
-  it('fast and deep modes agree', () => {
-    const fast = detectOrphans(fixture, { resolve: false }).orphans;
-    const deep = detectOrphans(fixture, { resolve: true }).orphans;
-    expect(deep).toEqual(fast);
+  describe('in a Next.js app with Storybook, Vitest, type-only imports and barrels', () => {
+    let app: string;
+    beforeAll(() => {
+      app = mkdtempSync(path.join(tmpdir(), 'archprint-orphans-'));
+      const files: Record<string, string> = {
+        'tsconfig.json': JSON.stringify({ compilerOptions: { paths: { '@/*': ['./*'] } } }),
+        'app/page.tsx':
+          "import { list } from '@/lib/api/all';\nimport type { Pm } from '@/types/pm';\nexport default function Page(p: Pm) { return list(p); }\n",
+        'app/robots.ts': 'export default function robots() { return {}; }\n',
+        'app/sitemap.ts': 'export default function sitemap() { return []; }\n',
+        'app/blog/opengraph-image.tsx': 'export default function Image() { return null; }\n',
+        'instrumentation-client.ts': 'export const onRouterTransitionStart = () => {};\n',
+        'proxy.ts': 'export function proxy() {}\n',
+        'components/button.tsx': 'export const Button = () => null;\n',
+        'components/button.stories.tsx':
+          "import { Button } from './button';\nexport default { component: Button };\n",
+        'vitest.config.ts': "export default { test: { setupFiles: ['./vitest.setup.ts'] } };\n",
+        'vitest.setup.ts': 'export {};\n',
+        'types/pm.ts': 'export interface Pm { id: string }\n',
+        'lib/api/all.ts': "export * from './leaf';\n",
+        'lib/api/leaf.ts': 'export const list = (p: unknown) => p;\n',
+        'components/pm-view.tsx': 'export const PmView = () => null;\n',
+        'components/pm-view.test.tsx':
+          "import { PmView } from './pm-view';\nexport const t = PmView;\n",
+        'lib/unused.ts': 'export const unused = 1;\n',
+      };
+      for (const [file, content] of Object.entries(files)) {
+        mkdirSync(path.dirname(path.join(app, file)), { recursive: true });
+        writeFileSync(path.join(app, file), content);
+      }
+    });
+    afterAll(() => rmSync(app, { recursive: true, force: true }));
+
+    it('reports only the file nothing references as an orphan', () => {
+      expect(detectOrphans(app).orphans).toEqual(['lib/unused.ts']);
+    });
+
+    it('reports a production file only its test imports separately', () => {
+      expect(detectOrphans(app).testOnly).toEqual(['components/pm-view.tsx']);
+    });
   });
 });

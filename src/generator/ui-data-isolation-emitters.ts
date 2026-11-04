@@ -1,5 +1,6 @@
 import type { UiDataIsolationAnalysis } from '../detector/ui-data-isolation-detector.js';
 import { ROLE_PATTERNS } from '../scanner/role-classifier.js';
+import { type AllowedFor, exemptingFrom, noneAllowed, toleratedFiles } from './depcruise-exempt.js';
 import type { Role } from '../scanner/role-classifier.js';
 
 export const UI_DATA_RULE = 'no-ui-to-data';
@@ -22,7 +23,7 @@ export interface UiDataRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { path: string };
+  from: { path: string; pathNot?: string | string[] };
   to: { path: string };
 }
 
@@ -30,7 +31,11 @@ export interface UiDataConfig {
   forbidden: UiDataRule[];
 }
 
-export function toDependencyCruiserUiData(analysis: UiDataIsolationAnalysis): UiDataConfig {
+export function toDependencyCruiserUiData(
+  analysis: UiDataIsolationAnalysis,
+  appPath = '.',
+  allowedFor: AllowedFor = noneAllowed,
+): UiDataConfig {
   if (analysis.componentCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
   const conform = analysis.componentCount - analysis.offenderCount;
   const floor = `${(analysis.gate.conditions.confidence.value * 100).toFixed(0)}%`;
@@ -40,7 +45,10 @@ export function toDependencyCruiserUiData(analysis: UiDataIsolationAnalysis): Ui
         name: UI_DATA_RULE,
         comment: `Archprint inferred UI/data separation: ${conform}/${analysis.componentCount} UI components never import the data layer (files under db, database or prisma folders, or a prisma, drizzle or kysely client file) directly; a component importing it is forbidden (confidence ${floor}).`,
         severity: 'error',
-        from: { path: componentPath() },
+        from: {
+          path: componentPath(),
+          ...exemptingFrom(toleratedFiles(analysis.violations, allowedFor(UI_DATA_RULE)), appPath),
+        },
         to: { path: dataPath() },
       },
     ],

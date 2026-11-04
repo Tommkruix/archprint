@@ -43,3 +43,17 @@ describe('toDependencyCruiserRoleLayering', () => {
     expect(toDependencyCruiserRoleLayering(list, ['AUTO', 'SUGGEST']).forbidden).toHaveLength(2);
   });
 });
+
+describe('toDependencyCruiserRoleLayering exemptions', () => {
+  it('exempts the known and the allowed files that break the boundary', () => {
+    const known = {
+      ...boundary('REPOSITORY', 'SERVICE', 1),
+      gate: evaluateGate({ roleFileCount: 200, violatingFileCount: 1, roleConfidence: 1 }),
+      violations: [{ file: 'src/a.repository.ts', target: 'src/b.service.ts' }],
+    };
+    const allowed = (rule: string) =>
+      rule === 'no-repository-to-service' ? ['src/c.repository.ts'] : [];
+    const [rule] = toDependencyCruiserRoleLayering([known], ['AUTO'], '.', allowed).forbidden;
+    expect(rule!.from.pathNot).toBe('^(?:src/a\\.repository\\.ts|src/c\\.repository\\.ts)$');
+  });
+});

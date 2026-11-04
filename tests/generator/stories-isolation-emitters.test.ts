@@ -32,3 +32,18 @@ describe('toDependencyCruiserStoriesIsolation', () => {
     expect(toDependencyCruiserStoriesIsolation(analysis(5, 3)).forbidden).toEqual([]);
   });
 });
+
+describe('toDependencyCruiserStoriesIsolation exemptions', () => {
+  it('exempts the files that import a story, known or allowed, not the stories', () => {
+    const known = {
+      ...analysis(200, 1),
+      violations: [{ file: 'src/Button.stories.tsx', importer: 'src/app.tsx' }],
+    };
+    const allowed = (rule: string) => (rule === 'no-import-stories' ? ['src/docs.tsx'] : []);
+    const [rule] = toDependencyCruiserStoriesIsolation(known, '.', allowed).forbidden;
+    expect(rule!.from.pathNot).toEqual([
+      '\\.stories\\.(ts|tsx)$',
+      '^(?:src/app\\.tsx|src/docs\\.tsx)$',
+    ]);
+  });
+});

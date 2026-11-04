@@ -24,9 +24,10 @@ const envAnalysis = (n: number, v: number, files: string[] = []): EnvAccessAnaly
 });
 
 describe('toEslintConsoleIsolation', () => {
-  it('emits a no-console rule scoped to the population the detector scored (excludes tests + cli files)', () => {
+  it('emits the console-isolation rule scoped to the population the detector scored (excludes tests + cli files)', () => {
     const config = toEslintConsoleIsolation(consoleAnalysis(40, 0));
-    expect(config?.rules['no-console']).toBe('error');
+    expect(config?.name).toBe('console-isolation');
+    expect(config?.check).toEqual({ kind: 'member', object: 'console' });
     expect(config?.ignores).toContain('**/cli/**');
     expect(config?.ignores).toContain('**/cli.{ts,tsx}');
     expect(config?.ignores).toContain('**/__tests__/**');
@@ -48,11 +49,12 @@ describe('toEslintConsoleIsolation', () => {
 });
 
 describe('toEslintEnvAccess', () => {
-  it('emits a no-restricted-properties rule scoped to the scored population (excludes tests + config files)', () => {
+  it('emits the env-access rule scoped to the scored population (excludes tests + config files)', () => {
     const config = toEslintEnvAccess(envAnalysis(40, 0));
     expect(config?.ignores).toContain('**/*.config.{ts,tsx}');
     expect(config?.ignores).toContain('**/__tests__/**');
-    expect(config?.rules['no-restricted-properties']).toBeDefined();
+    expect(config?.name).toBe('env-access');
+    expect(config?.check).toEqual({ kind: 'member', object: 'process', property: 'env' });
     expect(config?.ignores).toContain('**/config/**');
   });
 

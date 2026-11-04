@@ -70,6 +70,7 @@ import {
 import { inferDbClientMarkers, inferUiLayerMarkers } from '../detector/marker-inference.js';
 import {
   detectForbiddenImports,
+  FORBIDDEN_IMPORT_RULE_NAMES,
   REQUEST_ENTRY_ROLES,
   type DetectedPattern,
   type PatternConfig,
@@ -122,7 +123,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   if (ui.markers.length > 0) {
     configs.push({
       id: 'AP-002',
-      name: 'no-ui-layer-in-server-entry',
+      name: FORBIDDEN_IMPORT_RULE_NAMES['AP-002']!,
       description: 'A request handler must not import UI components.',
       roles: REQUEST_ENTRY_ROLES,
       forbidden: ui.markers,
@@ -132,7 +133,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const db = inferDbClientMarkers(appDir);
   configs.push({
     id: 'AP-001',
-    name: 'no-db-client-in-request-entry',
+    name: FORBIDDEN_IMPORT_RULE_NAMES['AP-001']!,
     description: 'A request handler must not import the database client directly.',
     roles: REQUEST_ENTRY_ROLES,
     forbidden: db.markers,
@@ -144,7 +145,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const layerBoundaries = detectLayerBoundaries(appDir, { resolve: false }).boundaries;
   const graph = buildImportGraph(appDir, { resolve: false });
   const cycles = detectCycles(appDir, { graph });
-  const orphans = detectOrphans(appDir, { graph });
+  const orphans = detectOrphans(appDir);
   const reachability = computeLayerReachability(appDir, { graph });
   const publicApi = detectPublicApiBoundaries(appDir, { graph });
   const featureSlices = detectFeatureSliceIsolation(appDir, { graph });

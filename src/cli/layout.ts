@@ -9,6 +9,16 @@ import { ensureIgnoreEntry } from './ignore-file.js';
 import { reconcileWithAdopted, type Recommendations } from './recommend.js';
 import { renderAdoptionBody } from './report.js';
 import type { ScanResult } from './scan.js';
+import { currentExceptions } from './summary.js';
+import {
+  comparableIn,
+  firstRecorded,
+  fixedExceptions,
+  newExceptions,
+  NewViolationsError,
+  remeasured,
+  type RuleExceptions,
+} from './ratchet.js';
 import {
   type AdoptedRule,
   LEGACY_RULES_FILE,
@@ -27,6 +37,8 @@ export interface WriteLayoutOptions {
   enforcers: InstalledEnforcers;
   only?: string;
   ruleIds?: readonly string[];
+  /** Start from the default rule set instead of keeping the rules adopted before. */
+  reset?: boolean;
   expand?: boolean;
   graph?: boolean;
   mode: ResolutionMode;
@@ -43,9 +55,19 @@ export interface WriteLayoutResult {
   folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
-  /** Previously adopted rules a scoped run kept, and those the current scan no longer generates. */
+  /** Previously adopted rules outside this run's selection that it kept, and those the current scan no longer generates. */
   kept: string[];
   dropped: string[];
+  /** Previously adopted rules --reset removed. */
+  reset: string[];
+  /** Every file this run wrote or changed, relative to the working directory. */
+  touched: string[];
+  /** Recorded exceptions the code no longer has, so the rules now apply to them. */
+  fixed: RuleExceptions[];
+  /** Exceptions recorded for the first time, for rules an earlier version adopted without them. */
+  firstRecorded: RuleExceptions[];
+  /** Forbidden-import exceptions measured again because this run's resolution mode differs from the rule's. */
+  remeasured: RuleExceptions[];
 }
 
 export class UnknownRulesError extends Error {
@@ -88,17 +110,10 @@ function removeFoldedFiles(outDir: string, cwd: string): string[] {
   return folded;
 }
 
-/** The rules a scoped run (--only, --rules) keeps from the previous adoption: it adds to them, never replaces them. */
-function carriedRuleIds(
-  outDir: string,
-  options: CollectOptions,
-  requested: readonly AdoptedRule[],
-): string[] {
-  if (options.only === undefined && options.ruleIds === undefined) return [];
+/** The previously adopted rules outside this run's selection: a run adds to the adoption, never replaces it. */
+function carriedRuleIds(previous: readonly string[], requested: readonly AdoptedRule[]): string[] {
   const requestedIds = new Set(requested.map((rule) => rule.id));
-  return (readAdoptedRules(outDir) ?? [])
-    .map((rule) => rule.id)
-    .filter((id) => !requestedIds.has(id));
+  return previous.filter((id) => !requestedIds.has(id));
 }
 
 /** Selects the requested and carried rules by id, across every family: a carried rule was adopted, held or not. */
@@ -139,7 +154,14 @@ export function writeLayout(
       requested.availableRules,
       options.structural ?? false,
     );
-  const carried = carriedRuleIds(outDir, collectOptions, requested.adopted);
+  const adoptedBefore = readAdoptedRules(outDir) ?? [];
+  const previousRules = options.reset ? [] : adoptedBefore;
+  const exceptionsNow = currentExceptions(scan);
+  const comparable = previousRules.filter(comparableIn(options.mode));
+  const broken = newExceptions(comparable, exceptionsNow);
+  if (broken.length > 0) throw new NewViolationsError(broken);
+  const previous = adoptedBefore.map((rule) => rule.id);
+  const carried = options.reset ? [] : carriedRuleIds(previous, requested.adopted);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(scan, outDir, {
     ...withCarried(collectOptions, requested.adopted, carried),
@@ -148,6 +170,8 @@ export function writeLayout(
     version: options.version,
   });
   const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
+  const keptRules = previousRules.filter((rule) => emittedIds.has(rule.id));
+  const keptComparable = keptRules.filter(comparableIn(options.mode));
   const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
     (file): file is string => file !== null,
@@ -159,7 +183,7 @@ export function writeLayout(
   if (options.readme && files.length > 0) {
     const result = injectAdoptionSection(
       path.join(options.cwd, 'README.md'),
-      renderAdoptionBody(adoption),
+      renderAdoptionBody(adoption, emitted.rules),
     );
     readme = result.status;
     if (result.status === 'created') readmeCreated = true;
@@ -167,18 +191,25 @@ export function writeLayout(
 
   const outRel = path.relative(options.cwd, outDir) || ARCHPRINT_DIR;
   const ignoreEntry = `${outRel.split(path.sep).join('/')}/`;
+  const changedIgnoreFiles: string[] = [];
   let prettierignore = prior?.managed.prettierignore ?? false;
   let prettierignoreCreated = prior?.managed.prettierignoreCreated ?? false;
   let npmignore = prior?.managed.npmignore ?? false;
   const npmignoreCreated = prior?.managed.npmignoreCreated ?? false;
   if (files.length > 0) {
-    const prettier = ensureIgnoreEntry(path.join(options.cwd, '.prettierignore'), ignoreEntry);
+    const prettierPath = path.join(options.cwd, '.prettierignore');
+    const prettier = ensureIgnoreEntry(prettierPath, ignoreEntry);
     if (prettier !== 'skipped') prettierignore = true;
     if (prettier === 'created') prettierignoreCreated = true;
-    const npm = ensureIgnoreEntry(path.join(options.cwd, '.npmignore'), ignoreEntry, {
-      create: false,
-    });
+    const npmPath = path.join(options.cwd, '.npmignore');
+    const npm = ensureIgnoreEntry(npmPath, ignoreEntry, { create: false });
     if (npm !== 'skipped') npmignore = true;
+    for (const [file, result] of [
+      [prettierPath, prettier],
+      [npmPath, npm],
+    ] as const) {
+      if (result === 'created' || result === 'appended') changedIgnoreFiles.push(file);
+    }
   }
 
   const managed: ManagedOutputs = {
@@ -199,7 +230,13 @@ export function writeLayout(
         app: options.app,
         rulesDir: path.relative(options.cwd, outDir) || ARCHPRINT_DIR,
       },
-      { rules: emitted.rules, allowed: sortAllowed(allowed) },
+      {
+        rules: emitted.rules.map((rule) => ({
+          ...rule,
+          exceptions: exceptionsNow.get(rule.id) ?? [],
+        })),
+        allowed: sortAllowed(allowed),
+      },
       managed,
     ),
   );
@@ -212,5 +249,17 @@ export function writeLayout(
     configPath,
     kept: carried.filter((id) => emittedIds.has(id)),
     dropped: carried.filter((id) => !emittedIds.has(id)),
+    reset: options.reset ? previous.filter((id) => !emittedIds.has(id)) : [],
+    fixed: fixedExceptions(keptComparable, exceptionsNow),
+    firstRecorded: firstRecorded(keptRules, exceptionsNow),
+    remeasured: remeasured(keptRules, exceptionsNow, options.mode),
+    touched: [
+      configPath,
+      ...files,
+      ...(readme === 'created' || readme === 'updated'
+        ? [path.join(options.cwd, 'README.md')]
+        : []),
+      ...changedIgnoreFiles,
+    ].map((file) => path.relative(options.cwd, file)),
   };
 }

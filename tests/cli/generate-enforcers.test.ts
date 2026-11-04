@@ -33,7 +33,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
       enforcers: enforcers({ eslint: true }),
       expand: true,
     });
-    expect(has('eslint.no-restricted-imports.archprint.json')).toBe(true);
+    expect(has('eslint.test-isolation.archprint.json')).toBe(true);
     expect(has('dependency-cruiser.test-isolation.archprint.json')).toBe(false);
   });
 
@@ -44,7 +44,7 @@ describe('emitLayout enforcer gating (--expand per-family files)', () => {
       expand: true,
     });
     expect(has('dependency-cruiser.test-isolation.archprint.json')).toBe(true);
-    expect(has('eslint.no-restricted-imports.archprint.json')).toBe(false);
+    expect(has('eslint.test-isolation.archprint.json')).toBe(false);
   });
 
   it('emits phantom-deps only for dependency-cruiser, not ESLint', () => {

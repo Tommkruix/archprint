@@ -42,3 +42,22 @@ describe('toDependencyCruiserAppIsolation', () => {
     expect(toDependencyCruiserAppIsolation(groups, ['AUTO', 'SUGGEST']).forbidden).toHaveLength(2);
   });
 });
+
+describe('toDependencyCruiserAppIsolation in an app below the repository root', () => {
+  it('prefixes the app path and exempts the known and the allowed cross-app importers', () => {
+    const known = {
+      ...group('apps', 200, 1),
+      violations: [{ file: 'apps/a/x.ts', target: 'apps/b/y.ts' }],
+    };
+    const allowed = (rule: string) => (rule === 'no-cross-app-apps' ? ['apps/a/z.ts'] : []);
+    const [rule] = toDependencyCruiserAppIsolation([known], ['AUTO'], 'web', allowed).forbidden;
+    expect(rule!.from.path).toBe('^web/apps/([^/]+)/');
+    expect(rule!.to.pathNot).toBe('^web/apps/$1/');
+    expect(rule!.from.pathNot).toBe('^(?:web/)?(?:apps/a/x\\.ts|apps/a/z\\.ts)$');
+  });
+
+  it('adds no exemption when nothing is known or allowed', () => {
+    const [rule] = toDependencyCruiserAppIsolation([group('apps', 40, 0)]).forbidden;
+    expect(rule!.from.pathNot).toBeUndefined();
+  });
+});

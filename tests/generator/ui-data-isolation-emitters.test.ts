@@ -32,3 +32,16 @@ describe('toDependencyCruiserUiData', () => {
     expect(toDependencyCruiserUiData(analysis(5, 3)).forbidden).toEqual([]);
   });
 });
+
+describe('toDependencyCruiserUiData exemptions', () => {
+  it('exempts the known and the allowed components that import the data layer', () => {
+    const known = {
+      ...analysis(200, 1),
+      violations: [{ file: 'src/components/list.tsx', target: 'src/db/client.ts' }],
+    };
+    const allowed = (rule: string) =>
+      rule === 'no-ui-to-data' ? ['src/components/admin.tsx'] : [];
+    const [rule] = toDependencyCruiserUiData(known, '.', allowed).forbidden;
+    expect(rule!.from.pathNot).toBe('^(?:src/components/admin\\.tsx|src/components/list\\.tsx)$');
+  });
+});

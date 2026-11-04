@@ -147,9 +147,9 @@ describe('githubSummary and text', () => {
     expect(renderCheckText(checked({ introduced: [] }))).toContain('No new violations.');
   });
 
-  it('renders a file-level finding without a line or subject', () => {
+  it('renders a usage finding without a line or subject', () => {
     const text = renderCheckText(
-      checked({ introduced: [reported({ kind: 'file', subject: '', line: null })] }),
+      checked({ introduced: [reported({ kind: 'usage', subject: 'console', line: null })] }),
     );
     expect(text).toContain('  app/api/users/route.ts  AP-001\n');
   });
@@ -192,7 +192,7 @@ describe('checkJson', () => {
     });
     const json = checkJson(
       checked({
-        introduced: [reported({ kind: 'file', subject: '' })],
+        introduced: [reported({ kind: 'usage', subject: 'console' })],
         adoptedInChange: [{ rule, change: 'new', count: 2 }],
       }),
       '9.9.9',

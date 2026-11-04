@@ -1,11 +1,6 @@
 import type { ConsoleIsolationAnalysis } from '../detector/console-isolation-detector.js';
+import type { EslintFamilyRule } from './eslint-family-rules.js';
 import { CLI_GLOBS, literalGlob, TEST_GLOBS } from './eslint-scope.js';
-
-export interface EslintFlatConfigBlock {
-  files: string[];
-  ignores: string[];
-  rules: Record<string, unknown>;
-}
 
 export function withMinedExemptions(
   baseIgnores: readonly string[],
@@ -16,11 +11,12 @@ export function withMinedExemptions(
 
 export function toEslintConsoleIsolation(
   analysis: ConsoleIsolationAnalysis,
-): EslintFlatConfigBlock | null {
+): EslintFamilyRule | null {
   if (analysis.libraryFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {
-    files: ['**/*.{ts,tsx}'],
+    name: 'console-isolation',
+    message: 'Do not use console in library code.',
     ignores: withMinedExemptions([...TEST_GLOBS, ...CLI_GLOBS], analysis.violations),
-    rules: { 'no-console': 'error' },
+    check: { kind: 'member', object: 'console' },
   };
 }

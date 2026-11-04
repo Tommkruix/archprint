@@ -38,19 +38,19 @@ describe('eslint enforcement (end to end)', () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('reports a violation of the generated no-console rule', async () => {
+  it('reports a violation of the generated console-isolation rule', async () => {
     const [result] = await eslint.lintText("export const f = () => console.log('x');\n", {
       filePath: path.join(tmp, 'src', 'lib', 'thing.ts'),
     });
     const rules = result!.messages.map((m) => m.ruleId);
-    expect(rules).toContain('no-console');
+    expect(rules).toContain('archprint/console-isolation');
   });
 
   it('passes clean code that does not violate the rule', async () => {
     const [result] = await eslint.lintText('export const f = () => 1 + 1;\n', {
       filePath: path.join(tmp, 'src', 'lib', 'thing.ts'),
     });
-    expect(result!.messages.filter((m) => m.ruleId === 'no-console')).toHaveLength(0);
+    expect(result!.messages).toHaveLength(0);
   });
 });
 

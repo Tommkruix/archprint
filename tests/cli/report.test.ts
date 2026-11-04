@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateGate } from '../../src/index.js';
 import type { LayerBoundary } from '../../src/detector/layer-detector.js';
-import { renderReport } from '../../src/cli/report.js';
+import { renderReport, renderRuleExplain } from '../../src/cli/report.js';
+import type { RuleSummary } from '../../src/cli/summary.js';
 import type { ScanResult } from '../../src/cli/scan.js';
 
 const suggestBoundary = (from: string, to: string, violating = 0): LayerBoundary => {
@@ -43,7 +44,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
     filesInCycles: 0,
     gate: evaluateGate({ roleFileCount: 1, violatingFileCount: 0, roleConfidence: 1 }),
   },
-  orphans: { appDir: '/app', fileCount: 10, orphans: [] },
+  orphans: { appDir: '/app', fileCount: 10, orphans: [], testOnly: [] },
   reachability: { appDir: '/app', layers: [], reaches: new Map() },
   publicApi: { appDir: '/app', groups: [] },
   featureSlices: { appDir: '/app', groups: [] },
@@ -219,5 +220,58 @@ describe('renderReport circular dependencies overflow', () => {
     );
     expect(report).toContain('CIRCULAR DEPENDENCIES (6)');
     expect(report).toContain('... and 1 more');
+  });
+});
+
+describe('renderRuleExplain', () => {
+  const summary = (overrides: Partial<RuleSummary>): RuleSummary => ({
+    family: 'console-isolation',
+    id: 'console-isolation',
+    label: 'console-isolation',
+    statement: 'library code must not use console',
+    status: 'AUTO',
+    adoption: 'enforce',
+    observedConformance: 0.98,
+    confidenceFloor: 0.95,
+    observations: 600,
+    violatingFiles: 12,
+    exceptions: Array.from({ length: 10 }, (_, index) => `src/lib/f${index}.ts`),
+    ...overrides,
+  });
+
+  it('lists the exceptions it was given and counts the rest', () => {
+    const text = renderRuleExplain(summary({}));
+    expect(text).toContain('Exceptions (12 file(s)):');
+    expect(text).toContain('  src/lib/f9.ts');
+    expect(text).toContain('... and 2 more');
+    expect(text).toContain('archprint generate --rules console-isolation');
+    expect(text).not.toContain('--include-structural');
+  });
+
+  it('says there is nothing to enforce below the confidence gate', () => {
+    const text = renderRuleExplain(
+      summary({ status: 'SUGGEST', violatingFiles: 0, exceptions: [] }),
+    );
+    expect(text).not.toContain('Exceptions');
+    expect(text).toContain('does not meet the confidence gate');
+  });
+});
+
+describe('renderReport orphan modules', () => {
+  it('lists the files only tests import before the files nothing imports', () => {
+    const text = renderReport(
+      baseScan({
+        orphans: {
+          appDir: '/app',
+          fileCount: 10,
+          orphans: ['lib/unused.ts'],
+          testOnly: ['components/pm-view.tsx'],
+        },
+      }),
+      '1.0.0',
+    );
+    expect(text).toContain('IMPORTED ONLY BY TESTS (1, review before deleting)');
+    expect(text).toContain('ORPHAN MODULES (1, review before deleting)');
+    expect(text.indexOf('components/pm-view.tsx')).toBeLessThan(text.indexOf('lib/unused.ts'));
   });
 });

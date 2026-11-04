@@ -132,7 +132,7 @@ export const internalsRuleSpec = (
   ),
 });
 
-const importPair = (importer: string, entry: string): string => `${importer} -> ${entry}`;
+export const importPair = (importer: string, entry: string): string => `${importer} -> ${entry}`;
 
 export const entryRuleSpec = (
   analysis: EntryPurityAnalysis,
@@ -162,14 +162,6 @@ const APP_RUNTIME = `function realPathOf(filename) {
   }
 }
 
-function isValueImport(node) {
-  return (
-    node.importKind !== 'type' &&
-    (node.specifiers.length === 0 ||
-      node.specifiers.some((specifier) => specifier.type !== 'ImportSpecifier' || specifier.importKind !== 'type'))
-  );
-}
-
 function isScanned(file) {
   const segments = file.split('/');
   return (
@@ -184,19 +176,6 @@ function appRelativePath(filename) {
   return relativePath.startsWith('..') || isAbsolute(relativePath)
     ? null
     : relativePath.split(sep).join('/');
-}
-
-function importVisitors(check) {
-  return {
-    ImportDeclaration(node) {
-      if (node.parent.type === 'Program' && isValueImport(node)) check(node, node.source.value);
-    },
-    ImportExpression(node) {
-      if (node.source.type === 'Literal' && typeof node.source.value === 'string') {
-        check(node, node.source.value);
-      }
-    },
-  };
 }
 
 function isTestFile(file) {
