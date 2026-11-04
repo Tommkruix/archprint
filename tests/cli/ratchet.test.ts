@@ -212,6 +212,15 @@ describe('exceptions compare like with like', () => {
     expect(fast.remeasured).toEqual([{ rule: 'AP-001', exceptions: [] }]);
   });
 
+  it('does not refuse unchanged code on a full run after a fast one', () => {
+    write('deep');
+    write('fast');
+    expect(ap001().mode).toBe('fast');
+    const deep = write('deep');
+    expect(deep.remeasured).toEqual([{ rule: 'AP-001', exceptions: ['app/api/hidden/route.ts'] }]);
+    expect(ap001()).toMatchObject({ mode: 'deep', exceptions: ['app/api/hidden/route.ts'] });
+  });
+
   it('measures a fast-adopted rule again on a deep run, instead of refusing what fast could not see', () => {
     write('fast');
     expect(ap001().exceptions).toEqual([]);
