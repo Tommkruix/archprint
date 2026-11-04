@@ -1,4 +1,11 @@
 import type { GenerationStatus } from '../detector/confidence-gate.js';
+import {
+  type AllowedFor,
+  appPathPrefix,
+  exemptingFrom,
+  noneAllowed,
+  toleratedFiles,
+} from './depcruise-exempt.js';
 import type { AppIsolationGroup } from '../detector/app-isolation-detector.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -16,7 +23,7 @@ export interface CrossAppRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { path: string };
+  from: { path: string; pathNot?: string | string[] };
   to: { path: string; pathNot: string };
 }
 
@@ -27,16 +34,22 @@ export interface CrossAppConfig {
 export function toDependencyCruiserAppIsolation(
   groups: readonly AppIsolationGroup[],
   include: readonly GenerationStatus[] = ['AUTO'],
+  appPath = '.',
+  allowedFor: AllowedFor = noneAllowed,
 ): CrossAppConfig {
   const forbidden = groups
     .filter((group) => include.includes(group.gate.status))
     .map((group) => {
-      const container = escapeRegExp(group.container);
+      const name = appIsolationRuleName(group.container);
+      const container = appPathPrefix(appPath) + escapeRegExp(group.container);
       return {
-        name: appIsolationRuleName(group.container),
+        name,
         comment: `Archprint inferred app isolation: the ${group.appCount} apps under "${group.container}" do not import each other (${group.appFileCount - group.crossImporterCount}/${group.appFileCount} app files conform); cross-app imports are forbidden (confidence ${confidencePct(group)}).`,
         severity: 'error' as const,
-        from: { path: `^${container}/([^/]+)/` },
+        from: {
+          path: `^${container}/([^/]+)/`,
+          ...exemptingFrom(toleratedFiles(group.violations, allowedFor(name))),
+        },
         to: { path: `^${container}/([^/]+)/`, pathNot: `^${container}/$1/` },
       };
     });

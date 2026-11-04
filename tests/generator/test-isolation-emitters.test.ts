@@ -53,6 +53,14 @@ describe('toDependencyCruiserTestIsolation', () => {
   });
 });
 
+describe('toDependencyCruiserTestIsolation allowed files', () => {
+  it('exempts a file allowed with a reason as well as the known importers', () => {
+    const allowed = (rule: string) => (rule === 'test-isolation' ? ['src/setup.ts'] : []);
+    const [rule] = toDependencyCruiserTestIsolation(analysis(40, 0, 3), allowed).forbidden;
+    expect(rule!.from.pathNot).toEqual([TEST_PATH, '(^|/)src/setup\\.ts$']);
+  });
+});
+
 describe('toEslintTestIsolation', () => {
   it('emits the test-isolation rule over value imports of test paths when clean (AUTO)', () => {
     const config = toEslintTestIsolation(analysis(40, 0, 3));

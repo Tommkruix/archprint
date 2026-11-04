@@ -52,3 +52,25 @@ describe('toDependencyCruiserPublicApi', () => {
     expect(toDependencyCruiserPublicApi(groups, ['AUTO', 'SUGGEST']).forbidden).toHaveLength(2);
   });
 });
+
+describe('toDependencyCruiserPublicApi in an app below the repository root', () => {
+  it('prefixes the app path and exempts the known and the allowed deep importers', () => {
+    const allowed = (rule: string) =>
+      rule === 'no-deep-import-features-auth' ? ['src/allowed.ts'] : [];
+    const [rule] = toDependencyCruiserPublicApi(
+      [group('features/auth', 200, 1, ['src/known.ts'])],
+      ['AUTO'],
+      'apps/web',
+      allowed,
+    ).forbidden;
+    expect(rule!.to.path).toBe('^apps/web/features/auth/');
+    expect(rule!.to.pathNot).toBe('^apps/web/features/auth/index\\.(ts|tsx)$');
+    expect(rule!.from.pathNot).toEqual(
+      expect.arrayContaining([
+        '^apps/web/features/auth/',
+        '(^|/)src/known\\.ts$',
+        '(^|/)src/allowed\\.ts$',
+      ]),
+    );
+  });
+});

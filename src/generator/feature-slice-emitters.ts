@@ -1,4 +1,11 @@
 import type { GenerationStatus } from '../detector/confidence-gate.js';
+import {
+  type AllowedFor,
+  appPathPrefix,
+  exemptingFrom,
+  noneAllowed,
+  toleratedFiles,
+} from './depcruise-exempt.js';
 import type { FeatureSliceGroup } from '../detector/feature-slice-detector.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -16,7 +23,7 @@ export interface CrossSliceRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
-  from: { path: string };
+  from: { path: string; pathNot?: string | string[] };
   to: { path: string; pathNot: string };
 }
 
@@ -27,16 +34,22 @@ export interface CrossSliceConfig {
 export function toDependencyCruiserFeatureSlice(
   groups: readonly FeatureSliceGroup[],
   include: readonly GenerationStatus[] = ['AUTO'],
+  appPath = '.',
+  allowedFor: AllowedFor = noneAllowed,
 ): CrossSliceConfig {
   const forbidden = groups
     .filter((group) => include.includes(group.gate.status))
     .map((group) => {
-      const container = escapeRegExp(group.container);
+      const name = featureSliceRuleName(group.container);
+      const container = appPathPrefix(appPath) + escapeRegExp(group.container);
       return {
-        name: featureSliceRuleName(group.container),
+        name,
         comment: `Archprint inferred slice isolation: the ${group.sliceCount} slices under "${group.container}" do not import each other (${group.sliceFileCount - group.crossImporterCount}/${group.sliceFileCount} slice files conform); cross-slice imports are forbidden (confidence ${confidencePct(group)}).`,
         severity: 'error' as const,
-        from: { path: `^${container}/([^/]+)/` },
+        from: {
+          path: `^${container}/([^/]+)/`,
+          ...exemptingFrom(toleratedFiles(group.violations, allowedFor(name))),
+        },
         to: { path: `^${container}/([^/]+)/`, pathNot: `^${container}/$1/` },
       };
     });
