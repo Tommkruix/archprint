@@ -400,22 +400,32 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const { files, removed, folded, configPath, kept, dropped, reset, fixed, firstRecorded } =
-          writeLayout(scan, outDir, {
-            structural,
-            enforcers,
-            graph: options.graph,
-            expand: options.expand,
-            only: options.only,
-            ruleIds,
-            reset: options.reset,
-            mode: options.fast ? 'fast' : 'deep',
-            version,
-            recommendations,
-            app: displayPath(scan.appDir, cwd),
-            cwd,
-            readme: options.readme,
-          });
+        const {
+          files,
+          removed,
+          folded,
+          configPath,
+          kept,
+          dropped,
+          reset,
+          fixed,
+          firstRecorded,
+          remeasured,
+        } = writeLayout(scan, outDir, {
+          structural,
+          enforcers,
+          graph: options.graph,
+          expand: options.expand,
+          only: options.only,
+          ruleIds,
+          reset: options.reset,
+          mode: options.fast ? 'fast' : 'deep',
+          version,
+          recommendations,
+          app: displayPath(scan.appDir, cwd),
+          cwd,
+          readme: options.readme,
+        });
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
@@ -435,6 +445,10 @@ export function buildProgram(version = readVersion()): Command {
         if (fixed.length > 0)
           console.log(
             `Fixed since the last run, so the rules now apply to them:\n${formatExceptions(fixed)}`,
+          );
+        if (remeasured.length > 0)
+          console.log(
+            `Measured again, since these rules were adopted from a ${options.fast ? 'full' : 'fast'} scan and this run is ${options.fast ? 'fast' : 'full'}; run in the rule's mode to compare:\n${formatExceptions(remeasured)}`,
           );
         if (firstRecorded.length > 0)
           console.log(

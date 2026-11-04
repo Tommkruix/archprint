@@ -1,4 +1,4 @@
-import type { AdoptedRule } from './adopted-rules.js';
+import type { AdoptedRule, ResolutionMode } from './adopted-rules.js';
 
 /** One rule's files, or `importer -> entry` imports for entry purity. */
 export interface RuleExceptions {
@@ -29,6 +29,26 @@ export const fixedExceptions = (rules: readonly AdoptedRule[], current: Exceptio
   compare(rules, current, (recorded, now) => {
     const remaining = new Set(now);
     return [...recorded].filter((item) => !remaining.has(item));
+  });
+
+/** Forbidden imports are the only rules a fast scan sees differently, so their exceptions compare within one mode. */
+export const comparableIn =
+  (mode: ResolutionMode) =>
+  (rule: AdoptedRule): boolean =>
+    rule.family !== 'forbidden-imports' || rule.mode === mode;
+
+/** Rules adopted in the other resolution mode whose exceptions this run measured differently, with the new list. */
+export const remeasured = (
+  rules: readonly AdoptedRule[],
+  current: ExceptionsByRule,
+  mode: ResolutionMode,
+): RuleExceptions[] =>
+  rules.flatMap((rule) => {
+    if (rule.exceptions === undefined || comparableIn(mode)(rule)) return [];
+    const exceptions = [...(current.get(rule.id) ?? [])];
+    return exceptions.join('\n') === rule.exceptions.join('\n')
+      ? []
+      : [{ rule: rule.id, exceptions }];
   });
 
 /** Rules an earlier version adopted without recording their exceptions, with what this run records for them. */

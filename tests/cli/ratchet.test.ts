@@ -1,10 +1,20 @@
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateConfig } from '../../src/cli/archprint-config.js';
-import { readAdoptedRules } from '../../src/cli/adopted-rules.js';
+import { readAdoptedRules, storiesIsolationRule } from '../../src/cli/adopted-rules.js';
+import { evaluateRules } from '../../src/cli/check-evaluate.js';
+import { currentExceptions } from '../../src/cli/summary.js';
 import { adoptedAllowances, excludeAllowed } from '../../src/cli/allowed-evidence.js';
 import { runAllow } from '../../src/cli/allow.js';
 import { writeLayout, type WriteLayoutOptions } from '../../src/cli/layout.js';
@@ -151,5 +161,84 @@ describe('the exceptions of adopted rules only shrink', () => {
     logIn('leak.ts');
     write({ reset: true });
     expect(consoleRule().exceptions).toEqual(['src/leak.ts']);
+  });
+});
+
+describe('exceptions compare like with like', () => {
+  let repo: string;
+  let outDir: string;
+  beforeEach(() => {
+    repo = mkdtempSync(path.join(tmpdir(), 'archprint-ratchet-mode-'));
+    cpSync(path.join(here, '..', 'fixtures', 'cli-auto'), repo, { recursive: true });
+    for (let index = 0; index < 40; index++) {
+      mkdirSync(path.join(repo, 'app', 'api', `extra${index}`), { recursive: true });
+      writeFileSync(
+        path.join(repo, 'app', 'api', `extra${index}`, 'route.ts'),
+        'export const GET = () => 1;\n',
+      );
+    }
+    writeFileSync(
+      path.join(repo, 'lib', 'db.ts'),
+      "import { PrismaClient } from '@prisma/client';\nexport const db = new PrismaClient();\n",
+    );
+    writeFileSync(path.join(repo, 'lib', 'index.ts'), "export * from './db';\n");
+    mkdirSync(path.join(repo, 'app', 'api', 'hidden'));
+    writeFileSync(
+      path.join(repo, 'app', 'api', 'hidden', 'route.ts'),
+      "import { db } from '@/lib';\nexport const GET = () => db;\n",
+    );
+    outDir = path.join(repo, '.archprint');
+  });
+  afterEach(() => rmSync(repo, { recursive: true, force: true }));
+
+  const write = (mode: 'deep' | 'fast') => {
+    const scan = scanRepo(repo, { deep: mode === 'deep' });
+    return writeLayout(scan, outDir, {
+      enforcers: ESLINT,
+      mode,
+      version: '9.9.9',
+      recommendations: buildRecommendations(scan, new Set(), ESLINT),
+      app: '.',
+      cwd: repo,
+    });
+  };
+  const ap001 = () => readAdoptedRules(outDir)!.find((rule) => rule.id === 'AP-001')!;
+
+  it('measures a deep-adopted rule again on a fast run, instead of calling its exceptions fixed', () => {
+    write('deep');
+    expect(ap001().exceptions).toEqual(['app/api/hidden/route.ts']);
+    const fast = write('fast');
+    expect(fast.fixed).toEqual([]);
+    expect(fast.remeasured).toEqual([{ rule: 'AP-001', exceptions: [] }]);
+  });
+
+  it('measures a fast-adopted rule again on a deep run, instead of refusing what fast could not see', () => {
+    write('fast');
+    expect(ap001().exceptions).toEqual([]);
+    const deep = write('deep');
+    expect(deep.remeasured).toEqual([{ rule: 'AP-001', exceptions: ['app/api/hidden/route.ts'] }]);
+    expect(ap001().exceptions).toEqual(['app/api/hidden/route.ts']);
+  });
+});
+
+describe('exceptions are named as check and allow name them', () => {
+  it('records the file that imports a story, which is what check reports and allow accepts', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'archprint-ratchet-stories-'));
+    try {
+      cpSync(path.join(here, '..', 'fixtures', 'stories-isolation-auto'), repo, {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(repo, 'src', 'app.tsx'),
+        "import { Story7 } from './c7.stories';\nexport const App = Story7;\n",
+      );
+      const scan = scanRepo(repo);
+      const rule = storiesIsolationRule(scan);
+      const reported = evaluateRules(repo, [rule]).map((finding) => finding.file);
+      expect(reported).toEqual(['src/app.tsx']);
+      expect(currentExceptions(scan).get(rule.id)).toEqual(reported);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 });

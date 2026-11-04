@@ -105,7 +105,9 @@ Those exceptions are recorded with the rule in `.archprint/config.json` and only
 enforced from the next `generate` on, and that run lists it. A file that breaks an adopted rule after it was written
 never joins the exceptions: `generate` stops, names it, and writes nothing until you fix it or accept it with
 `archprint allow <rule> <file> --reason "..."`. Rules adopted by an earlier archprint version have their current
-exceptions recorded on the first run, and that run lists every one.
+exceptions recorded on the first run, and that run lists every one. A forbidden-import (AP-) rule adopted from a full
+scan and regenerated with `--fast`, or the other way round, has its exceptions measured again and listed, because
+the two scans see different imports.
 
 Upgrading from an older `archprint-rules/` layout? `archprint migrate` (alias `upgrade`) moves it to `.archprint/`
 and rewrites the reference in your linter config in place, writing the new files before removing the old ones so

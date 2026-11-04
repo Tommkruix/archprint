@@ -45,7 +45,7 @@ interface RuleBase {
   statement: string;
   mode: ResolutionMode;
   evidence: AdoptionEvidence;
-  /** What broke the rule when it was written and is exempt; `generate` only shrinks it. Absent in older configs. */
+  /** The known breaks recorded when the rule was written; `generate` only shrinks the list. Absent in older configs. */
   exceptions?: string[];
 }
 

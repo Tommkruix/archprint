@@ -167,18 +167,20 @@ function collectGates(scan: ScanResult): GateEntry[] {
 }
 
 /**
- * What each rule tolerates in this scan, any gate status, in the unit its generated rules exempt: files, or
- * `importer -> entry` imports for entry purity.
+ * What breaks each rule in this scan, any gate status, keyed as `allow` and `check` name it: the file that breaks
+ * it, the importing file for stories, and `importer -> entry` for entry purity, which ESLint exempts per import.
  */
 export function currentExceptions(scan: ScanResult): Map<string, string[]> {
-  const entryImports = scan.entryPurity.imports
-    .map(({ importer, file }) => importPair(importer, file))
-    .sort();
+  const byFamily: Partial<Record<FamilyKey, string[]>> = {
+    'entry-purity': scan.entryPurity.imports
+      .map(({ importer, file }) => importPair(importer, file))
+      .sort(),
+    'stories-isolation': [
+      ...new Set(scan.storiesIsolation.violations.map((story) => story.importer)),
+    ].sort(),
+  };
   return new Map(
-    collectGates(scan).map((entry) => [
-      entry.id,
-      entry.family === 'entry-purity' ? entryImports : entry.files,
-    ]),
+    collectGates(scan).map((entry) => [entry.id, byFamily[entry.family] ?? entry.files]),
   );
 }
 

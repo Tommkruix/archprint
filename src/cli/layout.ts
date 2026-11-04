@@ -11,10 +11,12 @@ import { renderAdoptionBody } from './report.js';
 import type { ScanResult } from './scan.js';
 import { currentExceptions } from './summary.js';
 import {
+  comparableIn,
   firstRecorded,
   fixedExceptions,
   newExceptions,
   NewViolationsError,
+  remeasured,
   type RuleExceptions,
 } from './ratchet.js';
 import {
@@ -64,6 +66,8 @@ export interface WriteLayoutResult {
   fixed: RuleExceptions[];
   /** Exceptions recorded for the first time, for rules an earlier version adopted without them. */
   firstRecorded: RuleExceptions[];
+  /** Forbidden-import exceptions measured again because this run's resolution mode differs from the rule's. */
+  remeasured: RuleExceptions[];
 }
 
 export class UnknownRulesError extends Error {
@@ -153,7 +157,8 @@ export function writeLayout(
   const adoptedBefore = readAdoptedRules(outDir) ?? [];
   const previousRules = options.reset ? [] : adoptedBefore;
   const exceptionsNow = currentExceptions(scan);
-  const broken = newExceptions(previousRules, exceptionsNow);
+  const comparable = previousRules.filter(comparableIn(options.mode));
+  const broken = newExceptions(comparable, exceptionsNow);
   if (broken.length > 0) throw new NewViolationsError(broken);
   const previous = adoptedBefore.map((rule) => rule.id);
   const carried = options.reset ? [] : carriedRuleIds(previous, requested.adopted);
@@ -166,6 +171,7 @@ export function writeLayout(
   });
   const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
   const keptRules = previousRules.filter((rule) => emittedIds.has(rule.id));
+  const keptComparable = keptRules.filter(comparableIn(options.mode));
   const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
     (file): file is string => file !== null,
@@ -244,8 +250,9 @@ export function writeLayout(
     kept: carried.filter((id) => emittedIds.has(id)),
     dropped: carried.filter((id) => !emittedIds.has(id)),
     reset: options.reset ? previous.filter((id) => !emittedIds.has(id)) : [],
-    fixed: fixedExceptions(keptRules, exceptionsNow),
+    fixed: fixedExceptions(keptComparable, exceptionsNow),
     firstRecorded: firstRecorded(keptRules, exceptionsNow),
+    remeasured: remeasured(keptRules, exceptionsNow, options.mode),
     touched: [
       configPath,
       ...files,
