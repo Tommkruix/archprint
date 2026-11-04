@@ -43,14 +43,16 @@ async function typeScriptParser(appDir: string): Promise<Linter.Parser | null> {
 const archprintRuleIds = (config: readonly Linter.Config[]): Set<string> =>
   new Set(config.flatMap((block) => Object.keys(block.rules ?? {})));
 
-/** calculateConfigForFile gives every rule as `[severity, ...options]`, the severity a number. */
-const isError = (config: Linter.Config | undefined, ruleId: string): boolean =>
-  (config?.rules?.[ruleId] as [number] | undefined)?.[0] === 2;
+const ERROR = 2;
+
+/** calculateConfigForFile gives every rule as `[severity, ...options]`, the severity a number (0 when off). */
+const severityOf = (config: Linter.Config | undefined, ruleId: string): number =>
+  (config?.rules?.[ruleId] as [number] | undefined)?.[0] ?? 0;
 
 /**
- * For each archprint rule, the files where the generated config turns it on and the repo's config does not: a
- * later block switched it off or reconfigured it. Null when the repo's config turns on no archprint rule anywhere,
- * so it does not load the generated file.
+ * For each archprint rule, the files where the generated config makes it an error and the repo's config does not: a
+ * later block switched it off, downgraded it to a warning, or reconfigured it. Null when the repo's config turns on
+ * no archprint rule anywhere, so it does not load the generated file.
  */
 async function inactiveRules(
   files: readonly string[],
@@ -65,8 +67,9 @@ async function inactiveRules(
     if (actual === undefined) continue;
     const expected = (await generated.calculateConfigForFile(file)) as Linter.Config | undefined;
     for (const ruleId of [...ruleIds].sort()) {
-      if (isError(actual, ruleId)) wired = true;
-      else if (isError(expected, ruleId))
+      const actualSeverity = severityOf(actual, ruleId);
+      if (actualSeverity > 0) wired = true;
+      if (actualSeverity < ERROR && severityOf(expected, ruleId) === ERROR)
         inactive.set(ruleId, [...(inactive.get(ruleId) ?? []), file]);
     }
   }
@@ -76,7 +79,7 @@ async function inactiveRules(
 function reportInactive(inactive: ReadonlyMap<string, string[]>, appDir: string): void {
   if (inactive.size === 0) return;
   console.log(
-    `Check: ${inactive.size} generated rule(s) are turned off or overridden by your ESLint config for some files:`,
+    `Check: ${inactive.size} generated rule(s) are turned off, downgraded to a warning or overridden by your ESLint config for some files:`,
   );
   for (const [ruleId, files] of inactive) {
     console.log(
@@ -92,7 +95,7 @@ function reportResults(
   appDir: string,
 ): void {
   const offends = (message: Linter.LintMessage): boolean =>
-    message.severity === 2 && message.ruleId !== null && ruleIds.has(message.ruleId);
+    message.severity === ERROR && message.ruleId !== null && ruleIds.has(message.ruleId);
   const offenders = results.filter((result) => result.messages.some(offends));
   const count = offenders.reduce((total, r) => total + r.messages.filter(offends).length, 0);
   const unparsed = results.filter((result) => result.messages.some((m) => m.fatal));
@@ -145,12 +148,18 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
   });
   const repo = new eslint.ESLint({ cwd: appDir, ruleFilter: ({ ruleId }) => ruleIds.has(ruleId) });
 
-  let inactive: Map<string, string[]> | null;
-  try {
-    inactive = await inactiveRules(files, ruleIds, generated, repo);
-  } catch (error) {
-    console.log(`Check: could not load your ESLint config (${(error as Error).message}).`);
-    inactive = null;
+  const configFile = await repo.findConfigFile();
+  let inactive: Map<string, string[]> | null = null;
+  if (configFile !== undefined) {
+    try {
+      inactive = await inactiveRules(files, ruleIds, generated, repo);
+    } catch (error) {
+      console.log(
+        `Check: could not load your ESLint config, ${configFile} (${(error as Error).message}). Fix it, then check again.`,
+      );
+      process.exitCode = CANNOT_CHECK;
+      return;
+    }
   }
   let linter = repo;
   if (inactive === null) {

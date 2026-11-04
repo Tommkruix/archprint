@@ -149,13 +149,31 @@ describe('runEslintCheck', () => {
     expect(process.exitCode).toBe(2);
   });
 
-  it('says why when the repo config cannot load, then checks the rules on their own', async () => {
+  it("stops with exit 2, and says why, when the repo's ESLint config cannot load", async () => {
     const { appDir, outDir } = generatedApp();
     writeFileSync(path.join(appDir, 'eslint.config.mjs'), "throw new Error('broken config');\n");
     await runEslintCheck(appDir, outDir);
     expect(logged()).toContain('could not load your ESLint config');
     expect(logged()).toContain('broken config');
+    expect(logged()).not.toContain('pass clean');
+    expect(process.exitCode).toBe(2);
+  });
+
+  it('checks the rules on their own when the repo has no ESLint config file', async () => {
+    const { appDir, outDir } = generatedApp();
+    await runEslintCheck(appDir, outDir);
+    expect(logged()).toContain('does not load eslint.mjs yet');
     expect(logged()).toContain('pass clean');
+  });
+
+  it('counts a rule the repo downgrades to a warning as wired, and names it as not in force', async () => {
+    const { appDir, outDir } = generatedApp();
+    wire(appDir, `, { rules: { 'archprint/console-isolation': 'warn' } }`);
+    await runEslintCheck(appDir, outDir);
+    expect(logged()).not.toContain('checked on their own');
+    expect(logged()).toContain('downgraded to a warning');
+    expect(logged()).toMatch(/archprint\/console-isolation: not active for \d+ file\(s\)/);
+    expect(process.exitCode).toBe(1);
   });
 
   it('cannot check, and exits 2, when the repo has no eslint installed', async () => {
