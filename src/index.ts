@@ -51,11 +51,7 @@ export {
   type CycleDetectorOptions,
   type ImportCycle,
 } from './detector/cycle-detector.js';
-export {
-  detectOrphans,
-  type OrphanAnalysis,
-  type OrphanDetectorOptions,
-} from './detector/orphan-detector.js';
+export { detectOrphans, type OrphanAnalysis } from './detector/orphan-detector.js';
 export {
   buildImportGraph,
   stronglyConnectedComponents,

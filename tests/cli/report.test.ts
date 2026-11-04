@@ -44,7 +44,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
     filesInCycles: 0,
     gate: evaluateGate({ roleFileCount: 1, violatingFileCount: 0, roleConfidence: 1 }),
   },
-  orphans: { appDir: '/app', fileCount: 10, orphans: [] },
+  orphans: { appDir: '/app', fileCount: 10, orphans: [], testOnly: [] },
   reachability: { appDir: '/app', layers: [], reaches: new Map() },
   publicApi: { appDir: '/app', groups: [] },
   featureSlices: { appDir: '/app', groups: [] },
@@ -254,5 +254,24 @@ describe('renderRuleExplain', () => {
     );
     expect(text).not.toContain('Exceptions');
     expect(text).toContain('does not meet the confidence gate');
+  });
+});
+
+describe('renderReport orphan modules', () => {
+  it('lists the files only tests import before the files nothing imports', () => {
+    const text = renderReport(
+      baseScan({
+        orphans: {
+          appDir: '/app',
+          fileCount: 10,
+          orphans: ['lib/unused.ts'],
+          testOnly: ['components/pm-view.tsx'],
+        },
+      }),
+      '1.0.0',
+    );
+    expect(text).toContain('IMPORTED ONLY BY TESTS (1, review before deleting)');
+    expect(text).toContain('ORPHAN MODULES (1, review before deleting)');
+    expect(text.indexOf('components/pm-view.tsx')).toBeLessThan(text.indexOf('lib/unused.ts'));
   });
 });

@@ -158,6 +158,8 @@ interface RawImport {
   hasValueBinding: boolean;
   valueBindings: ValueBinding[];
   line: number;
+  /** `export ... from 'x'`: a module reference, not an import the rule families count. */
+  reexport: boolean;
 }
 
 function valueBindingsOf(clause: ts.ImportClause | undefined): ValueBinding[] {
@@ -209,6 +211,20 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         hasValueBinding: nodeHasValueBinding(statement.importClause),
         valueBindings: valueBindingsOf(statement.importClause),
         line: lineOf(statement),
+        reexport: false,
+      });
+    }
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      raw.push({
+        specifier: statement.moduleSpecifier.text,
+        hasValueBinding: !statement.isTypeOnly,
+        valueBindings: [],
+        line: lineOf(statement),
+        reexport: true,
       });
     }
   }
@@ -224,6 +240,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         hasValueBinding: true,
         valueBindings: [],
         line: lineOf(node),
+        reexport: false,
       });
     }
     ts.forEachChild(node, visit);
@@ -248,15 +265,46 @@ export function valueImportBindings(
   );
 }
 
+const importsOf = (absoluteFilePath: string): RawImport[] =>
+  parseFastImports(absoluteFilePath).filter((imp) => !imp.reexport);
+
 export function importLocations(absoluteFilePath: string): ImportLocation[] {
-  return parseFastImports(absoluteFilePath).map(({ specifier, line }) => ({ specifier, line }));
+  return importsOf(absoluteFilePath).map(({ specifier, line }) => ({ specifier, line }));
+}
+
+/** Every module a file names: its imports of any kind, `import('x')` calls and `export ... from 'x'`. */
+export function moduleReferences(absoluteFilePath: string): string[] {
+  return parseFastImports(absoluteFilePath).map((imp) => imp.specifier);
+}
+
+/** The string literals in a file, such as the setup files a tool's config names. */
+export function stringLiterals(absoluteFilePath: string): string[] {
+  const { source, scriptKind } = parseableSource(
+    absoluteFilePath,
+    readFileSync(absoluteFilePath, 'utf8'),
+  );
+  const sourceFile = ts.createSourceFile(
+    absoluteFilePath,
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    scriptKind,
+  );
+  const literals: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      literals.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return literals;
 }
 
 function specifierLevelImports(
   absoluteFilePath: string,
   classifyEdge: (specifier: string) => EdgeKind,
 ): ResolvedImport[] {
-  return parseFastImports(absoluteFilePath).map((imp) => ({
+  return importsOf(absoluteFilePath).map((imp) => ({
     specifier: imp.specifier,
     edgeKind: classifyEdge(imp.specifier),
     throughBarrel: false,

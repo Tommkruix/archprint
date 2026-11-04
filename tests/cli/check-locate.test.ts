@@ -41,6 +41,11 @@ describe('check line location', () => {
     ]);
   });
 
+  it('does not count an export ... from as an import, so the rule families see only imports', () => {
+    write('src/barrel.ts', "export * from '../lib/a.test';\nexport { x } from '@/lib/db';\n");
+    expect(importLocations(path.join(app, 'src/barrel.ts'))).toEqual([]);
+  });
+
   it('locates a specifier-based finding on its import line', () => {
     const locate = createLineLocator(app);
     expect(

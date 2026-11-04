@@ -209,23 +209,23 @@ export function renderReport(
   } else if (scan.cycles.gate.status === 'AUTO') {
     lines.push(green(`No circular dependencies ${autoLabel('cycles')}.`), '');
   }
-  if (scan.orphans.orphans.length > 0) {
-    lines.push(
-      yellow(bold(`ORPHAN MODULES (${scan.orphans.orphans.length}, review before deleting)`)),
-    );
-    for (const orphan of scan.orphans.orphans.slice(0, 8)) {
-      lines.push(dim(`  ${orphan}`));
-    }
-    if (scan.orphans.orphans.length > 8) {
-      lines.push(dim(`  ... and ${scan.orphans.orphans.length - 8} more`));
-    }
-    lines.push(
-      dim(
-        '  Nothing imports these and they are not framework entries. Suggest only, not enforced.',
-      ),
-    );
-    lines.push('');
-  }
+  const orphanList = (heading: string, files: readonly string[], note: string): void => {
+    if (files.length === 0) return;
+    lines.push(yellow(bold(`${heading} (${files.length}, review before deleting)`)));
+    for (const file of files.slice(0, 8)) lines.push(dim(`  ${file}`));
+    if (files.length > 8) lines.push(dim(`  ... and ${files.length - 8} more`));
+    lines.push(dim(`  ${note} Suggest only, not enforced.`), '');
+  };
+  orphanList(
+    'IMPORTED ONLY BY TESTS',
+    scan.orphans.testOnly,
+    'Only tests import these production files: dead code the tests keep alive.',
+  );
+  orphanList(
+    'ORPHAN MODULES',
+    scan.orphans.orphans,
+    'Nothing imports these and they are not framework entries.',
+  );
   const autoApi = scan.publicApi.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApi = scan.publicApi.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoApi.length > 0) {

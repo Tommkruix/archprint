@@ -102,7 +102,7 @@ function withCycles(cycleFiles: string[][], fileCount: number): CycleAnalysis {
 }
 
 function emptyOrphans(): OrphanAnalysis {
-  return { appDir: 'x', fileCount: 0, orphans: [] };
+  return { appDir: 'x', fileCount: 0, orphans: [], testOnly: [] };
 }
 
 function emptyReachability(): ReachabilityAnalysis {

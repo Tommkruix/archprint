@@ -182,8 +182,14 @@ heuristic. **When not to use:** rarely; low volume.
 
 ### Orphans (Report)
 
-Files nothing imports and that are not framework entries (dead-code candidates). Reported only, never enforced,
-too many files are legitimately unreferenced (entrypoints, side-effect modules, config).
+Production files nothing references, listed after the files only tests import (dead code the tests keep
+alive, usually the more actionable list). A reference is any import, type-only included, an `export ... from`
+through a barrel, an `import()` call, or a tool config naming the file, such as Vitest's `setupFiles`. Framework
+and tool entries are never reported: Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
+`opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
+`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. Reported only, never
+enforced: a file a workspace package imports by package name, or one loaded by a tool archprint does not read, can
+still be listed. A dedicated dead-code tool such as knip covers more of these cases.
 
 ### Reachability (Report)
 
