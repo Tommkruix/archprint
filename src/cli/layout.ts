@@ -10,6 +10,7 @@ import { reconcileWithAdopted, type Recommendations } from './recommend.js';
 import { renderAdoptionBody } from './report.js';
 import type { ScanResult } from './scan.js';
 import { currentExceptions } from './summary.js';
+import { baselineRuleIds, promoteBelowGate } from './promote.js';
 import {
   comparableIn,
   firstRecorded,
@@ -39,6 +40,8 @@ export interface WriteLayoutOptions {
   ruleIds?: readonly string[];
   /** Start from the default rule set instead of keeping the rules adopted before. */
   reset?: boolean;
+  /** Adopt the rules named in `ruleIds` below the confidence gate, recording their current breaks as exceptions. */
+  baseline?: boolean;
   expand?: boolean;
   graph?: boolean;
   mode: ResolutionMode;
@@ -68,6 +71,8 @@ export interface WriteLayoutResult {
   firstRecorded: RuleExceptions[];
   /** Forbidden-import exceptions measured again because this run's resolution mode differs from the rule's. */
   remeasured: RuleExceptions[];
+  /** Rules named with --baseline, with the exceptions this run recorded for them. */
+  baselined: RuleExceptions[];
 }
 
 export class UnknownRulesError extends Error {
@@ -137,6 +142,12 @@ export function writeLayout(
   options: WriteLayoutOptions,
 ): WriteLayoutResult {
   assertRealDirectory(outDir);
+  const adoptedBefore = readAdoptedRules(outDir) ?? [];
+  const baselineIds = options.baseline ? baselineRuleIds(scan, options.ruleIds ?? []) : [];
+  const enforced = promoteBelowGate(
+    scan,
+    new Set([...baselineIds, ...(options.reset ? [] : adoptedBefore.map((rule) => rule.id))]),
+  );
   const allowed = readAllowed(outDir);
   const collectOptions: CollectOptions = {
     allowed: allowedFilesByRule(allowed),
@@ -147,23 +158,24 @@ export function writeLayout(
     ruleIds: options.ruleIds,
     mode: options.mode,
   };
-  const requested = collectEnforcement(scan, collectOptions);
+  const requested = collectEnforcement(enforced, collectOptions);
   if (requested.unknownRules.length > 0)
     throw new UnknownRulesError(
       requested.unknownRules,
       requested.availableRules,
       options.structural ?? false,
     );
-  const adoptedBefore = readAdoptedRules(outDir) ?? [];
   const previousRules = options.reset ? [] : adoptedBefore;
   const exceptionsNow = currentExceptions(scan);
-  const comparable = previousRules.filter(comparableIn(options.mode));
+  const comparable = previousRules
+    .filter(comparableIn(options.mode))
+    .filter((rule) => !baselineIds.includes(rule.id));
   const broken = newExceptions(comparable, exceptionsNow);
   if (broken.length > 0) throw new NewViolationsError(broken);
   const previous = adoptedBefore.map((rule) => rule.id);
   const carried = options.reset ? [] : carriedRuleIds(previous, requested.adopted);
   const removed = cleanPrior(outDir, options.cwd);
-  const emitted = emitLayout(scan, outDir, {
+  const emitted = emitLayout(enforced, outDir, {
     ...withCarried(collectOptions, requested.adopted, carried),
     expand: options.expand,
     graph: options.only === undefined && options.graph !== false,
@@ -253,6 +265,9 @@ export function writeLayout(
     fixed: fixedExceptions(keptComparable, exceptionsNow),
     firstRecorded: firstRecorded(keptRules, exceptionsNow),
     remeasured: remeasured(keptRules, exceptionsNow, options.mode),
+    baselined: baselineIds
+      .filter((id) => emittedIds.has(id) && (exceptionsNow.get(id)?.length ?? 0) > 0)
+      .map((id) => ({ rule: id, exceptions: [...exceptionsNow.get(id)!] })),
     touched: [
       configPath,
       ...files,

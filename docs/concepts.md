@@ -109,6 +109,13 @@ exceptions recorded on the first run, and that run lists every one. A forbidden-
 scan and regenerated with `--fast`, or the other way round, has its exceptions measured again and listed, because
 the two scans see different imports.
 
+A rule your code almost follows, short of the confidence gate (more than three files break it, or too few files
+show it), is only suggested. To adopt it anyway and stop new breaks while you work through the old ones, name it with
+`--baseline`: `archprint generate --include-structural --rules no-lib-to-hooks --baseline`. Every file that breaks it
+today is recorded as an exception and listed, the rule's evidence stays as measured, and from then on the
+exceptions only shrink like any other rule's. Naming an adopted rule with `--baseline` again also accepts its new
+breaks. A rule the code does not follow, under 80% of the files it applies to, cannot be adopted this way.
+
 Upgrading from an older `archprint-rules/` layout? `archprint migrate` (alias `upgrade`) moves it to `.archprint/`
 and rewrites the reference in your linter config in place, writing the new files before removing the old ones so
 the config never points at a file that has been deleted.

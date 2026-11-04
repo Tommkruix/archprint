@@ -130,6 +130,9 @@ archprint generate apps/web --include-structural
 # Adopt the rules you choose, by id (added to the rules you adopted before)
 archprint generate apps/web --include-structural --rules no-lib-to-app,import-style
 
+# Adopt a rule your code almost follows, recording today's breaks as exceptions that only shrink
+archprint generate apps/web --include-structural --rules no-lib-to-hooks --baseline
+
 # Also write the granular per-family files, rule cards, fixtures, and graph
 archprint generate apps/web --expand
 ```

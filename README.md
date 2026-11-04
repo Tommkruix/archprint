@@ -505,8 +505,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
   `--only <family>` and `--rules <ids>` adopt one family or the rules they name (such as `AP-002`, `import-style`
-  or the layer rule `no-lib-to-app`), every run keeps the rules you adopted before and `--reset` returns to the
-  default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
+  or the layer rule `no-lib-to-app`), `--rules <ids> --baseline` adopts the named rules even below the confidence
+  gate, with what breaks them today recorded as exceptions that only shrink, every run keeps the rules you adopted
+  before and `--reset` returns to the default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared

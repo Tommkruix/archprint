@@ -153,7 +153,7 @@ importing a module that itself imports a forbidden target is out of scope.
 | exceptions | ${violatingFileCount} | <= 3 | ${pass(gate.exceptions.pass)} |
 | role confidence | ${roleConfidence.toFixed(2)} | >= 0.80 | ${pass(gate.roleConfidence.pass)} |
 
-Status: **${result.gate.status}** (all conditions must pass to auto-generate; the conformance floor is the
+Status: **${result.gate.promotedFrom === undefined ? result.gate.status : `${result.gate.promotedFrom}, below the gate and kept adopted with its current exceptions recorded`}** (all conditions must pass to auto-generate; the conformance floor is the
 Wilson 95% lower bound over ${roleFileCount} observations, so a thin sample cannot auto-generate).
 ${
   example
