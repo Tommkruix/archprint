@@ -132,7 +132,7 @@ export const internalsRuleSpec = (
   ),
 });
 
-const importPair = (importer: string, entry: string): string => `${importer} -> ${entry}`;
+export const importPair = (importer: string, entry: string): string => `${importer} -> ${entry}`;
 
 export const entryRuleSpec = (
   analysis: EntryPurityAnalysis,

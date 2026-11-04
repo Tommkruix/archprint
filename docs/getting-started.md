@@ -137,7 +137,9 @@ archprint generate apps/web --expand
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
 Every `generate` keeps the rules you adopted before: a plain run refreshes them alongside the default rule set,
 `--only` and `--rules` add to them, and each run says which it kept and names any earlier rule the current code no
-longer supports. `--reset` starts again from the default rule set and lists the adopted rules it removes.
+longer supports. `--reset` starts again from the default rule set and lists the adopted rules it removes. A rule's
+exceptions only shrink: a file that breaks an adopted rule after it was written stops `generate`, which names it
+and writes nothing until you fix it or accept it with `archprint allow`.
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
 `import archprint from './.archprint/eslint.mjs'`) and, when dependency-cruiser is present, one
 `.archprint/dependency-cruiser.json`; `--expand` adds the per-family configs, per-rule cards and fixtures, and

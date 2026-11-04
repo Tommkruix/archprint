@@ -3,6 +3,7 @@ import type { FamilyKey } from '../detector/family-maturity.js';
 import { autoTier, type AutoTier } from './recommend.js';
 import type { ScanResult } from './scan.js';
 import { NO_CYCLES_RULE } from './adopted-rules.js';
+import { importPair } from '../generator/eslint-app-emitter.js';
 import { appIsolationRuleName } from '../generator/app-isolation-emitters.js';
 import { DEPENDENCY_INTERNALS_RULE } from '../generator/dependency-internals-emitters.js';
 import { ENTRY_PURITY_RULE } from '../generator/entry-purity-emitters.js';
@@ -163,6 +164,22 @@ function collectGates(scan: ScanResult): GateEntry[] {
       files,
     });
   return entries;
+}
+
+/**
+ * What each rule tolerates in this scan, any gate status, in the unit its generated rules exempt: files, or
+ * `importer -> entry` imports for entry purity.
+ */
+export function currentExceptions(scan: ScanResult): Map<string, string[]> {
+  const entryImports = scan.entryPurity.imports
+    .map(({ importer, file }) => importPair(importer, file))
+    .sort();
+  return new Map(
+    collectGates(scan).map((entry) => [
+      entry.id,
+      entry.family === 'entry-purity' ? entryImports : entry.files,
+    ]),
+  );
 }
 
 export function summarizeRules(
