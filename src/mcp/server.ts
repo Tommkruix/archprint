@@ -53,13 +53,14 @@ export const TOOLS = [
     title: 'Explain an architecture rule',
     annotations: READ_ONLY,
     description:
-      'Explain one rule from archprint_scan in depth, by its label (e.g. AP-002, env-access, or "lib !-> app"): its statement, gate status, adoption (enforce, review, or report-only, as in archprint_scan), observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. Read-only.',
+      'Explain one rule from archprint_scan in depth, by its id, label or ESLint name (e.g. AP-002, env-access, no-lib-to-app, "lib !-> app" or archprint/no-lib-to-app): its statement, gate status, adoption (enforce, review, or report-only, as in archprint_scan), observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
-          description: 'rule label from archprint_scan, e.g. AP-002 or env-access',
+          description:
+            'rule id, label or ESLint name from archprint_scan, e.g. AP-002, no-lib-to-app or "lib !-> app"',
         },
         path: {
           type: 'string',

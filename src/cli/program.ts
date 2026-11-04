@@ -4,17 +4,25 @@ import { AllowError, runAllow } from './allow.js';
 import { InvalidAllowError, LEGACY_ALLOW_FILE } from './allowed-exceptions.js';
 import { adoptedAllowances, excludeAllowed } from './allowed-evidence.js';
 import { InvalidRulesError, LEGACY_RULES_FILE } from './adopted-rules.js';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
 import { hasTsConfig, scanRepo, type ScanResult, type ScannedPattern } from './scan.js';
-import { renderExplain, renderInit, renderReport, renderRecommendations } from './report.js';
+import {
+  renderExplain,
+  renderInit,
+  renderReport,
+  renderRecommendations,
+  renderRuleExplain,
+} from './report.js';
+import { findRule, ruleNames } from './rule-ref.js';
 import { buildRecommendations, detectStack } from './recommend.js';
-import { toScanSummary } from './summary.js';
-import { ARCHPRINT_DIR, ESLINT_FILE, FAMILY_NAMES, emitOne } from './generate.js';
+import { summarizeRules, toScanSummary } from './summary.js';
+import { ARCHPRINT_DIR, FAMILY_NAMES, emitOne } from './generate.js';
 import { writeLayout } from './layout.js';
+import { runEslintCheck } from './eslint-check.js';
 import { CONFIG_FILE, readConfig, recordManagedFiles } from './archprint-config.js';
 import { assertRealDirectory, ownedPath, staysInsideItsFolder } from '../generator/owned-paths.js';
 import { stripAdoptionSection } from './adoption-readme.js';
@@ -80,65 +88,6 @@ function applyEmitOverride(detected: InstalledEnforcers, emit?: string): Install
   }
 }
 
-export async function runEslintCheck(appDir: string, outDir: string): Promise<void> {
-  const rulesFile = path.join(outDir, ESLINT_FILE);
-  if (!existsSync(rulesFile)) {
-    console.log('Check: no eslint rules were generated to check.');
-    return;
-  }
-  const [{ ESLint }, tseslint, generated] = await Promise.all([
-    import('eslint'),
-    import('typescript-eslint'),
-    import(pathToFileURL(rulesFile).href) as Promise<{ default: unknown[] }>,
-  ]);
-  const archprintRuleIds = new Set<string>();
-  for (const block of generated.default) {
-    const rules = (block as { rules?: Record<string, unknown> }).rules;
-    if (rules) for (const id of Object.keys(rules)) archprintRuleIds.add(id);
-  }
-  const config = [
-    { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.default.parser } },
-    ...generated.default,
-  ];
-  const eslint = new ESLint({
-    cwd: appDir,
-    overrideConfigFile: true,
-    overrideConfig: config as never,
-  });
-  let results;
-  /* v8 ignore start -- defensive: eslint throws only on an unresolved rule (e.g. an unregistered plugin) */
-  try {
-    results = await eslint.lintFiles(['**/*.{ts,tsx}']);
-  } catch (error) {
-    console.log(`Check: could not run eslint (${(error as Error).message}).`);
-    process.exitCode = 1;
-    return;
-  }
-  /* v8 ignore stop */
-  const offends = (message: { ruleId: string | null; severity: number }): boolean =>
-    message.severity === 2 && message.ruleId !== null && archprintRuleIds.has(message.ruleId);
-  const offenders = results.filter((result) => result.messages.some(offends));
-  const count = offenders.reduce((total, r) => total + r.messages.filter(offends).length, 0);
-  const unparsed = results.filter((result) => result.messages.some((m) => m.fatal));
-  if (unparsed.length > 0) {
-    console.log(`Check: ${unparsed.length} file(s) could not be parsed, so they were not checked:`);
-    for (const result of unparsed.slice(0, 10))
-      console.log(`  ${path.relative(appDir, result.filePath)}`);
-    process.exitCode = 1;
-  }
-  if (count === 0) {
-    if (unparsed.length === 0)
-      console.log('Check: the generated eslint rules pass clean on this repo.');
-    return;
-  }
-  console.log(`Check: ${count} violation(s) of the generated rules:`);
-  for (const result of offenders.slice(0, 10)) {
-    const rules = [...new Set(result.messages.filter(offends).map((m) => m.ruleId))];
-    console.log(`  ${path.relative(appDir, result.filePath)}: ${rules.join(', ')}`);
-  }
-  process.exitCode = 1;
-}
-
 function resolveApp(input: string): string {
   const appDir = path.resolve(input);
   if (hasTsConfig(appDir)) return appDir;
@@ -162,6 +111,15 @@ function reportFolded(folded: readonly string[], configPath: string): void {
 function displayPath(target: string, cwd: string = process.cwd()): string {
   const relative = path.relative(cwd, target);
   return relative === '' ? '.' : relative.startsWith('..') ? target : relative;
+}
+
+/** Whether a flag other than --check and --out was given, so `generate --check` writes before it checks. */
+function generationFlagsPassed(command: Command): boolean {
+  return command.options
+    .map((option) => option.attributeName())
+    .some(
+      (name) => name !== 'check' && name !== 'out' && command.getOptionValueSource(name) === 'cli',
+    );
 }
 
 function findPattern(
@@ -200,6 +158,7 @@ export function buildProgram(version = readVersion()): Command {
       'also enforce the structural-inference families (held for review by default)',
     )
     .option('--expand', 'also write the per-family files, rule cards, and fixtures')
+    .option('--readme', 'also add an archprint section to README.md listing the adopted rules')
     .option('--force', `overwrite an existing ${ARCHPRINT_DIR}/${CONFIG_FILE} and rules`)
     .action(
       (
@@ -209,6 +168,7 @@ export function buildProgram(version = readVersion()): Command {
           fast?: boolean;
           includeStructural?: boolean;
           expand?: boolean;
+          readme?: boolean;
           force?: boolean;
         },
       ) => {
@@ -247,7 +207,7 @@ export function buildProgram(version = readVersion()): Command {
         const structural = options.includeStructural ?? false;
         const enforcers = detectEnforcers(scan.appDir);
         const recommendations = buildRecommendations(scan, detectStack(appDir), enforcers);
-        const { files, folded, configPath } = writeLayout(scan, outDir, {
+        const { files, folded, configPath, touched } = writeLayout(scan, outDir, {
           structural,
           enforcers,
           expand: options.expand,
@@ -256,12 +216,13 @@ export function buildProgram(version = readVersion()): Command {
           recommendations,
           app: displayPath(appDir, cwd),
           cwd,
-          readme: true,
+          readme: options.readme,
+          reset: true,
         });
         const config = readConfig(outDir);
         /* v8 ignore next -- writeLayout always writes a readable config */
         if (config === null) return;
-        console.log(renderInit(config, files.length, structural, version));
+        console.log(renderInit(config, touched, files.length, structural, version));
         reportFolded(folded, displayPath(configPath, cwd));
         if (options.fast) {
           console.log(
@@ -339,8 +300,12 @@ export function buildProgram(version = readVersion()): Command {
       'adopt these rules, keeping the rules adopted before (comma-separated ids, e.g. AP-002,import-style,no-lib-to-app)',
     )
     .option(
+      '--reset',
+      'start from the default rule set instead of keeping the rules adopted before, and list the ones it removes',
+    )
+    .option(
       '--check',
-      'after generating, run the eslint rules against the repo and report pass/fail',
+      'run the generated eslint rules against the repo and report pass/fail; on its own it checks the rules already generated and writes nothing',
     )
     .action(
       async (
@@ -356,9 +321,15 @@ export function buildProgram(version = readVersion()): Command {
           readme?: boolean;
           only?: string;
           rules?: string;
+          reset?: boolean;
           check?: boolean;
         },
+        command: Command,
       ) => {
+        if (options.check && !generationFlagsPassed(command)) {
+          await runEslintCheck(resolveApp(input), path.resolve(options.out));
+          return;
+        }
         if (options.emit !== undefined && !EMIT_TARGETS.includes(options.emit)) {
           console.error(
             `Invalid --emit target '${options.emit}'. Use: ${EMIT_TARGETS.join(', ')}.`,
@@ -428,20 +399,25 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
-        const { files, removed, folded, configPath, kept, dropped } = writeLayout(scan, outDir, {
-          structural,
-          enforcers,
-          graph: options.graph,
-          expand: options.expand,
-          only: options.only,
-          ruleIds,
-          mode: options.fast ? 'fast' : 'deep',
-          version,
-          recommendations,
-          app: displayPath(scan.appDir, cwd),
-          cwd,
-          readme: options.readme,
-        });
+        const { files, removed, folded, configPath, kept, dropped, reset } = writeLayout(
+          scan,
+          outDir,
+          {
+            structural,
+            enforcers,
+            graph: options.graph,
+            expand: options.expand,
+            only: options.only,
+            ruleIds,
+            reset: options.reset,
+            mode: options.fast ? 'fast' : 'deep',
+            version,
+            recommendations,
+            app: displayPath(scan.appDir, cwd),
+            cwd,
+            readme: options.readme,
+          },
+        );
         if (removed.length > 0) {
           console.log(
             `Refreshed: removed ${removed.length} stale archprint output(s) before writing.`,
@@ -453,6 +429,10 @@ export function buildProgram(version = readVersion()): Command {
         if (dropped.length > 0)
           console.log(
             `Dropped ${dropped.length} previously adopted rule(s) the current scan no longer generates: ${dropped.join(', ')}. Review their evidence with 'archprint scan'.`,
+          );
+        if (reset.length > 0)
+          console.log(
+            `Reset to the default rules: removed ${reset.length} previously adopted rule(s): ${reset.join(', ')}.`,
           );
         if (files.length === 0) {
           if (heldStructuralAuto > 0) {
@@ -518,13 +498,32 @@ export function buildProgram(version = readVersion()): Command {
 
   program
     .command('explain')
-    .description('Show the gate evidence behind a rule id')
-    .argument('<id>', 'rule id, e.g. AP-002')
+    .description('Show the gate evidence behind a rule')
+    .argument(
+      '<rule>',
+      'rule id, label or ESLint name, e.g. AP-002, no-lib-to-app, "lib !-> app" or archprint/no-lib-to-app',
+    )
     .argument('[path]', 'app directory', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
-    .action((id: string, input: string, options: { deep?: boolean }) => {
-      const { appDir, pattern } = findPattern(input, id, Boolean(options.deep));
-      console.log(renderExplain(pattern, appDir));
+    .action((ref: string, input: string, options: { deep?: boolean }) => {
+      const appDir = resolveApp(input);
+      const scan = scanRepo(appDir, { deep: Boolean(options.deep) });
+      const pattern = findRule(
+        ref,
+        scan.patterns.map((candidate) => ({ ...candidate, id: candidate.config.id })),
+      );
+      if (pattern !== undefined) {
+        console.log(renderExplain(pattern, appDir));
+        return;
+      }
+      const rules = summarizeRules(scan);
+      const rule = findRule(ref, rules);
+      if (rule === undefined) {
+        throw new Error(
+          `No rule "${ref}" found in ${appDir}. Rules found: ${ruleNames(rules).join(', ') || 'none'}.`,
+        );
+      }
+      console.log(renderRuleExplain(rule));
     });
 
   program
@@ -737,7 +736,10 @@ export function buildProgram(version = readVersion()): Command {
     .description(
       'Allow one adopted rule to be broken in one file, with a reason. archprint check accepts it, lists it in the pull request, and archprint generate stops the generated rules flagging it.',
     )
-    .argument('<rule>', 'adopted rule id, e.g. AP-001 or console-isolation')
+    .argument(
+      '<rule>',
+      'adopted rule id or ESLint name, e.g. AP-001, console-isolation or archprint/no-lib-to-app',
+    )
     .argument('<file>', 'file the rule reports, relative to the current directory')
     .option('--reason <text>', 'why this file is an exception (required)')
     .option('--remove', 'remove the exception instead')

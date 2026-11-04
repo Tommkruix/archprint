@@ -1,7 +1,7 @@
 import { buildImportGraph, type ImportGraph } from '../scanner/import-graph.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
 
-const STORY = /\.stories\.(ts|tsx)$/;
+export const STORY = /\.stories\.(ts|tsx)$/;
 
 export interface StoryImportViolation {
   file: string;

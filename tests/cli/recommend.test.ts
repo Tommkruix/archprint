@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { scanRepo } from '../../src/cli/scan.js';
 import { buildRecommendations, detectStack, resolveEnforcer } from '../../src/cli/recommend.js';
-import { renderAdoptionMarkdown, renderRecommendations } from '../../src/cli/report.js';
+import { renderAdoptionBody, renderRecommendations } from '../../src/cli/report.js';
+import { consoleIsolationRule } from '../../src/cli/adopted-rules.js';
 import type { InstalledEnforcers } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -75,29 +76,34 @@ describe('resolveEnforcer', () => {
   });
 });
 
-describe('renderAdoptionMarkdown', () => {
-  it('renders populated sections with tool and rate, and omits empty ones', () => {
-    const md = renderAdoptionMarkdown(
-      {
-        stack: [],
-        evidence: { apps: 1, asOf: 'x' },
-        enforceNow: [{ title: 'Console isolation', rate: 50, enforcer: 'eslint' }],
-        reportOnly: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
-        review: [{ title: 'Layer boundaries', rate: null, enforcer: 'dependency-cruiser' }],
-        adopt: [],
-      },
-      '1.0.0',
+describe('renderAdoptionBody', () => {
+  const rec = {
+    stack: [],
+    evidence: { apps: 1, asOf: 'x' },
+    enforceNow: [{ title: 'Console isolation', rate: 50, enforcer: 'eslint' }],
+    reportOnly: [{ title: 'Circular dependencies', rate: 56.8, enforcer: '' }],
+    review: [{ title: 'Layer boundaries', rate: null, enforcer: 'dependency-cruiser' }],
+    adopt: [{ title: 'Test isolation', rate: 33.4, enforcer: 'eslint' }],
+  };
+  const consoleRule = consoleIsolationRule(scanRepo(fixture('console-isolation-auto')));
+
+  it("lists each adopted rule with this repo's evidence, and no corpus rates", () => {
+    const md = renderAdoptionBody(rec, [consoleRule]);
+    const { conforming, total } = consoleRule.evidence;
+    expect(md).toContain(
+      `- \`console-isolation\`: Library code must not use console (${conforming} of ${total} files it applies to follow it)`,
     );
-    expect(md).toContain('# Archprint adoption notes');
-    expect(md).toContain('## Adopted rules');
     expect(md).toContain('`archprint wire` references them from your linter config');
-    expect(md).not.toMatch(/once `archprint wire`/);
-    expect(md).not.toMatch(/wired into your linter/);
-    expect(md).toContain('- Console isolation (eslint) (50% of comparable repos)');
+    expect(md).toContain('### Report only');
+    expect(md).toContain('- Circular dependencies');
     expect(md).toContain('- Layer boundaries (dependency-cruiser)');
-    expect(md).toContain('## Report only');
-    expect(md).toContain('- Circular dependencies (56.8% of comparable repos)');
-    expect(md).not.toContain('## Worth adopting');
+    expect(md).not.toContain('comparable repos');
+    expect(md).not.toContain('Worth adopting');
+    expect(md).not.toContain('Test isolation');
+  });
+
+  it('omits the adopted section when no rule was adopted', () => {
+    expect(renderAdoptionBody(rec, [])).not.toContain('### Adopted rules');
   });
 });
 

@@ -153,7 +153,7 @@ archprint explain AP-002 apps/web
 # Structural-inference rules are held for review; add --include-structural to emit them too.
 archprint generate apps/web
 
-# Confirm the generated rules pass on your repo before wiring
+# Confirm the generated rules pass on your repo before wiring (on its own, --check writes nothing)
 archprint generate apps/web --check
 
 # Generate a single rule by id after reviewing it (including a SUGGEST rule)
@@ -270,34 +270,43 @@ format.
   never re-infers a rule), the exceptions you allowed with a reason, what is enforced, followed but only reported,
   held for review, and worth adopting, and the list of managed outputs `eject` removes.
 - **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
-  every inferred ESLint rule (marker-based forbidden imports, `no-restricted-imports` import-style boundaries,
-  console isolation, and, when you include structural rules and do not use dependency-cruiser, layer boundaries,
-  undeclared (phantom) dependencies, the server/client boundary, package internals and entry purity)
+  every inferred ESLint rule (marker-based forbidden imports, import style, test isolation, console isolation,
+  and, when you include structural rules and do not use dependency-cruiser, env access, workspace package APIs,
+  layer boundaries, undeclared (phantom) dependencies, the server/client boundary, package internals and entry
+  purity)
   and needs no extra plugins: it adds rules to your existing ESLint setup, which already parses your TypeScript.
   So you can commit it, publish it, or hand it to another repo and adopt it in one line
   (`import archprint from './.archprint/eslint.mjs'`). Layer boundaries are the exception: they find your app
   relative to the file, so they only apply where it was generated. It self-ignores `**/.archprint/**`. The
-  forbidden-import (AP-) rules and those structural rules ship as a generated local eslint plugin inside it, so
-  wiring the eslint config enforces them too, no extra install.
+  rules ship as a generated local eslint plugin inside it, so wiring the eslint config enforces them too, no extra
+  install. Each rule has its own name, `archprint/<rule id>` (for example `archprint/test-isolation` or
+  `archprint/no-lib-to-app`), so your own settings for core rules such as `no-console` or `no-restricted-imports`
+  never replace archprint's, and archprint's never replace yours.
 - **`.archprint/dependency-cruiser.json`** (when dependency-cruiser is present): one `forbidden` ruleset with the
   mechanical boundaries (public-API deep-import, test-isolation); the review-held ones (layer, role-layering,
   feature-slice, app-isolation, entry-purity, dependency-internals, phantom deps, server/client) are added only with
   `--include-structural`, after you review them.
-- **A managed section in your `README.md`** summarizing what is enforced now, followed but only reported, held for
-  review, and worth adopting (written by `init`, or `generate --readme`), plus a managed `.prettierignore` entry so
-  the generated files stay out of your formatter.
+- **A managed `.prettierignore` entry** so the generated files stay out of your formatter, and, only when you pass
+  `--readme` to `init` or `generate`, a managed section in your `README.md` listing each adopted rule with this
+  repo's evidence (for example "45 of 45 files it applies to follow it"), what your code follows but no rule
+  enforces, and what is held for review.
 
 `--expand` additionally writes the granular artifacts inside `.archprint/`: the per-family ESLint and
 dependency-cruiser JSON, per-rule cards (`.md`) with passing and failing fixtures, the eslint-plugin-boundaries
 element-types config, ts-arch tests, and the Mermaid and Graphviz DOT layer graph.
 
-**Staying in sync, and leaving cleanly.** Re-running `generate` (or `init`) refreshes `.archprint/` and drops any
-rule the evidence no longer supports, so the output never drifts from the code. `wire` inserts a single managed
+**Staying in sync, and leaving cleanly.** Re-running `generate` refreshes `.archprint/`: it keeps every rule you
+adopted, names any the evidence no longer supports and drops it, so the output never drifts from the code.
+`generate --reset` (and `init --force`) start again from the default rule set and list the adopted rules they
+remove. `wire` inserts a single managed
 reference into each enforcement tool your repo uses (a flat eslint config, a `.dependency-cruiser.json`), one that
 survives those regenerations; for a config it cannot safely edit (a JS dependency-cruiser config, say), it prints
 the exact snippet to paste. `eject` removes Archprint's files and every wired reference, restoring each config
-exactly. `generate --check` runs the generated ESLint rules against your repo and reports whether they pass, so you
-can confirm before wiring. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
+exactly. `generate --check` runs the generated ESLint rules against your repo with your own ESLint (version 9 or
+later, installed in the repo) and reports whether they pass; on its own it checks the rules already generated and
+writes nothing. Once they are wired, it lints through your ESLint config, the one your editor and CI run, and names
+any generated rule that config turns off or overrides for some files. Before wiring, it checks the rules on their
+own. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
 
 ## Use in CI
@@ -390,8 +399,8 @@ jobs:
 what architecture rules your repo already follows, with the evidence, before it writes code. It exposes four
 read-only tools: `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`. Each rule
 comes back stated in plain words, with its evidence, the files that break it, and whether archprint enforces it,
-holds it for review, or only reports it. `archprint_explain` takes any rule label from the scan (for example
-`AP-002` or `env-access`). `archprint_check` reports the adopted rules the agent's current change breaks,
+holds it for review, or only reports it. `archprint_explain` takes any rule from the scan by its id, label or
+ESLint name (for example `AP-002`, `env-access`, `no-lib-to-app`, `lib !-> app` or `archprint/no-lib-to-app`). `archprint_check` reports the adopted rules the agent's current change breaks,
 uncommitted edits included, so it can fix them before it finishes. Point Claude Desktop, Claude Code, Cursor, or
 any MCP client at it:
 
@@ -480,25 +489,28 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
 ## Commands
 
 - **`archprint init [path]`**: zero-config setup. Detects the stack, enforces the rules the code already follows,
-  and writes `.archprint/` plus a managed README section. Options: `--expand`, `--include-structural`,
-  `--out <dir>`, `--fast`, `--force`.
+  writes `.archprint/`, and lists every file it wrote or changed. Options: `--readme` (also add a managed section
+  to `README.md`), `--expand`, `--include-structural`, `--out <dir>`, `--fast`, `--force`.
 - **`archprint scan [path]`**: reports the rules the repo already follows, with evidence. Changes nothing.
   `--deep` resolves through barrels and aliases.
-- **`archprint explain <id> [path]`**: shows the gate breakdown for one rule, with a codeframe per exception plus
-  how to fix, when not to use it, and how to enforce it.
+- **`archprint explain <rule> [path]`**: shows the evidence behind one rule, named by its id, label or ESLint name
+  (`AP-002`, `no-lib-to-app`, `"lib !-> app"`, `archprint/no-lib-to-app`): its gate, the files that break it, and how
+  to adopt it. For the forbidden-import (AP-) rules it adds a codeframe per exception, how to fix, and when not to
+  use it.
 - **`archprint recommend [path]`**: recommends a rule set from the repo's evidence and detected stack (works on a
   fresh repo too), and names the installed tool that will enforce each rule it can write.
 - **`archprint generate [path]`**: writes the auto-trusted mechanical rules to `.archprint/` for the linters your
   repo uses; structural rules are held for review. `--emit <eslint|dependency-cruiser|all>` forces the format,
   `--only <family>` and `--rules <ids>` adopt one family or the rules they name (such as `AP-002`, `import-style`
-  or the layer rule `no-lib-to-app`) and keep the rules you adopted before, `--check` runs the generated rules against your repo,
+  or the layer rule `no-lib-to-app`), every run keeps the rules you adopted before and `--reset` returns to the
+  default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
   with `--base <branch or commit>`. Warning only unless `--fail-on new`. `--format text|json|github`,
   `--out <dir>`. See [Use in CI](#use-in-ci).
-- **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule being broken in one file, with a
-  reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
+- **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule (by id or ESLint name) being broken
+  in one file, with a reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
   `generate` stops the generated rules flagging it. `--remove` takes it back out.
 - **`archprint wire`**: references the generated rules from the enforcement tools your repo uses (flat eslint
   config, `.dependency-cruiser.json`) through a managed, reversible reference. `--out <dir>`, `--dry-run`.
@@ -565,7 +577,8 @@ Without dependency-cruiser, each boundary becomes an ESLint rule in `.archprint/
 exempts the files that already break the boundary, so your lint stays green, and it catches a new import across
 the boundary, by relative path or alias. `archprint check` reports a new break in a pull request, and
 `archprint allow` records a justified exception. `--rules` adds the rules it names to the ones you adopted before,
-so you can adopt boundaries one run at a time; a plain `archprint generate` resets to the default rule set. If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
+so you can adopt boundaries one run at a time, and a plain `archprint generate` keeps them too (`--reset` returns to
+the default rule set). If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
 or later there first. The [rules reference](https://tommkruix.github.io/archprint/rules#layer-boundaries-review)
 says exactly which imports and files the rule reads.
 

@@ -7,11 +7,13 @@ import { reachesLayer } from '../detector/reachability.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
 import { autoTier, type AutoTier, type Recommendations } from './recommend.js';
 import type { FamilyKey } from '../detector/family-maturity.js';
-import { CONFIG_FILE, type ArchprintConfig } from './archprint-config.js';
+import type { ArchprintConfig } from './archprint-config.js';
 import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
 import { FAMILY_STATEMENTS } from './rule-statements.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
+import type { RuleSummary } from './summary.js';
+import type { AdoptedRule } from './adopted-rules.js';
 
 const enabled = !process.env.NO_COLOR && process.stdout.isTTY;
 const paint =
@@ -207,23 +209,23 @@ export function renderReport(
   } else if (scan.cycles.gate.status === 'AUTO') {
     lines.push(green(`No circular dependencies ${autoLabel('cycles')}.`), '');
   }
-  if (scan.orphans.orphans.length > 0) {
-    lines.push(
-      yellow(bold(`ORPHAN MODULES (${scan.orphans.orphans.length}, review before deleting)`)),
-    );
-    for (const orphan of scan.orphans.orphans.slice(0, 8)) {
-      lines.push(dim(`  ${orphan}`));
-    }
-    if (scan.orphans.orphans.length > 8) {
-      lines.push(dim(`  ... and ${scan.orphans.orphans.length - 8} more`));
-    }
-    lines.push(
-      dim(
-        '  Nothing imports these and they are not framework entries. Suggest only, not enforced.',
-      ),
-    );
-    lines.push('');
-  }
+  const orphanList = (heading: string, files: readonly string[], note: string): void => {
+    if (files.length === 0) return;
+    lines.push(yellow(bold(`${heading} (${files.length}, review before deleting)`)));
+    for (const file of files.slice(0, 8)) lines.push(dim(`  ${file}`));
+    if (files.length > 8) lines.push(dim(`  ... and ${files.length - 8} more`));
+    lines.push(dim(`  ${note} Suggest only, not enforced.`), '');
+  };
+  orphanList(
+    'IMPORTED ONLY BY TESTS',
+    scan.orphans.testOnly,
+    'Only tests import these production files: dead code the tests keep alive.',
+  );
+  orphanList(
+    'ORPHAN MODULES',
+    scan.orphans.orphans,
+    'Nothing imports these and they are not framework entries.',
+  );
   const autoApi = scan.publicApi.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApi = scan.publicApi.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoApi.length > 0) {
@@ -500,6 +502,35 @@ function enforceHint(id: string, status: GenerationStatus): string {
   return 'this pattern does not meet the confidence gate, so there is nothing to enforce yet.';
 }
 
+function ruleEnforceHint(rule: RuleSummary): string {
+  if (rule.status !== 'AUTO')
+    return 'this rule does not meet the confidence gate, so there is nothing to enforce yet.';
+  const structural = rule.adoption === 'review' ? ' --include-structural' : '';
+  return `archprint generate${structural} --rules ${rule.id}  (adds it to the rules in .archprint/)`;
+}
+
+/** The evidence behind any rule `scan` lists; the AP- rules have their own, fuller explanation. */
+export function renderRuleExplain(rule: RuleSummary): string {
+  const pct = (value: number): string => (value * 100).toFixed(1);
+  const lines = [
+    bold(rule.label === rule.id ? rule.id : `${rule.id}  ${rule.label}`),
+    rule.statement,
+    '',
+    `Status: ${rule.status}${rule.adoption === 'review' ? ' (held for review)' : ''}`,
+    dim(
+      `  observations: ${rule.observations} (${pct(rule.observedConformance)}% conforming); confidence floor ${pct(rule.confidenceFloor)}%, the Wilson 95% lower bound`,
+    ),
+  ];
+  if (rule.exceptions.length > 0) {
+    lines.push('', `Exceptions (${rule.violatingFiles} file(s)):`);
+    lines.push(...rule.exceptions.map((file) => `  ${file}`));
+    if (rule.violatingFiles > rule.exceptions.length)
+      lines.push(dim(`  ... and ${rule.violatingFiles - rule.exceptions.length} more`));
+  }
+  lines.push('', bold('How to enforce'), `  ${ruleEnforceHint(rule)}`);
+  return lines.join('\n');
+}
+
 export function renderExplain(pattern: ScannedPattern, appDir: string): string {
   const { config, result } = pattern;
   const lines = [
@@ -540,55 +571,41 @@ export function renderExplain(pattern: ScannedPattern, appDir: string): string {
 const enforcerTag = (r: { enforcer?: string }): string =>
   r.enforcer ? dim(`  [${r.enforcer}]`) : '';
 
-const adoptionItem = (r: { title: string; enforcer?: string; rate: number | null }): string => {
-  const tool = r.enforcer ? ` (${r.enforcer})` : '';
-  const rate = r.rate === null ? '' : ` (${r.rate}% of comparable repos)`;
-  return `- ${r.title}${tool}${rate}`;
+const adoptionItem = (r: { title: string; enforcer?: string }): string =>
+  `- ${r.title}${r.enforcer ? ` (${r.enforcer})` : ''}`;
+
+const adoptionSection = (heading: string, blurb: string, items: string[]): string[] =>
+  items.length === 0 ? [] : ['', `### ${heading}`, blurb, '', ...items];
+
+const asSentence = (statement: string): string => {
+  const trimmed = statement.replace(/\.$/, '');
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 };
 
-const adoptionSection = (
-  heading: string,
-  blurb: string,
-  items: Recommendations['adopt'],
-): string[] =>
-  items.length === 0 ? [] : ['', `### ${heading}`, blurb, '', ...items.map(adoptionItem)];
+const adoptedItem = (rule: AdoptedRule): string =>
+  `- \`${rule.id}\`: ${asSentence(rule.statement)} (${rule.evidence.conforming} of ${rule.evidence.total} files it applies to follow it)`;
 
-export function renderAdoptionBody(rec: Recommendations): string {
+/** The README section: this repo's adopted rules with their evidence, and what it follows but does not enforce. */
+export function renderAdoptionBody(rec: Recommendations, rules: readonly AdoptedRule[]): string {
   return [
     ...adoptionSection(
       'Adopted rules',
       'These rules match what your code already follows. They are written to `.archprint/`. `archprint wire` references them from your linter config, and `archprint eject` removes them.',
-      rec.enforceNow,
+      rules.map(adoptedItem),
     ),
     ...adoptionSection(
       'Report only',
       'Your code already follows these, but no adopted rule enforces them.',
-      rec.reportOnly,
+      rec.reportOnly.map(adoptionItem),
     ),
     ...adoptionSection(
       'Held for review',
       'Close, but the evidence is thin or the inference could be wrong. Review with `archprint scan` before enforcing.',
-      rec.review,
-    ),
-    ...adoptionSection(
-      'Worth adopting',
-      'Common in comparable repos, not yet in your code.',
-      rec.adopt,
+      rec.review.map(adoptionItem),
     ),
   ]
     .join('\n')
     .trim();
-}
-
-export function renderAdoptionMarkdown(rec: Recommendations, version: string): string {
-  return [
-    `# Archprint adoption notes`,
-    '',
-    `Generated by archprint v${version}. Run \`archprint eject\` to remove archprint's rules and this file.`,
-    '',
-    renderAdoptionBody(rec),
-    '',
-  ].join('\n');
 }
 
 export function renderRecommendations(rec: Recommendations, version: string): string {
@@ -634,6 +651,7 @@ export function renderRecommendations(rec: Recommendations, version: string): st
 
 export function renderInit(
   manifest: ArchprintConfig,
+  touched: readonly string[],
   writtenCount: number,
   structural: boolean,
   version: string,
@@ -675,7 +693,7 @@ export function renderInit(
     for (const r of manifest.adopt) lines.push(dim(`  - ${r.title}`) + evidence(r));
     lines.push('');
   }
-  lines.push(dim(`Wrote ${manifest.rulesDir}/${CONFIG_FILE}.`));
+  lines.push(dim(`Wrote ${touched.join(', ')}.`));
   if (writtenCount > 0) {
     lines.push(
       dim("Run 'archprint wire' to reference the rules from your linter config, then run your"),

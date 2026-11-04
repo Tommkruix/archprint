@@ -84,11 +84,11 @@ archprint init apps/web
 ```
 
 `init` scans the repo, writes the auto-trusted (mechanical) rules into `.archprint/` (only for the linters
-your repo uses, it detects ESLint and dependency-cruiser), adds a managed section to your `README.md`
-explaining what it did, and prints the tiers: what is enforced now, what your code follows that is reported but
+your repo uses, it detects ESLint and dependency-cruiser), lists every file it wrote or changed, and prints the
+tiers: what is enforced now, what your code follows that is reported but
 not written as a rule yet (circular dependencies today), what to review before enforcing, and what comparable repos
-commonly adopt that you do not yet. Then reference the generated rules from
-your linter:
+commonly adopt that you do not yet. Pass `--readme` to also add a managed section to your `README.md` listing the
+adopted rules with this repo's evidence. Then reference the generated rules from your linter:
 
 ```bash
 archprint wire      # inserts a managed, reversible reference into your eslint / dependency-cruiser config
@@ -114,7 +114,7 @@ archprint explain AP-002 apps/web
 # Write the auto-trusted mechanical rules (structural ones are held for review)
 archprint generate apps/web
 
-# Check the generated rules pass on your repo before you wire them
+# Check the generated rules pass on your repo before you wire them (writes nothing)
 archprint generate apps/web --check
 
 # Emit one specific rule after reviewing it (including a SUGGEST rule)
@@ -135,8 +135,9 @@ archprint generate apps/web --expand
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
-A plain `generate` writes the default rule set; `--only` and `--rules` add to the rules you adopted before and say
-which they kept, and name any earlier rule the current code no longer supports.
+Every `generate` keeps the rules you adopted before: a plain run refreshes them alongside the default rule set,
+`--only` and `--rules` add to them, and each run says which it kept and names any earlier rule the current code no
+longer supports. `--reset` starts again from the default rule set and lists the adopted rules it removes.
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
 `import archprint from './.archprint/eslint.mjs'`) and, when dependency-cruiser is present, one
 `.archprint/dependency-cruiser.json`; `--expand` adds the per-family configs, per-rule cards and fixtures, and
@@ -251,7 +252,8 @@ success and `1` on error.
 rules your repo already follows before they write code. It exposes read-only `archprint_scan`,
 `archprint_recommend`, `archprint_explain`, and `archprint_check` tools. Each rule comes back stated in plain
 words, with its evidence, the files that break it, and whether archprint enforces it, holds it for review, or only
-reports it. `archprint_explain` takes any rule label from the scan (for example `AP-002` or `env-access`).
+reports it. `archprint_explain` takes any rule from the scan by its id, label or ESLint name (for example `AP-002`,
+`env-access`, `no-lib-to-app` or `lib !-> app`).
 `archprint_check` reports the adopted rules the agent's current change breaks, uncommitted edits included, so it
 can fix them before it finishes. Point any MCP client at it:
 

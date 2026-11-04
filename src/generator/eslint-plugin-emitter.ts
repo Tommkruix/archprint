@@ -52,6 +52,28 @@ export const MAKE_RULE_FUNCTION = `function makeRule(spec) {
   };
 }`;
 
+/** The imports the scan counts: top-level declarations (value bindings only unless `typeImports`) and `import('x')`. */
+export const IMPORT_RUNTIME = `function isValueImport(node) {
+  return (
+    node.importKind !== 'type' &&
+    (node.specifiers.length === 0 ||
+      node.specifiers.some((specifier) => specifier.type !== 'ImportSpecifier' || specifier.importKind !== 'type'))
+  );
+}
+
+function importVisitors(check, typeImports = false) {
+  return {
+    ImportDeclaration(node) {
+      if (node.parent.type === 'Program' && (typeImports || isValueImport(node))) check(node, node.source.value);
+    },
+    ImportExpression(node) {
+      if (node.source.type === 'Literal' && typeof node.source.value === 'string') {
+        check(node, node.source.value);
+      }
+    },
+  };
+}`;
+
 export const LINTED_FILES = "['**/*.{ts,tsx}']";
 
 export const PLUGIN_CONFIGS = `SPECS.map((spec) => ({

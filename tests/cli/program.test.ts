@@ -209,7 +209,7 @@ describe('cli program', () => {
       '--out',
       out,
     ]);
-    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'eslint.test-isolation.archprint.json'))).toBe(true);
     expect(existsSync(path.join(out, 'dependency-cruiser.test-isolation.archprint.json'))).toBe(
       false,
     );
@@ -321,9 +321,33 @@ describe('cli program', () => {
     process.exitCode = 0;
   });
 
-  it('generate --check runs the generated eslint rules against the repo', async () => {
-    await run(['generate', auto, '--check', '--out', out]);
+  it('generate with --check and another flag generates, then runs the eslint rules against the repo', async () => {
+    await run(['generate', auto, '--fast', '--check', '--out', out]);
+    expect(existsSync(path.join(out, 'eslint.mjs'))).toBe(true);
     expect(output()).toContain('Check: the generated eslint rules pass clean');
+  });
+
+  it('generate --check on its own checks the rules already generated and writes nothing', async () => {
+    await run(['generate', auto, '--fast', '--out', out]);
+    const snapshot = () =>
+      readdirSync(out).map((name) => [name, readFileSync(path.join(out, name), 'utf8')]);
+    const before = snapshot();
+    logSpy.mockClear();
+    await run(['generate', auto, '--check', '--out', out]);
+    expect(snapshot()).toEqual(before);
+    expect(output()).toContain('Check: the generated eslint rules pass clean');
+    expect(output()).not.toMatch(/^generated /m);
+  });
+
+  it('generate --reset returns to the default rules and names the adopted rules it removed', async () => {
+    await run(['generate', layerAuto, '--include-structural', '--only', 'layer', '--out', out]);
+    await run(['generate', layerAuto, '--fast', '--out', out]);
+    expect(output()).toContain('Kept 1 previously adopted rule(s): no-helpers-to-views.');
+    logSpy.mockClear();
+    await run(['generate', layerAuto, '--fast', '--reset', '--out', out]);
+    expect(output()).toContain(
+      'Reset to the default rules: removed 1 previously adopted rule(s): no-helpers-to-views.',
+    );
   });
 
   it('generate --expand writes the app-isolation config for AUTO app isolation', async () => {
@@ -408,7 +432,7 @@ describe('cli program', () => {
 
   it('generate --expand writes the console-isolation eslint config', async () => {
     await run(['generate', consoleAuto, '--fast', '--expand', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.console.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'eslint.console-isolation.archprint.json'))).toBe(true);
   });
 
   it('generate --expand writes the env-access eslint config when env reads are centralized', async () => {
@@ -416,9 +440,9 @@ describe('cli program', () => {
     expect(existsSync(path.join(out, 'eslint.env-access.archprint.json'))).toBe(true);
   });
 
-  it('generate --expand writes the workspace-package rules into no-restricted-imports', async () => {
+  it('generate --expand writes the workspace-package eslint rule', async () => {
     await run(['generate', wpkgAuto, '--include-structural', '--fast', '--expand', '--out', out]);
-    expect(existsSync(path.join(out, 'eslint.no-restricted-imports.archprint.json'))).toBe(true);
+    expect(existsSync(path.join(out, 'eslint.workspace-package.archprint.json'))).toBe(true);
   });
 
   it('generate --expand writes the stories-isolation config when stories are unimported', async () => {
@@ -492,8 +516,25 @@ describe('cli program', () => {
     await expect(run(['explain', 'AP-002', here])).rejects.toThrow(/No tsconfig/);
   });
 
-  it('errors when the rule id is unknown', async () => {
-    await expect(run(['explain', 'AP-999', auto])).rejects.toThrow(/No pattern/);
+  it('errors when the rule id is unknown, naming the rules it found', async () => {
+    await expect(run(['explain', 'AP-999', auto])).rejects.toThrow(
+      /No rule "AP-999".*Rules found: .*AP-002/,
+    );
+  });
+
+  it('explain resolves a layer rule by id, ESLint name or label, and says how to adopt it', async () => {
+    for (const ref of [
+      'no-helpers-to-views',
+      'archprint/no-helpers-to-views',
+      'HELPERS  !-> views',
+    ]) {
+      logSpy.mockClear();
+      await run(['explain', ref, layerAuto]);
+      expect(output()).toContain('no-helpers-to-views  helpers !-> views');
+    }
+    expect(output()).toContain(
+      'archprint generate --include-structural --rules no-helpers-to-views',
+    );
   });
 
   it('--version is handled by exitOverride', async () => {
@@ -520,7 +561,8 @@ describe('init', () => {
   const config = (): Record<string, unknown> =>
     JSON.parse(readFileSync(path.join(tmp, '.archprint', 'config.json'), 'utf8'));
 
-  it('writes the .archprint layout, a README section, and reports the tiers', async () => {
+  it('writes the .archprint layout, leaves the README alone, and reports the tiers', async () => {
+    writeFileSync(path.join(tmp, 'README.md'), '# App\n');
     await run(['init', auto]);
     expect(existsSync(path.join(tmp, '.archprint', 'config.json'))).toBe(true);
     expect(existsSync(path.join(tmp, '.archprint', 'eslint.mjs'))).toBe(true);
@@ -528,12 +570,14 @@ describe('init', () => {
     expect(config().managed).toMatchObject({ files: ['.archprint/eslint.mjs'] });
     expect((config().rules as unknown[]).length).toBeGreaterThan(0);
     expect(config().allowed).toEqual([]);
-    expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).toContain('<!-- archprint:start -->');
+    expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).toBe('# App\n');
     expect(config().archprintVersion).toBe('9.9.9');
     expect((config().enforced as unknown[]).length).toBeGreaterThan(0);
     expect(output()).toContain('initialized');
     expect(output()).toContain('Enforcing now');
-    expect(output()).toContain('Wrote .archprint/config.json.');
+    expect(output()).toContain(
+      'Wrote .archprint/config.json, .archprint/eslint.mjs, .prettierignore.',
+    );
     expect(output().indexOf('Circular dependencies')).toBeGreaterThan(
       output().indexOf('Enforcing now'),
     );
@@ -591,9 +635,22 @@ describe('init', () => {
     expect(output()).toContain('Refreshed: removed');
   });
 
+  it('init --readme adds the adopted rules with their evidence to the README, and no corpus rates', async () => {
+    writeFileSync(path.join(tmp, 'README.md'), '# App\n');
+    await run(['init', auto, '--readme']);
+    const readme = readFileSync(path.join(tmp, 'README.md'), 'utf8');
+    expect(readme).toContain('<!-- archprint:start -->');
+    expect(readme).toMatch(
+      /- `AP-001`: A request handler must not import the database client directly \(\d+ of \d+ files it applies to follow it\)/,
+    );
+    expect(readme).not.toContain('comparable repos');
+    expect(output()).toContain('README.md');
+  });
+
   it('eject removes the generated files, the config, and the README section', async () => {
     writeFileSync(path.join(tmp, 'README.md'), '# App\n\nHello.\n');
-    await run(['init', auto]);
+    await run(['init', auto, '--readme']);
+    expect(readFileSync(path.join(tmp, 'README.md'), 'utf8')).toContain('archprint:start');
     expect(existsSync(path.join(tmp, '.archprint'))).toBe(true);
     await run(['eject']);
     expect(existsSync(path.join(tmp, '.archprint'))).toBe(false);
@@ -656,7 +713,7 @@ describe('init', () => {
           expect(readFileSync(path.join(outside, name), 'utf8')).toBe('mine\n');
         }
       };
-      await run(['init', auto]);
+      await run(['init', auto, '--readme']);
       untouched();
       await run(['eject']);
       untouched();
@@ -683,7 +740,7 @@ describe('init', () => {
     mkdirSync(path.join(tmp, 'docs'));
     writeFileSync(path.join(tmp, 'docs', 'README.md'), '# App\n');
     symlinkSync(path.join('docs', 'README.md'), path.join(tmp, 'README.md'));
-    await run(['init', auto]);
+    await run(['init', auto, '--readme']);
     expect(readFileSync(path.join(tmp, 'docs', 'README.md'), 'utf8')).toContain('archprint:start');
   });
 

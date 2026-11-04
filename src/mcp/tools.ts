@@ -13,6 +13,7 @@ import {
 } from '../cli/summary.js';
 import { buildRecommendations, detectStack, type Recommendations } from '../cli/recommend.js';
 import { guidanceFor, type RuleGuidance } from '../cli/rule-guidance.js';
+import { findRule, ruleNames } from '../cli/rule-ref.js';
 import type { DetectedPattern } from '../detector/pattern-detector.js';
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -74,23 +75,20 @@ export interface ExplainResult {
 
 export function explainTool(id: string, input: string): ExplainResult {
   const { root, dirs } = resolveAppDirs(input);
-  const wanted = id.toLowerCase();
   const known: string[] = [];
   for (const dir of dirs) {
     const scan = scanRepo(dir, { deep: false });
     const rules = summarizeRules(scan, Number.POSITIVE_INFINITY);
-    const rule = rules.find((candidate) => candidate.label.toLowerCase() === wanted);
+    const rule = findRule(id, rules);
     if (rule) {
-      const pattern = scan.patterns.find(
-        (candidate) => candidate.config.id.toLowerCase() === wanted,
-      );
+      const pattern = scan.patterns.find((candidate) => candidate.config.id === rule.id);
       return {
         app: displayApp(dir, root),
         rule,
         ...(pattern && { pattern: pattern.result, guidance: guidanceFor(pattern.config.name) }),
       };
     }
-    known.push(...rules.map((candidate) => candidate.label));
+    known.push(...ruleNames(rules));
   }
   throw new Error(
     `No rule "${id}" found under ${path.resolve(input)}. Rules found: ${[...new Set(known)].join(', ') || 'none'}.`,

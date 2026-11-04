@@ -53,10 +53,16 @@ export const REMOTE_TOOLS = [
     title: 'Explain an architecture rule',
     annotations: READ_ONLY_REMOTE,
     description:
-      'Clone a public repository by URL (read-only, ephemeral) and explain the confidence-gate evidence behind one inferred rule id (e.g. AP-002): its gate status, adoption (enforce, review, or report-only), conformance stats, and the files that violate it.',
+      'Clone a public repository by URL (read-only, ephemeral) and explain the confidence-gate evidence behind one inferred rule, by id, label or ESLint name (e.g. AP-002 or no-lib-to-app): its gate status, adoption (enforce, review, or report-only), conformance stats, and the files that violate it.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string', description: 'rule id, e.g. AP-002' }, ...repoProperty },
+      properties: {
+        id: {
+          type: 'string',
+          description: 'rule id, label or ESLint name, e.g. AP-002 or no-lib-to-app',
+        },
+        ...repoProperty,
+      },
       required: ['id', 'repo'],
     },
   },

@@ -59,7 +59,9 @@ describe('writeLayout', () => {
       'Env access',
     ]);
     expect(config.review.map((entry) => entry.title)).not.toContain('Env access');
-    expect(readmeSection('Adopted rules')).toContain('Env access');
+    expect(readmeSection('Adopted rules')).toContain(
+      '`env-access`: Read process.env only in the config layer',
+    );
     expect(readmeSection('Held for review')).not.toContain('Env access');
     expect(readmeSection('Report only')).toContain('Circular dependencies');
   });
@@ -96,9 +98,19 @@ describe('writeLayout', () => {
     expect(adoptedIds()).toEqual(['console-isolation', 'env-access']);
   });
 
-  it('refreshes to the default rule set when run without a scope', () => {
+  it('keeps the adopted rules when run without a scope', () => {
     write({ structural: true, ruleIds: ['env-access'] });
     const result = write();
+    expect(result.kept).toEqual(['env-access']);
+    expect(result.reset).toEqual([]);
+    expect(adoptedIds()).toEqual(['console-isolation', 'env-access', 'no-cycles']);
+    expect(eslintSource()).toContain(ENV_MESSAGE);
+  });
+
+  it('returns to the default rule set with reset, naming the rules it removed', () => {
+    write({ structural: true, ruleIds: ['env-access'] });
+    const result = write({ reset: true });
+    expect(result.reset).toEqual(['env-access']);
     expect(result.kept).toEqual([]);
     expect(adoptedIds()).toEqual(['console-isolation', 'no-cycles']);
     expect(existsSync(path.join(outDir, 'eslint.mjs'))).toBe(true);
