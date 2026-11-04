@@ -138,7 +138,7 @@ describe('rules that cannot be baselined, and how a baselined rule reads', () =>
       gate: { ...pattern!.result.gate, status: 'AUTO', promotedFrom: 'SUGGEST' },
     }).files.card;
     expect(card).toContain(
-      'Status: **SUGGEST, adopted with a baseline of its current exceptions**',
+      'Status: **SUGGEST, below the gate and kept adopted with its current exceptions recorded**',
     );
   });
 });
