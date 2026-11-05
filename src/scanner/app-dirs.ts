@@ -5,7 +5,8 @@ import { createIgnoreFilter } from './ignore-filter.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.next', '.git']);
 
-function findTsconfigDirs(root: string): string[] {
+/** Every directory under `root` with a tsconfig.json or tsconfig.base.json, the root included, skipping ignored ones. */
+export function findTsconfigDirs(root: string): string[] {
   const dirs: string[] = [];
   const isIgnored = createIgnoreFilter(root);
   const walk = (dir: string): void => {

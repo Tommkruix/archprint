@@ -7,6 +7,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { explainTool, recommendTool, scanTool } from '../../src/mcp/tools.js';
 import { callTool, createServer, runTool } from '../../src/mcp/server.js';
+import type { GapReport } from '../../src/cli/gap-report.js';
+import { writeTree } from '../integration/layer-app.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => path.join(here, '..', 'fixtures', name);
@@ -135,6 +137,44 @@ describe('mcp archprint_check', () => {
   });
 });
 
+describe('mcp archprint_gap_report', () => {
+  const mapping = {
+    rules: [
+      {
+        template: 'forbid-usage',
+        source: { file: 'CLAUDE.md', quote: 'Never call fetch in a component.' },
+        name: 'no-fetch-in-components',
+        files: ['src/components/**'],
+        usage: ['fetch'],
+      },
+    ],
+  };
+
+  it('verifies a mapping against the repository at path', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'archprint-mcp-gap-'));
+    tmpDirs.push(repo);
+    writeTree(repo, {
+      'CLAUDE.md': '- Never call fetch in a component.\n',
+      'tsconfig.json': '{}\n',
+      'src/components/card.tsx': "export const Card = fetch('/x');\n",
+    });
+    const report = runTool('archprint_gap_report', { path: repo, mapping }) as GapReport;
+    expect(report.entries).toEqual([
+      expect.objectContaining({
+        id: 'doc-no-fetch-in-components',
+        status: 'baseline',
+        source: { ...mapping.rules[0]!.source, line: 1 },
+      }),
+    ]);
+  });
+
+  it('answers a mapping that is not { rules } with an error naming the expected shape', () => {
+    const response = callTool('archprint_gap_report', { path: auto, mapping: [] });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]!.text).toContain('A mapping is { "rules": [ ... ] }');
+  });
+});
+
 describe('mcp runTool dispatch', () => {
   it('routes archprint_scan (path defaults to ".")', () => {
     const result = runTool('archprint_scan', { path: auto }) as { apps: unknown[] };
@@ -185,12 +225,13 @@ describe('mcp server over an in-memory transport', () => {
     return client;
   }
 
-  it('lists the four read-only tools', async () => {
+  it('lists the five read-only tools', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       'archprint_check',
       'archprint_explain',
+      'archprint_gap_report',
       'archprint_recommend',
       'archprint_scan',
     ]);

@@ -19,18 +19,46 @@ const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 const isSingleFileComponent = (filePath: string): boolean =>
   filePath.endsWith('.vue') || filePath.endsWith('.svelte');
 
+const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
+
+/** A component's script blocks where they are in the file, everything else blanked, so lines and columns match it. */
+function componentScript(text: string): string {
+  let source = '';
+  let end = 0;
+  for (const match of text.matchAll(SFC_SCRIPT)) {
+    const body = match[1] ?? '';
+    const start = match.index + match[0].indexOf('>') + 1;
+    source += blank(text.slice(end, start)) + body;
+    end = start + body.length;
+  }
+  return source + blank(text.slice(end));
+}
+
 function parseableSource(
   absoluteFilePath: string,
   text: string,
 ): { source: string; scriptKind: ts.ScriptKind } {
   if (isSingleFileComponent(absoluteFilePath)) {
-    const blocks = [...text.matchAll(SFC_SCRIPT)].map((match) => match[1] ?? '');
-    return { source: blocks.join('\n'), scriptKind: ts.ScriptKind.TS };
+    return { source: componentScript(text), scriptKind: ts.ScriptKind.TS };
   }
   return {
     source: text,
     scriptKind: absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   };
+}
+
+/** A source file's text as TypeScript parses it: Vue and Svelte files contribute their script blocks. */
+export function readSource(absoluteFilePath: string): {
+  source: string;
+  scriptKind: ts.ScriptKind;
+} {
+  return parseableSource(absoluteFilePath, readFileSync(absoluteFilePath, 'utf8'));
+}
+
+/** A source file's syntax tree, without parent pointers. */
+export function parseSourceFile(absoluteFilePath: string): ts.SourceFile {
+  const { source, scriptKind } = readSource(absoluteFilePath);
+  return ts.createSourceFile(absoluteFilePath, source, ts.ScriptTarget.Latest, false, scriptKind);
 }
 
 export interface WalkedFile extends RoleClassification {
@@ -160,6 +188,8 @@ interface RawImport {
   line: number;
   /** `export ... from 'x'`: a module reference, not an import the rule families count. */
   reexport: boolean;
+  /** `import('x')`: the names it takes are unknown. */
+  dynamic: boolean;
 }
 
 function valueBindingsOf(clause: ts.ImportClause | undefined): ValueBinding[] {
@@ -181,6 +211,19 @@ function valueBindingsOf(clause: ts.ImportClause | undefined): ValueBinding[] {
   return bound;
 }
 
+function reexportBindingsOf(statement: ts.ExportDeclaration): ValueBinding[] {
+  if (statement.isTypeOnly) return [];
+  const clause = statement.exportClause;
+  if (clause === undefined) return [{ imported: '*', local: '*' }];
+  if (ts.isNamespaceExport(clause)) return [{ imported: '*', local: clause.name.text }];
+  return clause.elements
+    .filter((element) => !element.isTypeOnly)
+    .map((element) => ({
+      imported: (element.propertyName ?? element.name).text,
+      local: element.name.text,
+    }));
+}
+
 const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
 const FAST_PARSE_CACHE_CAP = 50000;
 
@@ -190,17 +233,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
     return cached.raw;
   }
-  const { source, scriptKind } = parseableSource(
-    absoluteFilePath,
-    readFileSync(absoluteFilePath, 'utf8'),
-  );
-  const sourceFile = ts.createSourceFile(
-    absoluteFilePath,
-    source,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKind,
-  );
+  const sourceFile = parseSourceFile(absoluteFilePath);
   const lineOf = (node: ts.Node): number =>
     sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
   const raw: RawImport[] = [];
@@ -212,6 +245,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         valueBindings: valueBindingsOf(statement.importClause),
         line: lineOf(statement),
         reexport: false,
+        dynamic: false,
       });
     }
     if (
@@ -219,12 +253,14 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
       statement.moduleSpecifier !== undefined &&
       ts.isStringLiteral(statement.moduleSpecifier)
     ) {
+      const valueBindings = reexportBindingsOf(statement);
       raw.push({
         specifier: statement.moduleSpecifier.text,
-        hasValueBinding: !statement.isTypeOnly,
-        valueBindings: [],
+        hasValueBinding: valueBindings.length > 0,
+        valueBindings,
         line: lineOf(statement),
         reexport: true,
+        dynamic: false,
       });
     }
   }
@@ -241,6 +277,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         valueBindings: [],
         line: lineOf(node),
         reexport: false,
+        dynamic: true,
       });
     }
     ts.forEachChild(node, visit);
@@ -260,13 +297,32 @@ export interface ImportLocation {
 export function valueImportBindings(
   absoluteFilePath: string,
 ): (ValueBinding & { specifier: string })[] {
-  return parseFastImports(absoluteFilePath).flatMap((imp) =>
+  return importsOf(absoluteFilePath).flatMap((imp) =>
     imp.valueBindings.map((binding) => ({ ...binding, specifier: imp.specifier })),
   );
 }
 
-const importsOf = (absoluteFilePath: string): RawImport[] =>
-  parseFastImports(absoluteFilePath).filter((imp) => !imp.reexport);
+function importsOf(absoluteFilePath: string): RawImport[] {
+  return parseFastImports(absoluteFilePath).filter((imp) => !imp.reexport);
+}
+
+/** A module a file takes values from, as written; `names` are the exported names (`*` for all), null for `import('x')`. */
+export interface ModuleImport {
+  specifier: string;
+  line: number;
+  names: string[] | null;
+}
+
+/** A file's value imports, `import('x')` calls and value re-exports, in source order; type-only ones are left out. */
+export function valueModuleImports(absoluteFilePath: string): ModuleImport[] {
+  return parseFastImports(absoluteFilePath)
+    .filter((imp) => imp.hasValueBinding)
+    .map((imp) => ({
+      specifier: imp.specifier,
+      line: imp.line,
+      names: imp.dynamic ? null : imp.valueBindings.map((binding) => binding.imported),
+    }));
+}
 
 export function importLocations(absoluteFilePath: string): ImportLocation[] {
   return importsOf(absoluteFilePath).map(({ specifier, line }) => ({ specifier, line }));
@@ -279,17 +335,7 @@ export function moduleReferences(absoluteFilePath: string): string[] {
 
 /** The string literals in a file, such as the setup files a tool's config names. */
 export function stringLiterals(absoluteFilePath: string): string[] {
-  const { source, scriptKind } = parseableSource(
-    absoluteFilePath,
-    readFileSync(absoluteFilePath, 'utf8'),
-  );
-  const sourceFile = ts.createSourceFile(
-    absoluteFilePath,
-    source,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKind,
-  );
+  const sourceFile = parseSourceFile(absoluteFilePath);
   const literals: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
