@@ -49,17 +49,38 @@ export interface FindingDiff {
   fixed: Finding[];
 }
 
+function byIdentity(findings: readonly Finding[]): Map<string, Finding[]> {
+  const groups = new Map<string, Finding[]>();
+  for (const finding of findings) {
+    const key = identity(finding);
+    groups.set(key, [...(groups.get(key) ?? []), finding]);
+  }
+  return groups;
+}
+
+const inOrder = (a: Finding, b: Finding): number =>
+  identity(a).localeCompare(identity(b)) || (a.line ?? 0) - (b.line ?? 0);
+
+/**
+ * What the head adds and removes, counting like ESLint's bulk suppressions with the base as the baseline: a
+ * finding is new when the head has more of its kind (rule, file, subject) than the base. Then every one of them is
+ * listed, since which is the new one cannot be told; fewer than the base means some were fixed.
+ */
 export function diffFindings(
   base: readonly Finding[],
   head: readonly Finding[],
   renames: ReadonlyMap<string, string>,
 ): FindingDiff {
-  const renamedBase = base.map((finding) => renameFinding(finding, renames));
-  const baseKeys = new Set(renamedBase.map(identity));
-  const headKeys = new Set(head.map(identity));
-  const byIdentity = (a: Finding, b: Finding): number => identity(a).localeCompare(identity(b));
-  return {
-    introduced: head.filter((finding) => !baseKeys.has(identity(finding))).sort(byIdentity),
-    fixed: renamedBase.filter((finding) => !headKeys.has(identity(finding))).sort(byIdentity),
-  };
+  const baseGroups = byIdentity(base.map((finding) => renameFinding(finding, renames)));
+  const headGroups = byIdentity(head);
+  const introduced: Finding[] = [];
+  const fixed: Finding[] = [];
+  for (const [key, group] of headGroups) {
+    if (group.length > (baseGroups.get(key)?.length ?? 0)) introduced.push(...group);
+  }
+  for (const [key, group] of baseGroups) {
+    const remaining = headGroups.get(key)?.length ?? 0;
+    if (group.length > remaining) fixed.push(...group.slice(remaining));
+  }
+  return { introduced: introduced.sort(inOrder), fixed: fixed.sort(inOrder) };
 }

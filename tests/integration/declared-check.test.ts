@@ -69,6 +69,18 @@ describe('archprint check and explain with a declared rule', { timeout: 120_000 
     expect(result.exceptions.left).toBe(1);
   });
 
+  it('reports a second break added to a file whose first one is recorded, listing both', () => {
+    put('src/components/card.tsx', FETCH + "export const More = () => fetch('/y');\n");
+    const result = runCheck({ cwd: repo, out: '.archprint', base: 'main' });
+    if (result.status !== 'checked') throw new Error(`check did not run: ${result.status}`);
+    expect(
+      result.introduced.map((finding) => [finding.ruleId, finding.file, finding.line]),
+    ).toEqual([
+      ['doc-no-fetch-in-components', 'src/components/card.tsx', 1],
+      ['doc-no-fetch-in-components', 'src/components/card.tsx', 2],
+    ]);
+  });
+
   it('counts a fixed exception in the burn-down', () => {
     put('src/components/card.tsx', 'export const Card = 1;\n');
     const result = runCheck({ cwd: repo, out: '.archprint', base: 'main' });
