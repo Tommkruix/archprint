@@ -4,8 +4,8 @@ import { findTsconfigDirs } from '../scanner/app-dirs.js';
 import { valueModuleImports, walkRepo } from '../scanner/file-walker.js';
 import { globalReferences, type GlobalReference } from '../scanner/global-references.js';
 import { matchesAnyGlob, matchesGlob } from '../scanner/globs.js';
-import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
-import { packageEntry, sourceFileFor } from './import-target.js';
+import { buildWorkspacePackageMap, findWorkspaceRoots } from '../scanner/workspace-packages.js';
+import { packageEntry, packageSubpaths, sourceFileFor } from './import-target.js';
 import { layerAliases } from './layer-detector.js';
 import { type LayerAlias, resolveImportTarget, type WorkspacePackage } from './layer-paths.js';
 
@@ -71,17 +71,23 @@ function readJson(file: string): unknown {
   }
 }
 
+/** The packages of every workspace under `root` and the one above it; on a name clash, the shallowest workspace's. */
 function workspacePackages(root: string, isFile: (path: string) => boolean): WorkspacePackage[] {
-  const packages: WorkspacePackage[] = [];
-  for (const [name, absoluteDir] of Object.entries(
-    buildWorkspacePackageMap(findWorkspaceRoot(root)),
-  )) {
-    const dir = toPosix(path.relative(root, absoluteDir));
-    if (dir === '' || dir.startsWith('..')) continue;
-    const manifest = readJson(path.join(absoluteDir, 'package.json'));
-    packages.push({ name, dir, entry: packageEntry(manifest, dir, isFile) });
+  const packages = new Map<string, WorkspacePackage>();
+  for (const workspaceRoot of findWorkspaceRoots(root)) {
+    for (const [name, absoluteDir] of Object.entries(buildWorkspacePackageMap(workspaceRoot))) {
+      const dir = toPosix(path.relative(root, absoluteDir));
+      if (dir === '' || dir.startsWith('..') || packages.has(name)) continue;
+      const manifest = readJson(path.join(absoluteDir, 'package.json'));
+      packages.set(name, {
+        name,
+        dir,
+        entry: packageEntry(manifest, dir, isFile),
+        subpaths: packageSubpaths(manifest, dir),
+      });
+    }
   }
-  return packages.sort((a, b) => a.name.localeCompare(b.name));
+  return [...packages.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** A tsconfig directory, from the root, with its path aliases rebased to the root. */

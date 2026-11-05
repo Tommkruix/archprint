@@ -1,11 +1,15 @@
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildWorkspacePackageMap,
   findWorkspaceRoot,
+  findWorkspaceRoots,
 } from '../../src/scanner/workspace-packages.js';
 import { analyzeImports } from '../../src/scanner/file-walker.js';
+import { writeTree } from '../integration/layer-app.js';
 
 const monorepo = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -38,6 +42,37 @@ describe('buildWorkspacePackageMap', () => {
   it('stops the pnpm packages list at the next top-level yaml key', () => {
     const map = buildWorkspacePackageMap(fixture('ws-pnpm-nextkey'));
     expect(map['@y/p']).toBe(path.join(fixture('ws-pnpm-nextkey'), 'packages', 'p'));
+  });
+});
+
+describe('findWorkspaceRoots', () => {
+  let root: string;
+  beforeAll(() => {
+    root = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-ws-roots-')));
+    writeTree(root, {
+      'go.mod': 'module example.com/svc\n',
+      '.gitignore': 'generated/\n',
+      'web/pnpm-workspace.yaml': 'packages:\n  - "apps/*"\n',
+      'web/apps/portal/package.json': JSON.stringify({ name: '@acme/portal' }),
+      'examples/demo/package.json': JSON.stringify({ workspaces: ['packages/*'] }),
+      'tools/pnpm-workspace.yaml': 'packages:\n  - "lint"\n',
+      'node_modules/dep/pnpm-workspace.yaml': 'packages:\n  - "x"\n',
+      'generated/pnpm-workspace.yaml': 'packages:\n  - "y"\n',
+    });
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it('finds the workspaces nested below a root that is not one, shallowest first, skipping ignored folders', () => {
+    expect(findWorkspaceRoots(root).map((dir) => path.relative(root, dir))).toEqual([
+      'tools',
+      'web',
+      path.join('examples', 'demo'),
+    ]);
+  });
+
+  it('puts the workspace at or above the root first', () => {
+    expect(findWorkspaceRoots(path.join(root, 'web', 'apps'))).toEqual([path.join(root, 'web')]);
+    expect(findWorkspaceRoots(monorepo)[0]).toBe(monorepo);
   });
 });
 

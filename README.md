@@ -645,6 +645,10 @@ When that file only lists other projects under `references` (the solution-style 
 generate), archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`,
 as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it.
 
+**Workspace packages.** For your written rules (`gap-report`, and the `doc-` rules `check` and ESLint enforce), a
+package subpath import such as `@acme/ui/button` follows the package's `exports` as Node.js matches it, and the
+JavaScript workspaces nested below the folder you pass count too.
+
 **Determinism.** The same repo at the same version produces the same output. Analysis is pure and sorted; there is
 no randomness, and the analysis engine is pinned to an exact version.
 
