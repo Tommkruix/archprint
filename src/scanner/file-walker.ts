@@ -19,13 +19,27 @@ const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 const isSingleFileComponent = (filePath: string): boolean =>
   filePath.endsWith('.vue') || filePath.endsWith('.svelte');
 
+const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
+
+/** A component's script blocks where they are in the file, everything else blanked, so lines and columns match it. */
+function componentScript(text: string): string {
+  let source = '';
+  let end = 0;
+  for (const match of text.matchAll(SFC_SCRIPT)) {
+    const body = match[1] ?? '';
+    const start = match.index + match[0].indexOf('>') + 1;
+    source += blank(text.slice(end, start)) + body;
+    end = start + body.length;
+  }
+  return source + blank(text.slice(end));
+}
+
 function parseableSource(
   absoluteFilePath: string,
   text: string,
 ): { source: string; scriptKind: ts.ScriptKind } {
   if (isSingleFileComponent(absoluteFilePath)) {
-    const blocks = [...text.matchAll(SFC_SCRIPT)].map((match) => match[1] ?? '');
-    return { source: blocks.join('\n'), scriptKind: ts.ScriptKind.TS };
+    return { source: componentScript(text), scriptKind: ts.ScriptKind.TS };
   }
   return {
     source: text,
