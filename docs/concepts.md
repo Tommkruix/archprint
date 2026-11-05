@@ -190,8 +190,11 @@ risk is a wrong mapping, not a coincidence. Some details:
 - With `imports` names, a namespace import (`import * as cache`) and `export * from` count, as in ESLint's
   `no-restricted-imports`; an `import()` call and a bare `import 'x'` do not, since the names they take are unknown.
   A default import counts as the name `default`.
-- A read of a global counts unless the name resolves, in the scope around it, to the file's own import, variable,
-  parameter, function or class, the way ESLint resolves it. A type of the same name does not hide the global.
+- A read of a global (`process.env` or `process['env']`) counts unless the name resolves, in the scope around it, to
+  the file's own import, variable, parameter, function, class, enum or namespace, the way TypeScript and ESLint with
+  the TypeScript parser resolve it. A type of the same name does not hide the global, and neither does
+  `declare global`, which declares the global itself. `window.fetch` and `globalThis.fetch` are not reads of
+  `fetch`.
 - Whether files were added under a `forbid-file` glob after the sentence was written is not checked.
 
 ## Use from an AI agent (MCP)

@@ -30,7 +30,7 @@ const REPO: Record<string, string> = {
   }),
   'apps/web/src/app.ts': "export const app = fetch('/app');\n",
   'apps/web/src/components/card.tsx': "export const Card = fetch('/x');\n",
-  'apps/web/src/components/list.tsx': 'export const List = 1;\n',
+  'apps/web/src/components/list.tsx': "import { app } from '../app';\nexport const List = app;\n",
   'apps/web/src/ui/button.tsx': 'export const Button = 1;\n',
   'packages/mcds/button.tsx': 'export const B = 1;\n',
 };
@@ -74,6 +74,13 @@ describe('buildGapReport', () => {
           name: 'no-mcds-to-admin',
           files: ['packages/mcds/**'],
           targets: ['apps/admin/**'],
+        },
+        {
+          template: 'forbid-import',
+          source: quote('packages/mcds must not import the app.'),
+          name: 'mcds-half-typo',
+          files: ['apps/web/src/components/**'],
+          targets: ['apps/web/src/app.ts', 'apps/admin/**'],
         },
         {
           template: 'forbid-usage',
@@ -151,6 +158,14 @@ describe('buildGapReport', () => {
     expect(entry('doc-typo-scope')).toMatchObject({
       status: 'no-match',
       reason: 'no source file matches apps/web/src/componentz/**',
+    });
+  });
+
+  it('still lists what breaks a rule when one of its targets matches nothing', () => {
+    expect(entry('doc-mcds-half-typo')).toMatchObject({
+      status: 'no-match',
+      reason: 'no source file matches apps/admin/**',
+      breaking: [{ file: 'apps/web/src/components/list.tsx', line: 1, subject: '../app' }],
     });
   });
 

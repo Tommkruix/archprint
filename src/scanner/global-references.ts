@@ -47,6 +47,29 @@ const isClassExtends = (node: ts.Node, parent: ts.Node | undefined): node is ts.
   parent !== undefined &&
   (ts.isClassDeclaration(parent) || ts.isClassExpression(parent));
 
+/** The member a read takes: `x.env` or `x['env']`; null for a bare read or a computed one. */
+function memberRead(node: ts.Identifier, parent: ts.Node): string | null {
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === node) return parent.name.text;
+  if (
+    ts.isElementAccessExpression(parent) &&
+    parent.expression === node &&
+    ts.isStringLiteralLike(parent.argumentExpression)
+  ) {
+    return parent.argumentExpression.text;
+  }
+  return null;
+}
+
+/** Whether a declaration sits in `declare global { ... }`, which declares the global itself, not a local. */
+function augmentsGlobal(declaration: ts.Node): boolean {
+  for (let node = declaration.parent; node !== undefined; node = node.parent) {
+    if (ts.isModuleDeclaration(node) && (node.flags & ts.NodeFlags.GlobalAugmentation) !== 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const SINGLE_FILE_OPTIONS: ts.CompilerOptions = {
   noLib: true,
   noResolve: true,
@@ -78,10 +101,11 @@ function singleFileChecker(
 }
 
 /**
- * Where a file reads each of `usages` as a global: a bare name (`fetch`) or a name and member (`process.env`).
- * A read counts only when the name does not resolve, through the scopes around it, to a value the file declares
- * (an import, variable, parameter, function or class), the way ESLint's scope analysis resolves a reference.
- * Reads in type positions do not count; `typeof x` does.
+ * Where a file reads each of `usages` as a global: a bare name (`fetch`) or a name and member (`process.env`, read
+ * as `.env` or `['env']`). A read counts only when the name does not resolve, through the scopes around it, to a
+ * value the file declares (an import, variable, parameter, function, class, enum or namespace), the way TypeScript
+ * and typescript-eslint's scope analysis resolve a reference; `declare global` declares the global itself. Reads in
+ * type positions do not count; `typeof x` does.
  */
 export function globalReferences(
   absoluteFilePath: string,
@@ -95,13 +119,14 @@ export function globalReferences(
   const declaredInFile = (node: ts.Identifier): boolean =>
     checker
       .resolveName(node.text, node, ts.SymbolFlags.Value, false)
-      ?.declarations?.some((declaration) => declaration.getSourceFile() === sourceFile) ?? false;
+      ?.declarations?.some(
+        (declaration) => declaration.getSourceFile() === sourceFile && !augmentsGlobal(declaration),
+      ) ?? false;
 
   const references: GlobalReference[] = [];
   const record = (node: ts.Identifier, parent: ts.Node): void => {
     const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-    const member =
-      ts.isPropertyAccessExpression(parent) && parent.expression === node ? parent.name.text : null;
+    const member = memberRead(node, parent);
     for (const usage of wanted) {
       if (usage.name === node.text && (usage.member === null || usage.member === member)) {
         references.push({ usage: usage.usage, line });

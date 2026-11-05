@@ -159,7 +159,7 @@ the CLI the mapping file your agent wrote:
 }
 ```
 
-Each sentence comes back as enforce now (the code follows it), enforce with a baseline (broken today, with the
+Each sentence comes back as enforce now (nothing breaks it today), enforce with a baseline (broken today, with the
 files and lines), already an archprint rule, check the mapping (the quote is not in the file, or the mapping
 matches no code), or guidance only. Archprint never calls a model: the agent only maps prose to a template, and
 every number in the report is computed from your code. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report)

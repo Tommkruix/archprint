@@ -109,6 +109,7 @@ function declaredEntry(
     return {
       status: 'no-match',
       evidence,
+      ...(measure.violations.length > 0 && { breaking: measure.violations }),
       reason: `no source file matches ${joined(measure.unmatchedTargets)}`,
     };
   }
@@ -235,7 +236,7 @@ function evidenceLines(entry: GapEntry): string[] {
         : `Freezes the ${evidence.files} file(s) there today. Not verified: whether any were added after the sentence was written.`,
     ];
   }
-  if (entry.status === 'no-match') return [];
+  if (evidence.files === 0) return [];
   const lines = [`${evidence.following} of ${evidence.files} file(s) follow it.`];
   if (evidence.vacuous) {
     lines.push(

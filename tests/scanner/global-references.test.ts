@@ -47,7 +47,26 @@ describe('globalReferences', () => {
 
   it('leaves out a read that resolves to an import or declaration of the same name', () => {
     expect(lines("import { fetch } from 'undici';\nfetch('/x');\n", ['fetch'])).toEqual([]);
+    expect(lines("const { fetch } = deps;\nfetch('/x');\n", ['fetch'])).toEqual([]);
+  });
+
+  it('resolves to a binding declared later in the same scope, as a hoisted function or a const does', () => {
+    expect(lines("fetch('/x');\nfunction fetch() {}\n", ['fetch'])).toEqual([]);
     expect(lines("fetch('/x');\nconst { fetch } = deps;\n", ['fetch'])).toEqual([]);
+  });
+
+  it('treats catch parameters, enums and namespaces as bindings, and declare global as the global itself', () => {
+    expect(lines("try {} catch (fetch) { fetch('/x'); }\nfetch('/y');\n", ['fetch'])).toEqual([
+      '2:fetch',
+    ]);
+    expect(lines('enum window { A }\nuse(window);\n', ['window'])).toEqual([]);
+    expect(lines('namespace Intl { export const a = 1; }\nuse(Intl);\n', ['Intl'])).toEqual([]);
+    const augmented = [
+      'export {};',
+      'declare global { var fetch: (url: string) => void; }',
+      "fetch('/x');",
+    ].join('\n');
+    expect(lines(augmented, ['fetch'])).toEqual(['3:fetch']);
   });
 
   it('resolves each read through its own scopes, so a parameter or block binding shadows only there', () => {
@@ -69,10 +88,16 @@ describe('globalReferences', () => {
     expect(lines(source, ['fetch', 'localStorage'])).toEqual(['3:fetch', '3:localStorage']);
   });
 
-  it('reads the script block of a Vue file', () => {
-    const vue =
-      '<template><div /></template>\n<script lang="ts">\nconst a = fetch(\'/x\');\n</script>\n';
-    expect(lines(vue, ['fetch'], 'card.vue')).toHaveLength(1);
+  it('reads the script block of a Vue file, at its line in the file', () => {
+    const vue = [
+      '<template>',
+      '  <div :title="fetch" />',
+      '</template>',
+      '<script setup lang="ts">',
+      "const a = fetch('/x');",
+      '</script>',
+    ].join('\n');
+    expect(lines(vue, ['fetch'], 'card.vue')).toEqual(['5:fetch']);
   });
 
   it('counts a value read in a typeof type query and a class extends, not other type positions', () => {
@@ -85,14 +110,19 @@ describe('globalReferences', () => {
     expect(lines(source, ['Intl', 'fetch', 'window'])).toEqual(['2:fetch', '3:window', '4:Intl']);
   });
 
-  it('matches a member usage only on that member, read with a dot', () => {
+  it('matches a member usage only on that member, read with a dot or a string in brackets', () => {
     const source = [
       'const a = process.env.API_URL;',
       'const b = process.argv;',
       "const c = process['env'];",
       'const d = process?.env;',
+      'const e = process[key];',
     ].join('\n');
-    expect(lines(source, ['process.env'])).toEqual(['1:process.env', '4:process.env']);
+    expect(lines(source, ['process.env'])).toEqual([
+      '1:process.env',
+      '3:process.env',
+      '4:process.env',
+    ]);
   });
 
   it('counts a local export of the global but not a lowercase JSX tag of the same name', () => {
