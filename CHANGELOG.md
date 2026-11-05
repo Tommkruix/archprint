@@ -1,5 +1,11 @@
 # archprint
 
+## 0.18.1
+
+### Patch Changes
+
+- Archprint now reads solution-style `tsconfig.json` files the way TypeScript does. When the app's `tsconfig.json` only lists other projects (`"files": []` plus `references`, the layout create-vite, Angular and Nx generate), the settings for the app's files live in a referenced project such as `tsconfig.app.json`. Two things went wrong there. A full scan (`--deep`, and `generate` by default) missed every import of a `.tsx` file. And when the `paths` aliases were only in the referenced project, every scan missed the imports through them: the files they import were listed as orphans, and the rules could not see those imports. Archprint now reads the referenced projects that compile the app's files, and a full scan resolves each file with the compiler options of the project that includes it. Apps without `references` are unaffected. If two referenced projects map the same alias to different folders, the fast scan leaves that alias unresolved rather than guess, and an alias in the `tsconfig.json` itself takes precedence.
+
 ## 0.18.0
 
 ### Minor Changes
