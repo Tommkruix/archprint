@@ -67,7 +67,7 @@ export function runAllow(options: AllowOptions): string {
   if (reason === '') {
     throw new AllowError('Give the reason this file is an exception: --reason "..."');
   }
-  const reported = evaluateRules(appDir, [rule]).some((finding) => finding.file === file);
+  const reported = evaluateRules(appDir, [rule], outDir).some((finding) => finding.file === file);
   if (!reported) {
     throw new AllowError(`${rule.id} reports nothing in ${file}, so there is nothing to allow.`);
   }

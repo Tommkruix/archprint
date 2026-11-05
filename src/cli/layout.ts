@@ -22,10 +22,22 @@ import {
 } from './ratchet.js';
 import {
   type AdoptedRule,
+  byRuleId,
+  type DeclaredAdoptedRule,
   LEGACY_RULES_FILE,
   readAdoptedRules,
   type ResolutionMode,
 } from './adopted-rules.js';
+import { measureAdopted } from './check-evaluate.js';
+import {
+  breakingFiles,
+  type DeclaredResult,
+  declareFromMapping,
+  relocateSources,
+  remeasure,
+} from './declared-adoption.js';
+
+const isDeclared = (rule: AdoptedRule): rule is DeclaredAdoptedRule => rule.family === 'declared';
 import {
   allowedFilesByRule,
   LEGACY_ALLOW_FILE,
@@ -42,6 +54,8 @@ export interface WriteLayoutOptions {
   reset?: boolean;
   /** Adopt the rules named in `ruleIds` below the confidence gate, recording their current breaks as exceptions. */
   baseline?: boolean;
+  /** A gap-report mapping whose verified sentences this run adopts as declared rules (broken ones with `baseline`). */
+  declare?: unknown;
   expand?: boolean;
   graph?: boolean;
   mode: ResolutionMode;
@@ -73,6 +87,7 @@ export interface WriteLayoutResult {
   remeasured: RuleExceptions[];
   /** Rules named with --baseline, with the exceptions this run recorded for them. */
   baselined: RuleExceptions[];
+  declared: DeclaredResult;
 }
 
 export class UnknownRulesError extends Error {
@@ -143,10 +158,13 @@ export function writeLayout(
 ): WriteLayoutResult {
   assertRealDirectory(outDir);
   const adoptedBefore = readAdoptedRules(outDir) ?? [];
-  const baselineIds = options.baseline ? baselineRuleIds(scan, options.ruleIds ?? []) : [];
+  const inferredBefore = adoptedBefore.filter((rule) => !isDeclared(rule));
+  const declaredBefore = options.reset ? [] : adoptedBefore.filter(isDeclared);
+  const baselineIds =
+    options.baseline && options.ruleIds !== undefined ? baselineRuleIds(scan, options.ruleIds) : [];
   const enforced = promoteBelowGate(
     scan,
-    new Set([...baselineIds, ...(options.reset ? [] : adoptedBefore.map((rule) => rule.id))]),
+    new Set([...baselineIds, ...(options.reset ? [] : inferredBefore.map((rule) => rule.id))]),
   );
   const allowed = readAllowed(outDir);
   const collectOptions: CollectOptions = {
@@ -165,14 +183,43 @@ export function writeLayout(
       requested.availableRules,
       options.structural ?? false,
     );
-  const previousRules = options.reset ? [] : adoptedBefore;
+  const previousRules = options.reset ? [] : inferredBefore;
   const exceptionsNow = currentExceptions(scan);
   const comparable = previousRules
     .filter(comparableIn(options.mode))
     .filter((rule) => !baselineIds.includes(rule.id));
-  const broken = newExceptions(comparable, exceptionsNow);
+  const allowedFor = (ruleId: string): readonly string[] =>
+    collectOptions.allowed?.get(ruleId) ?? [];
+  const declaration =
+    options.declare === undefined
+      ? null
+      : declareFromMapping(options.declare, {
+          root: options.cwd,
+          appDir: scan.appDir,
+          rulesDir: outDir,
+          baseline: options.baseline ?? false,
+          allowedFor,
+        });
+  const redeclared = new Set(declaration?.adopted.map((rule) => rule.id));
+  const declaredKept = declaredBefore.filter((rule) => !redeclared.has(rule.id));
+  const keptMeasures = measureAdopted(scan.appDir, declaredKept, outDir);
+  const declaredNow = new Map(
+    declaredKept.map((rule) => [
+      rule.id,
+      breakingFiles(keptMeasures.get(rule.id)!, allowedFor(rule.id)),
+    ]),
+  );
+  const broken = [
+    ...newExceptions(comparable, exceptionsNow),
+    ...newExceptions(declaredKept, declaredNow),
+  ];
   if (broken.length > 0) throw new NewViolationsError(broken);
-  const previous = adoptedBefore.map((rule) => rule.id);
+  const relocated = relocateSources(
+    declaredKept.map((rule) => remeasure(rule, keptMeasures.get(rule.id)!, allowedFor(rule.id))),
+    outDir,
+  );
+  const declaredRules = [...relocated.rules, ...(declaration?.adopted ?? [])].sort(byRuleId);
+  const previous = inferredBefore.map((rule) => rule.id);
   const carried = options.reset ? [] : carriedRuleIds(previous, requested.adopted);
   const removed = cleanPrior(outDir, options.cwd);
   const emitted = emitLayout(enforced, outDir, {
@@ -180,6 +227,7 @@ export function writeLayout(
     expand: options.expand,
     graph: options.only === undefined && options.graph !== false,
     version: options.version,
+    declared: declaredRules,
   });
   const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
   const keptRules = previousRules.filter((rule) => emittedIds.has(rule.id));
@@ -195,7 +243,7 @@ export function writeLayout(
   if (options.readme && files.length > 0) {
     const result = injectAdoptionSection(
       path.join(options.cwd, 'README.md'),
-      renderAdoptionBody(adoption, emitted.rules),
+      renderAdoptionBody(adoption, [...emitted.rules, ...declaredRules]),
     );
     readme = result.status;
     if (result.status === 'created') readmeCreated = true;
@@ -243,10 +291,13 @@ export function writeLayout(
         rulesDir: path.relative(options.cwd, outDir) || ARCHPRINT_DIR,
       },
       {
-        rules: emitted.rules.map((rule) => ({
-          ...rule,
-          exceptions: exceptionsNow.get(rule.id) ?? [],
-        })),
+        rules: [
+          ...emitted.rules.map((rule) => ({
+            ...rule,
+            exceptions: exceptionsNow.get(rule.id) ?? [],
+          })),
+          ...declaredRules,
+        ].sort(byRuleId),
         allowed: sortAllowed(allowed),
       },
       managed,
@@ -261,13 +312,28 @@ export function writeLayout(
     configPath,
     kept: carried.filter((id) => emittedIds.has(id)),
     dropped: carried.filter((id) => !emittedIds.has(id)),
-    reset: options.reset ? previous.filter((id) => !emittedIds.has(id)) : [],
-    fixed: fixedExceptions(keptComparable, exceptionsNow),
+    reset: options.reset
+      ? [
+          ...previous.filter((id) => !emittedIds.has(id)),
+          ...adoptedBefore.filter(isDeclared).map((rule) => rule.id),
+        ]
+      : [],
+    fixed: [
+      ...fixedExceptions(keptComparable, exceptionsNow),
+      ...fixedExceptions(declaredKept, declaredNow),
+    ],
     firstRecorded: firstRecorded(keptRules, exceptionsNow),
     remeasured: remeasured(keptRules, exceptionsNow, options.mode),
     baselined: baselineIds
       .filter((id) => emittedIds.has(id) && (exceptionsNow.get(id)?.length ?? 0) > 0)
       .map((id) => ({ rule: id, exceptions: [...exceptionsNow.get(id)!] })),
+    declared: {
+      adopted: declaration?.adopted ?? [],
+      refused: declaration?.refused ?? [],
+      kept: declaredKept.map((rule) => rule.id),
+      replaced: declaredBefore.filter((rule) => redeclared.has(rule.id)).map((rule) => rule.id),
+      stale: relocated.stale,
+    },
     touched: [
       configPath,
       ...files,

@@ -16,6 +16,7 @@ import {
   renderEslintAppRules,
   serverClientRuleSpec,
 } from '../generator/eslint-app-emitter.js';
+import { declaredEslintRules, type DeclaredRuleInput } from '../generator/declared-emitters.js';
 import { toDependencyCruiserPublicApi } from '../generator/public-api-emitters.js';
 import {
   featureSliceRuleName,
@@ -344,6 +345,7 @@ export function collectEnforcement(
     serverClient: serverClient === null ? null : serverClientRuleSpec(serverClient, allowedFor),
     internals: internals === null ? null : internalsRuleSpec(internals, allowedFor),
     entry: entry === null ? null : entryRuleSpec(entry, allowedFor),
+    declared: null,
   };
   const eslintApp = emitDepcruise || !hasAppRules(appRules) ? null : appRules;
   if (emitDepcruise) {
@@ -602,13 +604,48 @@ export interface EmitResult {
   expanded: string[];
 }
 
+/** The app's ESLint rules with nothing adopted yet, for declared rules to join. */
+const emptyAppRules = (scan: ScanResult): EslintAppRules => ({
+  appDir: scan.appDir,
+  aliases: scan.layerAliases,
+  ignored: scan.gitignoredPaths,
+  layers: [],
+  phantom: null,
+  serverClient: null,
+  internals: null,
+  entry: null,
+  declared: null,
+});
+
+/** The collected rules with the declared ones joined to the app's ESLint rules, which enforce them on their own. */
+function withDeclared(
+  collected: CollectedEnforcement,
+  scan: ScanResult,
+  outDir: string,
+  options: CollectOptions & { declared?: readonly DeclaredRuleInput[] },
+): CollectedEnforcement {
+  const declared = declaredEslintRules(
+    options.declared ?? [],
+    scan.appDir,
+    outDir,
+    (ruleId) => options.allowed?.get(ruleId) ?? [],
+  );
+  if (declared === null) return collected;
+  return { ...collected, eslintApp: { ...(collected.eslintApp ?? emptyAppRules(scan)), declared } };
+}
+
 export function emitLayout(
   scan: ScanResult,
   outDir: string,
-  options: CollectOptions & { expand?: boolean; graph?: boolean; version: string },
+  options: CollectOptions & {
+    expand?: boolean;
+    graph?: boolean;
+    version: string;
+    declared?: readonly DeclaredRuleInput[];
+  },
 ): EmitResult {
   const collected = collectEnforcement(scan, options);
-  const eslint = writeArchprintEslint(collected, outDir);
+  const eslint = writeArchprintEslint(withDeclared(collected, scan, outDir, options), outDir);
   const depcruise = writeArchprintDepcruise(collected, outDir);
   const rules = [...collected.adopted].sort(byRuleId);
   const expanded = options.expand

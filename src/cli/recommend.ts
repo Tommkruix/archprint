@@ -297,7 +297,9 @@ export function reconcileWithAdopted(
   rec: Recommendations,
   rules: readonly AdoptedRule[],
 ): Recommendations {
-  const families = new Set<FamilyKey>(rules.map((rule) => rule.family));
+  const families = new Set<FamilyKey>(
+    rules.flatMap((rule) => (rule.family === 'declared' ? [] : [rule.family])),
+  );
   const adopted = (entry: Recommendation): boolean =>
     families.has(FAMILY_BY_TITLE.get(entry.title)!);
   const followed = rec.enforceNow

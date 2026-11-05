@@ -27,6 +27,7 @@ import {
   sliceStatement,
 } from './rule-statements.js';
 import type { ScannedPattern, ScanResult } from './scan.js';
+import type { DeclaredDefinition } from '../detector/declared-rules.js';
 
 /** Where 0.9.0 to 0.11.x kept the adopted rules, before they moved into config.json. */
 export const LEGACY_RULES_FILE = 'rules.json';
@@ -93,13 +94,23 @@ export interface SiblingIsolationRule extends RuleBase {
   container: string;
 }
 
+/** A rule a team stated in a context file, adopted from the gap report; its statement is the team's sentence. */
+export type DeclaredAdoptedRule = RuleBase &
+  DeclaredDefinition & {
+    family: 'declared';
+    /** The directory the globs are relative to, as a path from the rules directory. */
+    root: string;
+    source: { file: string; line: number };
+  };
+
 export type AdoptedRule =
   | ForbiddenImportRule
   | PublicApiRule
   | LayerRule
   | RoleLayeringRule
   | SiblingIsolationRule
-  | SingleFamilyRule;
+  | SingleFamilyRule
+  | DeclaredAdoptedRule;
 
 const evidenceOf = (gate: GateResult, total: number, violating: number): AdoptionEvidence => ({
   conforming: total - violating,
@@ -345,8 +356,43 @@ const FAMILIES: ReadonlySet<string> = new Set([
   'role-layering',
   'feature-slice',
   'app-isolation',
+  'declared',
 ]);
 const MAX_PATTERN_LENGTH = 200;
+
+const isTextList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/** Whether a declared rule has its template's fields, its root and its source, as generate writes them. */
+function isDeclaredShape(candidate: Record<string, unknown>): boolean {
+  const { template, root, source, files, except } = candidate;
+  const sourceOk =
+    typeof source === 'object' &&
+    source !== null &&
+    typeof (source as { file?: unknown }).file === 'string' &&
+    typeof (source as { line?: unknown }).line === 'number';
+  if (typeof root !== 'string' || !sourceOk || !isTextList(files) || !isTextList(except)) {
+    return false;
+  }
+  switch (template) {
+    case 'forbid-import':
+      return (
+        isTextList(candidate.targets) &&
+        Array.isArray(candidate.packages) &&
+        candidate.packages.every(
+          (target: { name?: unknown; imports?: unknown }) =>
+            typeof target?.name === 'string' &&
+            (target.imports === undefined || isTextList(target.imports)),
+        )
+      );
+    case 'forbid-usage':
+      return isTextList(candidate.usage);
+    case 'forbid-file':
+      return true;
+    default:
+      return false;
+  }
+}
 const PATTERN_FLAGS = /^[imsu]*$/;
 
 function validateRule(rule: unknown, file: string): AdoptedRule {
@@ -398,6 +444,9 @@ function validateRule(rule: unknown, file: string): AdoptedRule {
         return invalid(`rule ${candidate.id} has an invalid pattern`);
       }
     }
+  }
+  if (candidate.family === 'declared' && !isDeclaredShape(rule as Record<string, unknown>)) {
+    return invalid(`rule ${candidate.id} is not a complete declared rule`);
   }
   if (candidate.family === 'public-api' && typeof candidate.dir !== 'string') {
     return invalid(`rule ${candidate.id} has no directory`);
@@ -451,6 +500,19 @@ export function readAdoptedRules(outDir: string): AdoptedRule[] | null {
   return existsSync(legacy) ? parseLegacyRules(readFileSync(legacy, 'utf8'), legacy) : null;
 }
 
+/** What a declared rule enforces, without its bookkeeping (evidence, exceptions, source line). */
+export function declaredDefinition(rule: DeclaredDefinition): DeclaredDefinition {
+  const scope = { files: rule.files, except: rule.except };
+  switch (rule.template) {
+    case 'forbid-import':
+      return { template: rule.template, ...scope, targets: rule.targets, packages: rule.packages };
+    case 'forbid-usage':
+      return { template: rule.template, ...scope, usage: rule.usage };
+    case 'forbid-file':
+      return { template: rule.template, ...scope };
+  }
+}
+
 export function ruleDefinitionKey(rule: AdoptedRule): string {
   const common = [rule.family, rule.id, rule.mode];
   switch (rule.family) {
@@ -468,6 +530,8 @@ export function ruleDefinitionKey(rule: AdoptedRule): string {
     case 'feature-slice':
     case 'app-isolation':
       return JSON.stringify([...common, rule.container]);
+    case 'declared':
+      return JSON.stringify([...common, rule.root, declaredDefinition(rule)]);
     default:
       return JSON.stringify(common);
   }

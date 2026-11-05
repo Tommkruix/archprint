@@ -10,6 +10,7 @@ const toPosix = (value: string): string => value.split(path.sep).join('/');
 export function createLineLocator(appDir: string): (finding: Finding) => number | null {
   const aliases = buildAliasEntries(appDir);
   return (finding) => {
+    if (finding.line !== undefined) return finding.line;
     const absolute = path.join(appDir, finding.file);
     let locations;
     try {

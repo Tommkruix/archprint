@@ -1,7 +1,15 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { checkTool, explainTool, gapReportTool, recommendTool, scanTool } from './tools.js';
+import {
+  checkTool,
+  declaredExplainTool,
+  explainTool,
+  gapReportTool,
+  recommendTool,
+  scanTool,
+} from './tools.js';
+import { isDeclaredRef } from '../cli/declared-adoption.js';
 import { errorResponse, okResponse, type ToolResponse } from './tool-response.js';
 
 const READ_ONLY = {
@@ -53,14 +61,14 @@ export const TOOLS = [
     title: 'Explain an architecture rule',
     annotations: READ_ONLY,
     description:
-      'Explain one rule from archprint_scan in depth, by its id, label or ESLint name (e.g. AP-002, env-access, no-lib-to-app, "lib !-> app" or archprint/no-lib-to-app): its statement, gate status, adoption (enforce, review, or report-only, as in archprint_scan), observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. Read-only.',
+      'Explain one rule from archprint_scan in depth, by its id, label or ESLint name (e.g. AP-002, env-access, no-lib-to-app, "lib !-> app" or archprint/no-lib-to-app): its statement, gate status, adoption (enforce, review, or report-only, as in archprint_scan), observed conformance and confidence floor, and every file that breaks it (scan lists only a few). For the forbidden-import rules (AP-001, AP-002) it also returns each confidence-gate condition with its value and threshold, how to fix a violation, and when not to adopt the rule. A rule the team stated in CLAUDE.md or AGENTS.md and adopted (its id starts with doc-) comes back with the sentence the team wrote, its source line, what it enforces in plain words, its evidence and its exceptions. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
           description:
-            'rule id, label or ESLint name from archprint_scan, e.g. AP-002, no-lib-to-app or "lib !-> app"',
+            'rule id, label or ESLint name from archprint_scan, e.g. AP-002, no-lib-to-app or "lib !-> app", or a declared rule id such as doc-no-fetch-in-components',
         },
         path: {
           type: 'string',
@@ -180,7 +188,9 @@ export function runTool(name: string, args: Record<string, unknown>): unknown {
       if (typeof args.id !== 'string' || args.id === '') {
         throw new Error('archprint_explain requires an "id" (for example AP-002).');
       }
-      return explainTool(args.id, input);
+      return isDeclaredRef(args.id)
+        ? declaredExplainTool(args.id, input)
+        : explainTool(args.id, input);
     case 'archprint_gap_report':
       return gapReportTool(input, args.mapping);
     case 'archprint_check':
