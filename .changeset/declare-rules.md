@@ -1,0 +1,5 @@
+---
+'archprint': minor
+---
+
+`archprint generate <app> --declare <mapping>` enforces the rules your CLAUDE.md or AGENTS.md states, from the mapping your agent wrote for `archprint gap-report`. It verifies the mapping again and adopts, for that app, every sentence the code follows, and with `--baseline` also those it breaks today, recording each breaking file as an exception that only shrinks. A sentence it cannot adopt is listed with the reason. Each adopted rule becomes an `archprint/doc-<name>` rule in `.archprint/eslint.mjs` whose error message is your team's sentence and its line, for example `Components never call fetch directly. (CLAUDE.md:2)`, and `archprint check` finds the same breaks, file for file and line for line, and reports the ones a pull request adds. `archprint allow` and `archprint explain` (and the `archprint_explain` MCP tool) take its id. Later runs of `generate` keep these rules, refuse a new break, and say when a rule's sentence is no longer in its file. dependency-cruiser does not enforce them.

@@ -137,6 +137,37 @@ npx eslint .
 npx archprint eject
 ```
 
+### The rules you already wrote down
+
+Your CLAUDE.md or AGENTS.md probably states rules already ("never call `fetch` in a component", "`packages/ui`
+must not import the app"). Agents read them as guidance. `archprint gap-report` checks them against the code: your
+agent maps each rule-like sentence to one of a few fixed templates, quoting it, and Archprint verifies the mapping
+and measures it. Ask your agent "Which of the rules in our CLAUDE.md does the code actually follow?", or give
+the CLI the mapping file your agent wrote:
+
+```json
+{
+  "rules": [
+    {
+      "source": { "file": "CLAUDE.md", "quote": "Never call fetch directly in a component" },
+      "name": "no-fetch-in-components",
+      "template": "forbid-usage",
+      "files": ["src/components/**"],
+      "usage": ["fetch"]
+    }
+  ]
+}
+```
+
+Each sentence comes back as enforce now (nothing breaks it today), enforce with a baseline (broken today, with the
+files and lines), already an archprint rule, check the mapping (the quote is not in the file, or the mapping
+matches no code), or guidance only. Archprint never calls a model: the agent only maps prose to a template, and
+every number in the report is computed from your code. Adopt the ones you approve with
+`archprint generate <app> --declare mapping.json` (add `--baseline` for those the code breaks today): each becomes
+an ESLint rule whose error is your team's sentence, with its line in CLAUDE.md, and `archprint check` enforces it in
+pull requests. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report) for
+the templates.
+
 **See it catch something.** After step 4, break a rule on purpose: for example, make a route file import your
 database client directly, then run your linter. That is the whole loop the
 [demo](https://stackblitz.com/github/Tommkruix/archprint-demo) walks through in the browser.
@@ -164,6 +195,12 @@ archprint generate apps/web --include-structural --rules AP-002,no-utils-to-app
 
 # Recommend a rule set from the evidence and the detected stack (fresh repos too)
 archprint recommend apps/web
+
+# Check the rules your CLAUDE.md or AGENTS.md states against the code, from a mapping your agent wrote
+archprint gap-report mapping.json .
+
+# Enforce the ones you approve (with --baseline, also those the code breaks today)
+archprint generate apps/web --declare mapping.json
 
 # Upgrading from 0.5.x? Move an older archprint-rules/ setup to the .archprint layout
 archprint migrate
@@ -316,7 +353,8 @@ this layout and rewires your configs in place.
 
 `archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
-evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request
+evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
+and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
@@ -402,12 +440,15 @@ change.` When a fixed exception is still recorded, it says to run `archprint gen
 ## MCP setup
 
 `archprint mcp` runs Archprint as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent can ask
-what architecture rules your repo already follows, with the evidence, before it writes code. It exposes four
-read-only tools: `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`. Each rule
+what architecture rules your repo already follows, with the evidence, before it writes code. It exposes five
+read-only tools: `archprint_scan`, `archprint_recommend`, `archprint_explain`, `archprint_check`, and
+`archprint_gap_report`. Each rule
 comes back stated in plain words, with its evidence, the files that break it, and whether archprint enforces it,
 holds it for review, or only reports it. `archprint_explain` takes any rule from the scan by its id, label or
 ESLint name (for example `AP-002`, `env-access`, `no-lib-to-app`, `lib !-> app` or `archprint/no-lib-to-app`). `archprint_check` reports the adopted rules the agent's current change breaks,
-uncommitted edits included, so it can fix them before it finishes. Point Claude Desktop, Claude Code, Cursor, or
+uncommitted edits included, so it can fix them before it finishes. `archprint_gap_report` takes the agent's
+mapping of your CLAUDE.md or AGENTS.md sentences and returns which ones the code follows, breaks, or that match
+nothing. Point Claude Desktop, Claude Code, Cursor, or
 any MCP client at it:
 
 ```json
@@ -424,6 +465,7 @@ any MCP client at it:
 - "Which file breaks the env-access rule, and how should I fix it?"
 - "I am adding a new API route. What rules should it follow in this codebase?"
 - "Which rules should we enforce now, and which are worth adopting?"
+- "Which of the rules in our CLAUDE.md does the code actually follow?"
 
 **Your code stays on your machine.** This default is a local server: it reads your local checkout, so it is the
 one to use for private code, and your source never leaves your machine, whichever git host you use.
@@ -459,7 +501,7 @@ then enable **archprint** under **Settings > MCP**.
 **Scanning a public repo by URL.** `archprint mcp --http` runs a remote server instead. It clones the repo shallow
 to a temp dir, runs the same read-only analysis, returns the result, and deletes the clone (only public
 `github.com`, `gitlab.com`, and `bitbucket.org` URLs; nothing is written or kept). The tools then take a `repo` URL
-(and an optional `ref`). It listens on `0.0.0.0:8848/mcp` by default (set `--host 127.0.0.1` to keep it to your
+(and an optional `ref`); the gap report and check stay local, since they read your files and your change. It listens on `0.0.0.0:8848/mcp` by default (set `--host 127.0.0.1` to keep it to your
 own machine, or `--port`/`$PORT` to change the port) and answers health checks at `/health` (use this one on Cloud
 Run, which reserves `/healthz`) and `/healthz`. Every request clones and scans, so a server anyone can reach spends
 compute on anyone's behalf: keep it behind authentication, such as Cloud Run's IAM, unless you accept that cost.

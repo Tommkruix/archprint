@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createImportAnalyzer, walkRepo } from '../../src/scanner/file-walker.js';
+import { createImportAnalyzer, importLocations, walkRepo } from '../../src/scanner/file-walker.js';
 import { resolveFirstPartyImport } from '../../src/scanner/resolve-import.js';
 
 describe('single-file component support', () => {
@@ -65,5 +65,15 @@ describe('single-file component support', () => {
       path.join(dir, 'src', 'Widget.vue'),
     );
     expect(resolveFirstPartyImport('./Page', from, [])).toBe(path.join(dir, 'src', 'Page.svelte'));
+  });
+
+  it('reports import lines as they are in the component file, not in its script block', () => {
+    expect(importLocations(path.join(dir, 'src', 'App.vue'))).toEqual([
+      { specifier: './Widget.vue', line: 3 },
+      { specifier: './data', line: 4 },
+    ]);
+    expect(importLocations(path.join(dir, 'src', 'Page.svelte'))).toEqual([
+      { specifier: './store', line: 2 },
+    ]);
   });
 });

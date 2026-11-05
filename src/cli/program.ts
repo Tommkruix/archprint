@@ -41,6 +41,14 @@ import {
   type FailOn,
 } from './check.js';
 import { CheckSetupError } from './check-git.js';
+import { parseMappingJson } from './declared-mapping.js';
+import {
+  describeDeclared,
+  findDeclared,
+  isDeclaredRef,
+  renderDeclaredExplain,
+} from './declared-adoption.js';
+import { buildGapReport, renderGapReport } from './gap-report.js';
 
 const LEGACY_ROOT_CONFIG = 'archprint.json';
 
@@ -305,6 +313,10 @@ export function buildProgram(version = readVersion()): Command {
       'with --rules: adopt the named rules even below the confidence gate, recording what breaks them today as exceptions that generate then only removes as they are fixed',
     )
     .option(
+      '--declare <mapping>',
+      'adopt the rules your CLAUDE.md or AGENTS.md states, from the mapping your agent wrote for archprint gap-report (a JSON file, "-" reads it from stdin); with --baseline, also those the code breaks today',
+    )
+    .option(
       '--reset',
       'start from the default rule set instead of keeping the rules adopted before, and list the ones it removes',
     )
@@ -328,6 +340,7 @@ export function buildProgram(version = readVersion()): Command {
           rules?: string;
           reset?: boolean;
           baseline?: boolean;
+          declare?: string;
           check?: boolean;
         },
         command: Command,
@@ -400,9 +413,9 @@ export function buildProgram(version = readVersion()): Command {
           ?.split(',')
           .map((id) => id.trim())
           .filter(Boolean);
-        if (options.baseline && ruleIds === undefined) {
+        if (options.baseline && ruleIds === undefined && options.declare === undefined) {
           console.error(
-            '--baseline adopts only the rules you name; pass them with --rules, e.g. --rules no-lib-to-hooks --baseline.',
+            '--baseline adopts only the rules you name; pass them with --rules (or --declare), e.g. --rules no-lib-to-hooks --baseline.',
           );
           process.exitCode = 1;
           return;
@@ -424,6 +437,7 @@ export function buildProgram(version = readVersion()): Command {
           firstRecorded,
           remeasured,
           baselined,
+          declared,
         } = writeLayout(scan, outDir, {
           structural,
           enforcers,
@@ -433,6 +447,12 @@ export function buildProgram(version = readVersion()): Command {
           ruleIds,
           reset: options.reset,
           baseline: options.baseline,
+          declare:
+            options.declare === undefined
+              ? undefined
+              : parseMappingJson(
+                  readFileSync(options.declare === '-' ? 0 : options.declare, 'utf8'),
+                ),
           mode: options.fast ? 'fast' : 'deep',
           version,
           recommendations,
@@ -464,6 +484,7 @@ export function buildProgram(version = readVersion()): Command {
           console.log(
             `Adopted with a baseline: these break the rules today and are recorded as exceptions, which generate only removes as they are fixed:\n${formatExceptions(baselined)}`,
           );
+        for (const line of describeDeclared(declared, enforcers.eslint)) console.log(line);
         if (remeasured.length > 0)
           console.log(
             `Measured again, since these rules were adopted from a ${options.fast ? 'full' : 'fast'} scan and this run is ${options.fast ? 'fast' : 'full'}; run in the rule's mode to compare:\n${formatExceptions(remeasured)}`,
@@ -544,6 +565,16 @@ export function buildProgram(version = readVersion()): Command {
     .argument('[path]', 'app directory', '.')
     .option('--deep', 'resolve imports through barrels/aliases (slower, more accurate)')
     .action((ref: string, input: string, options: { deep?: boolean }) => {
+      if (isDeclaredRef(ref)) {
+        const declared = findDeclared(ref, path.resolve(ARCHPRINT_DIR));
+        if (declared === undefined) {
+          throw new Error(
+            `No declared rule "${ref}" in ${ARCHPRINT_DIR}/config.json. Adopt one with archprint generate --declare <mapping>.`,
+          );
+        }
+        console.log(renderDeclaredExplain(declared));
+        return;
+      }
       const appDir = resolveApp(input);
       const scan = scanRepo(appDir, { deep: Boolean(options.deep) });
       const pattern = findRule(
@@ -562,6 +593,20 @@ export function buildProgram(version = readVersion()): Command {
         );
       }
       console.log(renderRuleExplain(rule));
+    });
+
+  program
+    .command('gap-report')
+    .description(
+      'Verify the rules your context files state (CLAUDE.md, AGENTS.md) against the code: your agent maps each rule-like sentence to a template, archprint checks the mapping and measures what follows or breaks it. Writes nothing.',
+    )
+    .argument('<mapping>', 'the mapping your agent wrote, a JSON file ("-" reads it from stdin)')
+    .argument('[path]', 'repository root, where the context files are', '.')
+    .option('--json', 'print the report as JSON')
+    .action((mapping: string, input: string, options: { json?: boolean }) => {
+      const text = readFileSync(mapping === '-' ? 0 : mapping, 'utf8');
+      const report = buildGapReport(input, parseMappingJson(text));
+      console.log(options.json ? JSON.stringify(report, null, 2) : renderGapReport(report));
     });
 
   program
@@ -699,7 +744,7 @@ export function buildProgram(version = readVersion()): Command {
   program
     .command('mcp')
     .description(
-      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain, check. Serves over stdio by default; --http runs a remote server that scans a public repo by URL (scan, recommend, explain).',
+      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain, check, gap report. Serves over stdio by default; --http runs a remote server that scans a public repo by URL (scan, recommend, explain).',
     )
     .option('--http', 'serve over HTTP (Streamable HTTP) instead of stdio, for remote clients')
     .option('--port <port>', 'port for --http', process.env.PORT ?? '8848')

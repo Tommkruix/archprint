@@ -120,12 +120,115 @@ Upgrading from an older `archprint-rules/` layout? `archprint migrate` (alias `u
 and rewrites the reference in your linter config in place, writing the new files before removing the old ones so
 the config never points at a file that has been deleted.
 
+## Written rules: the gap report
+
+Inference finds the rules your code already follows. Your team has usually also written rules down, in
+CLAUDE.md, AGENTS.md or `.cursor/rules`, and agents treat those as guidance. The gap report checks them against
+the code, without anyone writing rules by hand:
+
+1. Your agent reads the context files and maps each rule-like sentence to one template, quoting the sentence.
+2. Archprint verifies each mapping and measures it: `archprint gap-report <mapping.json> [path]`, or the
+   `archprint_gap_report` MCP tool. It writes nothing.
+3. You adopt the ones you approve: `archprint generate <app> --declare <mapping.json>` (see below).
+
+Archprint never calls a model. The agent only turns prose into a template's parameters; every number in the report
+is computed from your code.
+
+**Templates.** Every template takes `files` (the files it covers) and an optional `except`, as minimatch globs
+(the syntax ESLint's `files` use; `dir/**` also matches `dir` itself) relative to the path you pass, normally
+the repository root, where the context files are. A glob cannot start with `!`; list what to leave out in
+`except`.
+
+| Template        | The sentence says                 | Parameters                                                                                                                  |
+| --------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `forbid-import` | these files must not import that  | `targets`: path globs, matched on the file an import resolves to; `packages`: specifier globs, each with optional `imports` |
+| `forbid-usage`  | these files must not use a global | `usage`: a global (`fetch`, `window`, `localStorage`) or a global and member (`process.env`)                                |
+| `forbid-file`   | no new file here                  | none: the files there today are recorded, and only a new one would break it                                                 |
+| `inferred`      | a rule archprint already finds    | `rule`: its id from `archprint scan`                                                                                        |
+| `none`          | something no template checks      | `reason`, for example a style rule a standard linter covers                                                                 |
+
+A mapping is `{ "rules": [ ... ] }`, one entry per sentence:
+
+```json
+{
+  "rules": [
+    {
+      "source": { "file": "CLAUDE.md", "quote": "packages/mcds must not import the app" },
+      "name": "no-mcds-to-app",
+      "template": "forbid-import",
+      "files": ["packages/mcds/**"],
+      "targets": ["apps/web/**"]
+    },
+    {
+      "source": { "file": "AGENTS.md", "quote": "Do not use Next.js unstable_cache()" },
+      "name": "no-unstable-cache",
+      "template": "forbid-import",
+      "files": ["**"],
+      "packages": [{ "name": "next/cache", "imports": ["unstable_cache"] }]
+    }
+  ]
+}
+```
+
+Each sentence comes back in one group:
+
+- **Enforce now**: the code follows it. A `forbid-file` rule is always here, with the files it freezes.
+- **Enforce with a baseline**: some files break it today, listed with the line.
+- **Already an archprint rule**: the rule's own status and evidence.
+- **Check the mapping**: the quote is not in the file, the files or a target match no source file, or the entry is
+  not a valid mapping (the reason says which).
+- **Guidance only**: no template fits.
+
+A declared rule is named `doc-<name>`, for example `doc-no-fetch-in-components`.
+
+**What it checks, and what it does not.** The quote check proves the sentence is in the file, not that the
+mapping means the same thing, so the report restates every mapping in plain words next to the quote for you to
+compare. A rule nothing in the code breaks, in scope or out, is marked as such: the evidence cannot tell it from a
+mapping that names the wrong thing. Declared rules skip the confidence gate, because your team stated them; the
+risk is a wrong mapping, not a coincidence. Some details:
+
+- Imports are matched on what they name, not on what a barrel re-exports. Type-only imports never count. Neither do
+  test files, except for `forbid-file`. `export ... from` counts as an import.
+- With `imports` names, a namespace import (`import * as cache`) and `export * from` count, as in ESLint's
+  `no-restricted-imports`; an `import()` call and a bare `import 'x'` do not, since the names they take are unknown.
+  A default import counts as the name `default`.
+- A read of a global (`process.env` or `process['env']`) counts unless the name resolves, in the scope around it, to
+  the file's own import, variable, parameter, function, class, enum or namespace, the way TypeScript and ESLint with
+  the TypeScript parser resolve it. A type of the same name does not hide the global, and neither does
+  `declare global`, which declares the global itself. `window.fetch` and `globalThis.fetch` are not reads of
+  `fetch`.
+- Whether files were added under a `forbid-file` glob after the sentence was written is not checked.
+
+**Adopting them.** Run `archprint generate <app> --declare mapping.json` from the directory the gap report ran
+in (the globs are relative to it). It verifies the mapping again, then adopts, for that app:
+
+- every sentence the code follows today;
+- with `--baseline`, also those it breaks today, recording each breaking file as an exception that `generate`
+  then only removes as it is fixed, as for inferred rules;
+- a `forbid-file` rule, which records the files there today, so only a new one breaks it.
+
+It refuses the rest and says why: the quote is not in the file, the mapping matches no file, the files are in
+another app (adopt it from that app), or the sentence is a rule archprint already finds (adopt it with
+`--rules <id>`).
+
+An adopted rule is enforced by an `archprint/doc-<name>` rule in `.archprint/eslint.mjs`, whose error message is
+your team's sentence and where it is written, for example `Components never call fetch directly. (CLAUDE.md:2)`,
+and by `archprint check`, which finds the same breaks, file for file and line for line, and in a pull request
+reports only the ones the change adds. `check` counts like ESLint's bulk suppressions, with the base branch as the
+baseline: a recorded file that breaks the rule more times than it did on the base fails, and every break of the
+rule in that file is listed. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
+a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
+take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
+if the sentence is gone, `generate` says so and the rule stays until `--reset`. dependency-cruiser does not
+enforce declared rules.
+
 ## Use from an AI agent (MCP)
 
 `archprint mcp` runs Archprint as a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio,
 so an assistant like Claude or Cursor can read a repo's architecture on demand. It exposes the read-only half of
-the CLI as four tools, `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`, which
-return the same evidence-gated findings as the commands of the same name (as JSON) and never write to your project. Generating and wiring
+the CLI as five tools, `archprint_scan`, `archprint_recommend`, `archprint_explain`, `archprint_check`, and
+`archprint_gap_report`, which return the same findings as the commands of the same name (as JSON) and never write to
+your project. Generating and wiring
 rules stays a deliberate command you run yourself. The stdio server runs on your machine against your local
 checkout, so it suits private code: nothing leaves your machine. `archprint mcp --http` instead runs a remote server
 that scans a public repository by URL: it clones the repo ephemerally, runs the same read-only analysis (scan,

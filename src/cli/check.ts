@@ -33,7 +33,7 @@ export interface CheckOptions {
   base?: string;
 }
 
-export interface ReportedFinding extends Finding {
+export interface ReportedFinding extends Omit<Finding, 'line'> {
   line: number | null;
   rule: AdoptedRule;
 }
@@ -215,8 +215,11 @@ export function runCheck(options: CheckOptions): CheckResult {
     const baseRules = readBaseRules(path.join(baseTree.root, outPrefix));
     const partition = partitionRules(adopted, baseRules);
     const baseApp = path.join(baseTree.root, appPrefix);
-    const baseFindings = existsSync(baseApp) ? evaluateRules(baseApp, partition.comparable) : [];
-    const headFindings = evaluateRules(appDir, partition.comparable);
+    const baseOutDir = path.join(baseTree.root, outPrefix);
+    const baseFindings = existsSync(baseApp)
+      ? evaluateRules(baseApp, partition.comparable, baseOutDir)
+      : [];
+    const headFindings = evaluateRules(appDir, partition.comparable, outDir);
     const { introduced } = diffFindings(
       baseFindings,
       withoutAllowed(headFindings, allowed),
@@ -227,9 +230,10 @@ export function runCheck(options: CheckOptions): CheckResult {
     const adoptedFindings = evaluateRules(
       appDir,
       partition.adoptedInChange.map((entry) => entry.rule),
+      outDir,
     );
     const baseAllowKeys = new Set(
-      readBaseAllowed(path.join(baseTree.root, outPrefix)).map((entry) =>
+      readBaseAllowed(baseOutDir).map((entry) =>
         allowKey(entry.rule, renames.get(entry.file) ?? entry.file),
       ),
     );
@@ -293,7 +297,7 @@ export function findingMessage(rule: AdoptedRule): string {
   return `${sentence(rule.statement)}. When this rule was adopted, ${conforming} of ${total} files it applies to followed it (confidence ${Math.round(floor * 100)}%).`;
 }
 
-const describeSubject = (finding: Finding): string =>
+const describeSubject = (finding: Pick<Finding, 'kind' | 'subject'>): string =>
   finding.kind === 'usage' ? '' : ` (${finding.subject})`;
 
 const ruleIds = (rules: readonly AdoptedRule[]): string => rules.map((rule) => rule.id).join(', ');
