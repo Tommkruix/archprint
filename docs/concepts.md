@@ -195,6 +195,15 @@ risk is a wrong mapping, not a coincidence. Some details:
 
 - Imports are matched on what they name, not on what a barrel re-exports. Type-only imports never count. Neither do
   test files, except for `forbid-file`. `export ... from` counts as an import.
+- A `targets` glob is matched on the file an import resolves to: a relative path, a tsconfig `paths` alias, or a
+  workspace package by name. A package subpath such as `@acme/ui/button` follows the package's `exports` the way
+  Node.js matches it (an exact key first, then the most specific `*` pattern) and takes the first of that key's
+  targets that is a source file in the repository (`.ts`, `.tsx`, `.vue` or `.svelte`; a `.js` target counts as its
+  `.ts` source). Declaration files (`.d.ts`) are tried last, for the root import too, so where a package lists both
+  its built types and its source, the source is used whether or not the package has been built. When no target is
+  such a file, the import stays the path under the package folder; a looser pattern is not tried. Workspaces nested
+  below the folder you pass count too, such as a JavaScript workspace in `web/` of a repository whose root is not
+  one; if two workspaces have a package of the same name, the shallower workspace's package is used.
 - With `imports` names, a namespace import (`import * as cache`) and `export * from` count, as in ESLint's
   `no-restricted-imports`; an `import()` call and a bare `import 'x'` do not, since the names they take are unknown.
   A default import counts as the name `default`.

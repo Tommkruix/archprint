@@ -195,3 +195,60 @@ describe('measureDeclared', () => {
     expect(result.violations.map((violation) => violation.file)).toEqual(result.scope);
   });
 });
+
+describe('loadCodebase: workspace packages', () => {
+  let root: string;
+  beforeAll(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'archprint-declared-ws-'));
+    writeTree(root, {
+      'go.mod': 'module example.com/svc\n',
+      'web/pnpm-workspace.yaml': 'packages:\n  - "apps/*"\n  - "internal/*"\n',
+      'web/apps/portal/package.json': JSON.stringify({ name: '@acme/portal' }),
+      'web/apps/portal/src/page.tsx': "import { brand } from '@acme/brand/src/lib/brand';\n",
+      'web/internal/brand/package.json': JSON.stringify({ name: '@acme/brand' }),
+      'web/internal/brand/src/lib/brand.ts': 'export const brand = 1;\n',
+      'web/internal/ui/package.json': JSON.stringify({ name: '@acme/ui' }),
+      'web/internal/ui/src/lib/button.ts': 'export const button = 1;\n',
+      'web/internal/core/package.json': JSON.stringify({
+        name: '@acme/core',
+        exports: {
+          '.': './src/index.ts',
+          './v3/*': { types: './dist/v3/*.d.ts', source: './src/v3/*.ts' },
+        },
+      }),
+      'web/internal/core/src/index.ts': 'export const core = 1;\n',
+      'web/internal/core/src/v3/zod.ts': 'export const zod = 1;\n',
+      'web/examples/demo/package.json': JSON.stringify({ workspaces: ['packages/*'] }),
+      'web/examples/demo/packages/ui/package.json': JSON.stringify({ name: '@acme/ui' }),
+      'web/examples/demo/packages/ui/src/lib/button.ts': 'export const button = 2;\n',
+      'web/examples/demo/app.ts': "import { button } from '@acme/ui/src/lib/button';\n",
+    });
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const targetFrom = (file: string, specifier: string): string | null => {
+    const codebase = loadCodebase(root);
+    return codebase.targetOf(
+      codebase.files.find((candidate) => candidate.path === file)!,
+      specifier,
+    );
+  };
+
+  it('reads the packages of a workspace nested below the root, as in a repository whose JavaScript lives in a subfolder', () => {
+    expect(targetFrom('web/apps/portal/src/page.tsx', '@acme/brand/src/lib/brand')).toBe(
+      'web/internal/brand/src/lib/brand.ts',
+    );
+  });
+
+  it('resolves a subpath through the package exports, not its directory', () => {
+    expect(targetFrom('web/apps/portal/src/page.tsx', '@acme/core/v3/zod')).toBe(
+      'web/internal/core/src/v3/zod.ts',
+    );
+  });
+
+  it('takes the shallowest workspace on a name clash, so a nested example does not shadow the real package', () => {
+    expect(targetFrom('web/examples/demo/app.ts', '@acme/ui/src/lib/button')).toBe(
+      'web/internal/ui/src/lib/button.ts',
+    );
+  });
+});

@@ -19,6 +19,7 @@ const CLAUDE_MD = [
   '- Do not use Next.js unstable_cache().',
   '- The web app must not reach into packages/mcds directly.',
   '- Do not add new primitives to src/ui.',
+  '- The web app must not use the mcds primitives.',
 ].join('\n');
 
 /** One app, with every way an import or a global read reaches a rule, and the cases neither side counts. */
@@ -79,13 +80,18 @@ const REPO: Record<string, string> = {
   'apps/web/src/legacy.ts': [
     "import { Button } from '../../../packages/mcds/button';",
     "import { mcds } from '@acme/mcds';",
-    'export const x = [Button, mcds];',
+    "import { Badge } from '@acme/mcds/primitives/badge';",
+    'export const x = [Button, mcds, Badge];',
   ].join('\n'),
   'apps/web/src/ui/button.tsx': 'export const Button = 1;\n',
   'apps/web/src/ui/button.test.tsx': "export const t = 'test';\n",
-  'packages/mcds/package.json': JSON.stringify({ name: '@acme/mcds', main: './index.ts' }),
+  'packages/mcds/package.json': JSON.stringify({
+    name: '@acme/mcds',
+    exports: { '.': './index.ts', './primitives/*': './src/primitives/*.tsx' },
+  }),
   'packages/mcds/index.ts': 'export const mcds = 1;\n',
   'packages/mcds/button.tsx': 'export const Button = 1;\n',
+  'packages/mcds/src/primitives/badge.tsx': 'export const Badge = 1;\n',
 };
 
 const quote = (text: string) => ({ file: 'CLAUDE.md', quote: text });
@@ -129,6 +135,13 @@ const MAPPING = {
       targets: ['packages/mcds/**'],
     },
     {
+      template: 'forbid-import',
+      source: quote('The web app must not use the mcds primitives.'),
+      name: 'web-not-primitives',
+      files: ['apps/web/src/legacy.ts'],
+      targets: ['packages/mcds/src/primitives/**'],
+    },
+    {
       template: 'forbid-file',
       source: quote('Do not add new primitives to src/ui.'),
       name: 'freeze-ui',
@@ -157,6 +170,8 @@ const EXPECTED = [
   'src/components/types.ts:3 doc-no-fetch-in-components',
   'src/legacy.ts:1 doc-web-not-mcds',
   'src/legacy.ts:2 doc-web-not-mcds',
+  'src/legacy.ts:3 doc-web-not-mcds',
+  'src/legacy.ts:3 doc-web-not-primitives',
   'src/ui/button.test.tsx:1 doc-freeze-ui',
   'src/ui/button.tsx:1 doc-freeze-ui',
 ];

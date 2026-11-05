@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
+import { directoriesUnder } from './directory-walk.js';
 
 export function buildWorkspacePackageMap(rootDir: string): Record<string, string> {
   const map: Record<string, string> = {};
@@ -14,20 +15,39 @@ export function buildWorkspacePackageMap(rootDir: string): Record<string, string
   return map;
 }
 
+function isWorkspaceRoot(dir: string): boolean {
+  if (existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return true;
+  const packageJsonPath = path.join(dir, 'package.json');
+  if (!existsSync(packageJsonPath)) return false;
+  try {
+    return JSON.parse(readFileSync(packageJsonPath, 'utf-8')).workspaces !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 export function findWorkspaceRoot(startDir: string): string {
   let dir = path.resolve(startDir);
   for (;;) {
-    if (existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return dir;
-    const packageJsonPath = path.join(dir, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        if (JSON.parse(readFileSync(packageJsonPath, 'utf-8')).workspaces !== undefined) return dir;
-      } catch {}
-    }
+    if (isWorkspaceRoot(dir)) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return path.resolve(startDir);
     dir = parent;
   }
+}
+
+const depth = (dir: string): number => dir.split(path.sep).length;
+
+/**
+ * The workspace roots whose packages the files under `root` can import: the one at or above `root`, then those nested
+ * below it (a JavaScript workspace in a subfolder of a polyglot repository, an example, a fixture), shallowest first.
+ */
+export function findWorkspaceRoots(root: string): string[] {
+  const above = findWorkspaceRoot(root);
+  const below = directoriesUnder(path.resolve(root), isWorkspaceRoot)
+    .filter((dir) => dir !== above)
+    .sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+  return isWorkspaceRoot(above) ? [above, ...below] : below;
 }
 
 function readWorkspaceGlobs(rootDir: string): string[] {

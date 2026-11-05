@@ -1,42 +1,16 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import * as path from 'node:path';
+import { directoriesUnder } from './directory-walk.js';
 import { listSourceFiles } from './file-walker.js';
-import { createIgnoreFilter } from './ignore-filter.js';
-
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.next', '.git']);
 
 /** Every directory under `root` with a tsconfig.json or tsconfig.base.json, the root included, skipping ignored ones. */
 export function findTsconfigDirs(root: string): string[] {
-  const dirs: string[] = [];
-  const isIgnored = createIgnoreFilter(root);
-  const walk = (dir: string): void => {
-    if (
+  return directoriesUnder(
+    root,
+    (dir) =>
       existsSync(path.join(dir, 'tsconfig.json')) ||
-      existsSync(path.join(dir, 'tsconfig.base.json'))
-    ) {
-      dirs.push(dir);
-    }
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      /* v8 ignore next -- defensive: unreadable directory */
-      return;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (
-        entry.isDirectory() &&
-        !SKIP_DIRS.has(entry.name) &&
-        !entry.name.startsWith('.') &&
-        !isIgnored(path.relative(root, full), true)
-      ) {
-        walk(full);
-      }
-    }
-  };
-  walk(root);
-  return dirs;
+      existsSync(path.join(dir, 'tsconfig.base.json')),
+  );
 }
 
 function deepestOwner(dirs: readonly string[], file: string): string | null {
