@@ -97,6 +97,13 @@ describe('parseMapping', () => {
     expect(reasonOf({ ...usageRule, files: ['src\\components'] })).toContain('forward slashes');
   });
 
+  it('refuses a negated or comment glob, pointing at except', () => {
+    expect(reasonOf({ ...usageRule, files: ['!src/legacy/**'] })).toBe(
+      '"files" holds "!src/legacy/**"; list what to leave out in "except" instead of negating a glob',
+    );
+    expect(reasonOf({ ...usageRule, except: ['#src'] })).toContain('instead of negating a glob');
+  });
+
   it('refuses a field the template does not take, so a misspelled one is not silently dropped', () => {
     expect(reasonOf({ ...usageRule, targets: ['src/db/**'] })).toBe(
       '"forbid-usage" takes no "targets"',

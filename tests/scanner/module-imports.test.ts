@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { valueImportBindings, valueModuleImports } from '../../src/scanner/file-walker.js';
-import { matchesGlob } from '../../src/scanner/globs.js';
+import { globPattern, matchesGlob } from '../../src/scanner/globs.js';
 import { writeTree } from '../integration/layer-app.js';
 
 describe('valueModuleImports', () => {
@@ -79,15 +79,31 @@ describe('valueModuleImports', () => {
 });
 
 describe('matchesGlob', () => {
-  it('matches the way ESLint matches files: dotfiles included, a leading ./ ignored', () => {
+  it('matches minimatch globs with dotfiles included and a leading ./ ignored, as ESLint reads them', () => {
     expect(matchesGlob('src/.storybook/main.ts', 'src/**')).toBe(true);
     expect(matchesGlob('src/a.ts', './src/*.ts')).toBe(true);
     expect(matchesGlob('src/app/[id]/page.tsx', 'src/app/**')).toBe(true);
   });
 
-  it('anchors a pattern at the root: *.ts is a root file only, and a directory needs its trailing slash', () => {
+  it('anchors a pattern at the root, and lets dir/** match the directory itself', () => {
     expect(matchesGlob('src/a.ts', '*.ts')).toBe(false);
-    expect(matchesGlob('packages/db', 'packages/db/**')).toBe(false);
+    expect(matchesGlob('packages/db', 'packages/db/**')).toBe(true);
     expect(matchesGlob('packages/db/', 'packages/db/**')).toBe(true);
+    expect(matchesGlob('packages/dbx/a.ts', 'packages/db/**')).toBe(false);
+  });
+});
+
+describe('globPattern', () => {
+  it('compiles a glob to a source and flags that rebuild the same matcher', () => {
+    const { source, flags } = globPattern('src/components/**');
+    const rebuilt = new RegExp(source, flags);
+    expect(rebuilt.test('src/components/card.tsx')).toBe(true);
+    expect(rebuilt.test('src/lib/db.ts')).toBe(false);
+  });
+
+  it('turns a glob minimatch reads as a comment into one that matches nothing', () => {
+    const { source, flags } = globPattern('#not a glob');
+    expect(new RegExp(source, flags).test('#not a glob')).toBe(false);
+    expect(matchesGlob('', '#')).toBe(false);
   });
 });

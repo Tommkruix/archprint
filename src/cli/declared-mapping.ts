@@ -92,6 +92,11 @@ function globList(value: unknown, field: string, required: boolean): string[] {
         `"${field}" holds "${glob}"; use a path relative to the repository, with forward slashes`,
       );
     }
+    if (glob.startsWith('!') || glob.startsWith('#')) {
+      fail(
+        `"${field}" holds "${glob}"; list what to leave out in "except" instead of negating a glob`,
+      );
+    }
   }
   return globs;
 }
