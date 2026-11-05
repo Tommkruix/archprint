@@ -18,7 +18,15 @@ import { detectStoriesIsolation } from '../detector/stories-isolation-detector.j
 import { detectTestIsolation } from '../detector/test-isolation-detector.js';
 import { detectUiDataIsolation } from '../detector/ui-data-isolation-detector.js';
 import { detectWorkspacePackageApi } from '../detector/workspace-package-detector.js';
-import type { AdoptedRule, ForbiddenImportRule, ResolutionMode } from './adopted-rules.js';
+import * as path from 'node:path';
+import { type DeclaredMeasure, loadCodebase, measureDeclared } from '../detector/declared-rules.js';
+import {
+  type AdoptedRule,
+  type DeclaredAdoptedRule,
+  declaredDefinition,
+  type ForbiddenImportRule,
+  type ResolutionMode,
+} from './adopted-rules.js';
 
 /** What a finding names: an import as written, the file an import resolves to, or what a file reads (`console`, `process.env`). */
 export type SubjectKind = 'specifier' | 'target' | 'usage';
@@ -28,6 +36,8 @@ export interface Finding {
   file: string;
   subject: string;
   kind: SubjectKind;
+  /** The line, when the rule's measurement knows it (declared rules). */
+  line?: number;
 }
 
 const toPatternConfig = (rule: ForbiddenImportRule): PatternConfig => ({
@@ -77,10 +87,73 @@ function containerFindings(
   });
 }
 
-export function evaluateRules(appDir: string, rules: readonly AdoptedRule[]): Finding[] {
+const DECLARED_KINDS: Record<DeclaredAdoptedRule['template'], SubjectKind> = {
+  'forbid-import': 'specifier',
+  'forbid-usage': 'usage',
+  'forbid-file': 'target',
+};
+
+/** Each declared rule measured over the app's files, from the root its globs are written against. */
+export function measureAdopted(
+  appDir: string,
+  rules: readonly DeclaredAdoptedRule[],
+  rulesDir: string,
+): Map<string, DeclaredMeasure> {
+  const byRoot = new Map<string, DeclaredAdoptedRule[]>();
+  for (const rule of rules) {
+    const root = path.resolve(rulesDir, rule.root);
+    byRoot.set(root, [...(byRoot.get(root) ?? []), rule]);
+  }
+  const measures = new Map<string, DeclaredMeasure>();
+  for (const [root, group] of byRoot) {
+    const results = measureDeclared(loadCodebase(root, appDir), group.map(declaredDefinition));
+    group.forEach((rule, index) => measures.set(rule.id, results[index]!));
+  }
+  return measures;
+}
+
+function declaredFindings(
+  appDir: string,
+  rules: readonly DeclaredAdoptedRule[],
+  rulesDir: string | undefined,
+): Finding[] {
+  if (rules.length === 0) return [];
+  if (rulesDir === undefined) {
+    throw new Error(
+      'Declared rules are measured from the rules directory that records their root.',
+    );
+  }
+  const measures = measureAdopted(appDir, rules, rulesDir);
+  return rules.flatMap((rule) =>
+    measures.get(rule.id)!.violations.map((violation) => ({
+      ruleId: rule.id,
+      file: violation.file,
+      subject: violation.subject,
+      kind: DECLARED_KINDS[rule.template],
+      line: violation.line,
+    })),
+  );
+}
+
+/**
+ * What breaks each rule in the app today. Declared rules need `rulesDir`, the rules directory their recorded root
+ * is relative to (in `check`, the base snapshot's copy of it for the base).
+ */
+export function evaluateRules(
+  appDir: string,
+  rules: readonly AdoptedRule[],
+  rulesDir?: string,
+): Finding[] {
   const findings = forbiddenImportFindings(
     appDir,
     rules.filter((rule): rule is ForbiddenImportRule => rule.family === 'forbidden-imports'),
+  );
+  findings.push(
+    ...declaredFindings(
+      appDir,
+      rules.filter((rule): rule is DeclaredAdoptedRule => rule.family === 'declared'),
+      rulesDir,
+    ),
   );
   const byFamily = (family: AdoptedRule['family']): AdoptedRule[] =>
     rules.filter((rule) => rule.family === family);

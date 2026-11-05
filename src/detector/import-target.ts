@@ -1,13 +1,5 @@
 import * as path from 'node:path';
-import { type LayerAlias, resolveImportPath } from './layer-paths.js';
 import { firstPartyCandidates } from '../scanner/resolve-import.js';
-
-/** A workspace package by repo-relative directory, with the source file its root import resolves to, if known. */
-export interface WorkspacePackage {
-  name: string;
-  dir: string;
-  entry: string | null;
-}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -50,26 +42,8 @@ export function packageEntry(
   return candidates.find(isFile) ?? null;
 }
 
-/**
- * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path, or a
- * workspace package (its entry for the root import; its directory with a trailing `/` when the entry is unknown).
- * A known source file is preferred over the bare path; null for a package outside the repository.
- */
-export function resolveImportTarget(
-  fromPath: string,
-  specifier: string,
-  aliases: readonly LayerAlias[],
-  packages: readonly WorkspacePackage[],
-  isFile: (candidate: string) => boolean,
-): string | null {
-  let base = resolveImportPath(fromPath, specifier, aliases);
-  if (base === null) {
-    const owner = packages.find(
-      ({ name }) => specifier === name || specifier.startsWith(`${name}/`),
-    );
-    if (owner === undefined) return null;
-    if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
-    base = `${owner.dir}${specifier.slice(owner.name.length)}`;
-  }
-  return firstPartyCandidates(base).find(isFile) ?? base;
-}
+/** The source file among a path's candidates (`x.ts`, `x/index.ts`, ...) that `isFile` accepts, if any. */
+export const sourceFileFor =
+  (isFile: (candidate: string) => boolean) =>
+  (base: string): string | null =>
+    firstPartyCandidates(base).find(isFile) ?? null;

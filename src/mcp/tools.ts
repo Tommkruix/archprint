@@ -14,7 +14,9 @@ import {
 import { buildRecommendations, detectStack, type Recommendations } from '../cli/recommend.js';
 import { guidanceFor, type RuleGuidance } from '../cli/rule-guidance.js';
 import { findRule, ruleNames } from '../cli/rule-ref.js';
-import { buildGapReport, type GapReport } from '../cli/gap-report.js';
+import { buildGapReport, type GapReport, restate } from '../cli/gap-report.js';
+import { findDeclared } from '../cli/declared-adoption.js';
+import type { DeclaredAdoptedRule } from '../cli/adopted-rules.js';
 import type { DetectedPattern } from '../detector/pattern-detector.js';
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -72,6 +74,24 @@ export interface ExplainResult {
   rule: RuleSummary;
   pattern?: DetectedPattern;
   guidance?: RuleGuidance;
+}
+
+/** A rule the team stated in a context file and adopted, with what it enforces in plain words. */
+export interface DeclaredExplainResult {
+  declared: DeclaredAdoptedRule;
+  enforces: string;
+}
+
+/** A declared rule from the repo's `.archprint/config.json`, by its id or ESLint name. */
+export function declaredExplainTool(id: string, input: string): DeclaredExplainResult {
+  const rulesDir = path.join(path.resolve(localPath(input)), ARCHPRINT_DIR);
+  const declared = findDeclared(id, rulesDir);
+  if (declared === undefined) {
+    throw new Error(
+      `No declared rule "${id}" in ${rulesDir}/config.json. Adopt one with archprint generate --declare <mapping>.`,
+    );
+  }
+  return { declared, enforces: restate(declared) };
 }
 
 export function explainTool(id: string, input: string): ExplainResult {

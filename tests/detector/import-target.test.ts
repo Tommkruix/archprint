@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  packageEntry,
-  resolveImportTarget,
-  type WorkspacePackage,
-} from '../../src/detector/import-target.js';
+import { packageEntry, sourceFileFor } from '../../src/detector/import-target.js';
+import { resolveImportTarget, type WorkspacePackage } from '../../src/detector/layer-paths.js';
 
 const known =
   (...files: string[]) =>
@@ -59,7 +56,7 @@ describe('resolveImportTarget', () => {
     'apps/web/src/app.ts',
   );
   const target = (from: string, specifier: string): string | null =>
-    resolveImportTarget(from, specifier, aliases, packages, isFile);
+    resolveImportTarget(from, specifier, aliases, packages, sourceFileFor(isFile));
 
   it('resolves relative paths across apps and alias paths to the source file', () => {
     expect(target('packages/mcds/a.ts', '../../apps/web/src/app')).toBe('apps/web/src/app.ts');

@@ -138,6 +138,9 @@ archprint generate apps/web --expand
 
 # Check the rules your CLAUDE.md or AGENTS.md states against the code, from a mapping your agent wrote
 archprint gap-report mapping.json .
+
+# Enforce the ones you approve (with --baseline, also those the code breaks today)
+archprint generate apps/web --declare mapping.json
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
@@ -173,14 +176,17 @@ If your CLAUDE.md or AGENTS.md already states architecture rules, ask your agent
 "Which of the rules in our CLAUDE.md does the code actually follow?". It maps each rule-like sentence to a template
 and calls `archprint_gap_report`, which reports what the code follows, what breaks it today, and which mappings
 match nothing. Without MCP, have the agent write the mapping to a file and run `archprint gap-report mapping.json .`
-from the repository root. [The gap report](/concepts#written-rules-the-gap-report) lists the templates and what each
-result means.
+from the repository root. To enforce the ones you approve, run `archprint generate <app> --declare mapping.json`
+from the same directory (add `--baseline` for those the code breaks today). [The gap
+report](/concepts#written-rules-the-gap-report) lists the templates, what each result means, and what adopting a rule
+does.
 
 ## CI
 
 `archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
-evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request
+evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
+and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the

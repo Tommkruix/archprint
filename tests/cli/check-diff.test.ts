@@ -149,4 +149,18 @@ describe('diffFindings', () => {
     const second = finding({ subject: '@prisma/client' });
     expect(diffFindings([first], [first, second], new Map()).introduced).toEqual([second]);
   });
+
+  it('counts like ESLint bulk suppressions: one more break of the same kind in a file lists all of them', () => {
+    const old = finding({ ruleId: 'doc-no-fetch', kind: 'usage', subject: 'fetch', line: 3 });
+    const added = { ...old, line: 9 };
+    expect(diffFindings([old], [added, old], new Map()).introduced).toEqual([old, added]);
+    expect(diffFindings([old], [{ ...old, line: 5 }], new Map()).introduced).toEqual([]);
+  });
+
+  it('counts a break fixed when a file has fewer of its kind than the base', () => {
+    const first = finding({ ruleId: 'doc-no-fetch', kind: 'usage', subject: 'fetch', line: 3 });
+    const second = { ...first, line: 9 };
+    expect(diffFindings([first, second], [first], new Map()).fixed).toEqual([second]);
+    expect(diffFindings([first, second], [first], new Map()).introduced).toEqual([]);
+  });
 });

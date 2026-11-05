@@ -6,6 +6,7 @@ import {
   InvalidRulesError,
   parseConfigRules,
   readAdoptedRules,
+  ruleDefinitionKey,
   type AdoptedRule,
 } from '../../src/cli/adopted-rules.js';
 
@@ -92,5 +93,68 @@ describe('reading the adopted rules', () => {
     expect(() => readAdoptedRules(dir)).toThrow(/not valid JSON/);
     writeLegacy({ format: 0, rules: [] });
     expect(() => readAdoptedRules(dir)).toThrow(/different archprint version/);
+  });
+});
+
+describe('declared rules in config.json', () => {
+  const declaredRule = {
+    id: 'doc-no-unstable-cache',
+    family: 'declared',
+    statement: 'Do not use Next.js unstable_cache().',
+    mode: 'fast',
+    evidence: { conforming: 3, total: 3, floor: 0.43 },
+    exceptions: [],
+    root: '..',
+    source: { file: 'AGENTS.md', line: 4 },
+    template: 'forbid-import',
+    files: ['src/**'],
+    except: [],
+    targets: [],
+    packages: [{ name: 'next/cache', imports: ['unstable_cache'] }],
+  };
+  const parse = (rules: unknown[]): AdoptedRule[] =>
+    parseConfigRules(JSON.stringify({ rules }), '.archprint/config.json')!;
+
+  it('reads each template back as written', () => {
+    const usage = {
+      ...declaredRule,
+      id: 'doc-no-fetch',
+      template: 'forbid-usage',
+      usage: ['fetch'],
+      targets: undefined,
+      packages: undefined,
+    };
+    const freeze = { ...declaredRule, id: 'doc-freeze', template: 'forbid-file' };
+    expect(parse([declaredRule, usage, freeze])).toEqual([
+      declaredRule,
+      JSON.parse(JSON.stringify(usage)),
+      freeze,
+    ]);
+  });
+
+  it.each([
+    ['no root', { root: undefined }],
+    ['a source without a line', { source: { file: 'AGENTS.md' } }],
+    ['globs that are not text', { files: [1] }],
+    ['an unknown template', { template: 'forbid-call' }],
+    ['a package without a name', { packages: [{ imports: ['x'] }] }],
+    ['package imports that are not text', { packages: [{ name: 'x', imports: 'y' }] }],
+    ['a usage rule without usage', { template: 'forbid-usage', usage: 'fetch' }],
+  ])('refuses a declared rule with %s', (_, change) => {
+    expect(() => parse([JSON.parse(JSON.stringify({ ...declaredRule, ...change }))])).toThrow(
+      'rule doc-no-unstable-cache is not a complete declared rule',
+    );
+  });
+
+  it('keys a declared rule on its root and definition, so a changed glob is a changed rule', () => {
+    const [rule] = parse([declaredRule]);
+    const [widened] = parse([{ ...declaredRule, files: ['**'] }]);
+    const [moved] = parse([{ ...declaredRule, root: '../..' }]);
+    const [remeasured] = parse([
+      { ...declaredRule, evidence: { conforming: 2, total: 3, floor: 0.2 } },
+    ]);
+    expect(ruleDefinitionKey(widened!)).not.toBe(ruleDefinitionKey(rule!));
+    expect(ruleDefinitionKey(moved!)).not.toBe(ruleDefinitionKey(rule!));
+    expect(ruleDefinitionKey(remeasured!)).toBe(ruleDefinitionKey(rule!));
   });
 });

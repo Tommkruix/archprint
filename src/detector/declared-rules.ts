@@ -1,13 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { findTsconfigDirs } from '../scanner/app-dirs.js';
 import { valueModuleImports, walkRepo } from '../scanner/file-walker.js';
 import { globalReferences, type GlobalReference } from '../scanner/global-references.js';
 import { matchesAnyGlob, matchesGlob } from '../scanner/globs.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
-import { packageEntry, resolveImportTarget, type WorkspacePackage } from './import-target.js';
+import { packageEntry, sourceFileFor } from './import-target.js';
 import { layerAliases } from './layer-detector.js';
-import type { LayerAlias } from './layer-paths.js';
+import { type LayerAlias, resolveImportTarget, type WorkspacePackage } from './layer-paths.js';
 
 /** A package specifier glob, optionally limited to some of its exported names (`default` for a default import). */
 export interface PackageTarget {
@@ -28,12 +28,12 @@ export type DeclaredDefinition = RuleScope &
     | { template: 'forbid-file' }
   );
 
-/** A source file by its path from the root the rules are written against. */
+/** A source file, by its path from the root the rules' globs are written against and from the directory measured. */
 export interface CodebaseFile {
   path: string;
+  /** Its path in the directory measured: the app for an adopted rule, the root for the gap report. */
+  local: string;
   absolutePath: string;
-  /** The tsconfig directory (from the root) whose aliases resolve its imports; null when none is above it. */
-  app: string | null;
   test: boolean;
 }
 
@@ -43,6 +43,7 @@ export interface DeclaredCodebase {
   targetOf(file: CodebaseFile, specifier: string): string | null;
 }
 
+/** A break of a rule, by the file's path in the directory measured. */
 export interface DeclaredViolation {
   file: string;
   line: number;
@@ -60,9 +61,6 @@ export interface DeclaredMeasure {
 }
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
-
-const deepestOwner = (dirs: readonly string[], file: string): string | undefined =>
-  dirs.filter((dir) => file.startsWith(dir + path.sep)).sort((a, b) => b.length - a.length)[0];
 
 function readJson(file: string): unknown {
   try {
@@ -86,48 +84,68 @@ function workspacePackages(root: string, isFile: (path: string) => boolean): Wor
   return packages.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/**
- * Every source file under `root`, by its path from `root` (the base the rules' globs are written against). Each
- * file's imports resolve through the aliases of the deepest tsconfig above it, so a small package that is not an
- * app of its own still counts, as a scope and as a target.
- */
-export function loadCodebase(root: string): DeclaredCodebase {
+/** A tsconfig directory, from the root, with its path aliases rebased to the root. */
+export interface ConfigAliases {
+  dir: string;
+  aliases: LayerAlias[];
+}
+
+/** What resolves an import: each tsconfig directory with its aliases, deepest first, and the workspace packages. */
+export interface ImportResolution {
+  configs: ConfigAliases[];
+  packages: WorkspacePackage[];
+}
+
+const fileUnder =
+  (root: string) =>
+  (candidate: string): boolean =>
+    existsSync(path.join(root, candidate));
+
+/** How imports under `dir` (the whole root by default) resolve, in paths from `root`; a candidate is a file on disk. */
+export function importResolution(root: string, dir: string = root): ImportResolution {
   const absoluteRoot = path.resolve(root);
-  const configDirs = findTsconfigDirs(absoluteRoot);
-  const aliases = new Map<string, LayerAlias[]>();
-  const aliasesOf = (app: string): LayerAlias[] => {
-    let found = aliases.get(app);
-    if (found === undefined) {
-      found = layerAliases(path.join(absoluteRoot, app)).map((alias) => ({
-        prefix: alias.prefix,
-        dir: path.posix.join(app, alias.dir),
-      }));
-      aliases.set(app, found);
-    }
-    return found;
-  };
-  const files = walkRepo(absoluteRoot).map((walked) => {
-    const owner = deepestOwner(configDirs, walked.absolutePath);
-    return {
-      path: walked.relativePath,
-      absolutePath: walked.absolutePath,
-      app: owner === undefined ? null : toPosix(path.relative(absoluteRoot, owner)),
-      test: walked.role === 'TEST',
-    };
-  });
-  const known = new Set(files.map((file) => file.path));
-  const isFile = (candidate: string): boolean => known.has(candidate);
-  const packages = workspacePackages(absoluteRoot, isFile);
+  const configs = findTsconfigDirs(path.resolve(dir))
+    .map((configDir) => {
+      const owner = toPosix(path.relative(absoluteRoot, configDir));
+      return {
+        dir: owner,
+        aliases: layerAliases(configDir).map((alias) => ({
+          prefix: alias.prefix,
+          dir: path.posix.join(owner, alias.dir),
+        })),
+      };
+    })
+    .sort((a, b) => b.dir.length - a.dir.length || a.dir.localeCompare(b.dir));
+  return { configs, packages: workspacePackages(absoluteRoot, fileUnder(absoluteRoot)) };
+}
+
+/** The aliases of the deepest tsconfig directory above a root-relative file; `configs` come deepest first. */
+export function aliasesFor(file: string, configs: readonly ConfigAliases[]): LayerAlias[] {
+  const owner = configs.find(({ dir }) => dir === '' || file.startsWith(dir + '/'));
+  return owner === undefined ? [] : owner.aliases;
+}
+
+/**
+ * The source files under `dir` (the whole root by default), each by its path from `root`, the base the rules' globs
+ * are written against. A file's imports resolve through the aliases of the deepest tsconfig above it, so a small
+ * package that is not an app of its own still counts.
+ */
+export function loadCodebase(root: string, dir: string = root): DeclaredCodebase {
+  const absoluteRoot = path.resolve(root);
+  const absoluteDir = path.resolve(dir);
+  const prefix = toPosix(path.relative(absoluteRoot, absoluteDir));
+  const { configs, packages } = importResolution(absoluteRoot, absoluteDir);
+  const fileFor = sourceFileFor(fileUnder(absoluteRoot));
+  const files = walkRepo(absoluteDir).map((walked) => ({
+    path: path.posix.join(prefix, walked.relativePath),
+    local: walked.relativePath,
+    absolutePath: walked.absolutePath,
+    test: walked.role === 'TEST',
+  }));
   return {
     files,
     targetOf: (file, specifier) =>
-      resolveImportTarget(
-        file.path,
-        specifier,
-        file.app === null ? [] : aliasesOf(file.app),
-        packages,
-        isFile,
-      ),
+      resolveImportTarget(file.path, specifier, aliasesFor(file.path, configs), packages, fileFor),
   };
 }
 
@@ -163,7 +181,7 @@ function importViolations(
       const resolved = rule.targets.length === 0 ? null : codebase.targetOf(file, imp.specifier);
       return resolved !== null && rule.targets.some((glob) => matchesGlob(resolved, glob));
     })
-    .map((imp) => ({ file: file.path, line: imp.line, subject: imp.specifier }));
+    .map((imp) => ({ file: file.local, line: imp.line, subject: imp.specifier }));
 }
 
 function usageReferences(
@@ -193,7 +211,7 @@ function measureOne(
   references: Map<string, GlobalReference[]>,
 ): DeclaredMeasure {
   if (rule.template === 'forbid-file') {
-    const scope = codebase.files.filter((file) => inScope(file, rule)).map((file) => file.path);
+    const scope = codebase.files.filter((file) => inScope(file, rule)).map((file) => file.local);
     return {
       scope,
       violations: scope.map((file) => ({ file, line: 1, subject: file })),
@@ -207,7 +225,7 @@ function measureOne(
       : (references.get(file.path) ?? [])
           .filter((reference) => rule.usage.includes(reference.usage))
           .map((reference) => ({
-            file: file.path,
+            file: file.local,
             line: reference.line,
             subject: reference.usage,
           }));
@@ -221,10 +239,10 @@ function measureOne(
     if (file.test) continue;
     const found = violationsIn(file);
     if (inScope(file, rule)) {
-      measure.scope.push(file.path);
+      measure.scope.push(file.local);
       measure.violations.push(...found);
     } else if (found.length > 0) {
-      measure.elsewhere.push(file.path);
+      measure.elsewhere.push(file.local);
     }
   }
   if (rule.template === 'forbid-import') {

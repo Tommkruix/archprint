@@ -129,13 +129,15 @@ the code, without anyone writing rules by hand:
 1. Your agent reads the context files and maps each rule-like sentence to one template, quoting the sentence.
 2. Archprint verifies each mapping and measures it: `archprint gap-report <mapping.json> [path]`, or the
    `archprint_gap_report` MCP tool. It writes nothing.
+3. You adopt the ones you approve: `archprint generate <app> --declare <mapping.json>` (see below).
 
 Archprint never calls a model. The agent only turns prose into a template's parameters; every number in the report
 is computed from your code.
 
-**Templates.** Every template takes `files` (the files it covers) and an optional `except`, as globs relative to
-the path you pass (normally the repository root, where the context files are), matched the way ESLint matches its
-`files`.
+**Templates.** Every template takes `files` (the files it covers) and an optional `except`, as minimatch globs
+(the syntax ESLint's `files` use; `dir/**` also matches `dir` itself) relative to the path you pass, normally
+the repository root, where the context files are. A glob cannot start with `!`; list what to leave out in
+`except`.
 
 | Template        | The sentence says                 | Parameters                                                                                                                  |
 | --------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -196,6 +198,29 @@ risk is a wrong mapping, not a coincidence. Some details:
   `declare global`, which declares the global itself. `window.fetch` and `globalThis.fetch` are not reads of
   `fetch`.
 - Whether files were added under a `forbid-file` glob after the sentence was written is not checked.
+
+**Adopting them.** Run `archprint generate <app> --declare mapping.json` from the directory the gap report ran
+in (the globs are relative to it). It verifies the mapping again, then adopts, for that app:
+
+- every sentence the code follows today;
+- with `--baseline`, also those it breaks today, recording each breaking file as an exception that `generate`
+  then only removes as it is fixed, as for inferred rules;
+- a `forbid-file` rule, which records the files there today, so only a new one breaks it.
+
+It refuses the rest and says why: the quote is not in the file, the mapping matches no file, the files are in
+another app (adopt it from that app), or the sentence is a rule archprint already finds (adopt it with
+`--rules <id>`).
+
+An adopted rule is enforced by an `archprint/doc-<name>` rule in `.archprint/eslint.mjs`, whose error message is
+your team's sentence and where it is written, for example `Components never call fetch directly. (CLAUDE.md:2)`,
+and by `archprint check`, which finds the same breaks, file for file and line for line, and in a pull request
+reports only the ones the change adds. `check` counts like ESLint's bulk suppressions, with the base branch as the
+baseline: a recorded file that breaks the rule more times than it did on the base fails, and every break of the
+rule in that file is listed. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
+a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
+take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
+if the sentence is gone, `generate` says so and the rule stays until `--reset`. dependency-cruiser does not
+enforce declared rules.
 
 ## Use from an AI agent (MCP)
 

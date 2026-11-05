@@ -1,6 +1,11 @@
 import * as path from 'node:path';
 import type { LayerBoundary } from '../detector/layer-detector.js';
-import { type LayerAlias, layerRootOf, resolveImportPath } from '../detector/layer-paths.js';
+import {
+  type LayerAlias,
+  layerRootOf,
+  resolveImportPath,
+  resolveImportTarget,
+} from '../detector/layer-paths.js';
 import {
   SERVER_ONLY_PACKAGE,
   type ServerClientAnalysis,
@@ -15,6 +20,8 @@ import { firstMatchingRule, ROLE_PATTERNS, ROLE_RULE_SOURCES } from '../scanner/
 import { isSkippedFolder, isSourceFileName } from '../scanner/source-paths.js';
 import { LINTED_FILES } from './eslint-plugin-emitter.js';
 import { layerRuleName } from './layer-emitters.js';
+import { aliasesFor } from '../detector/declared-rules.js';
+import { DECLARED_RUNTIME, type DeclaredEslintRules } from './declared-emitters.js';
 import { DEPENDENCY_INTERNALS_RULE } from './dependency-internals-emitters.js';
 import { ENTRY_PURITY_RULE } from './entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from './phantom-dependency-emitters.js';
@@ -61,6 +68,7 @@ export interface EslintAppRules extends AppScope {
   serverClient: ServerClientRuleSpec | null;
   internals: AppRule | null;
   entry: EntryRuleSpec | null;
+  declared: DeclaredEslintRules | null;
 }
 
 type AllowedFor = (ruleId: string) => readonly string[];
@@ -148,7 +156,9 @@ export const entryRuleSpec = (
 
 export const hasAppRules = (rules: EslintAppRules): boolean =>
   rules.layers.length > 0 ||
-  [rules.phantom, rules.serverClient, rules.internals, rules.entry].some((spec) => spec !== null);
+  [rules.phantom, rules.serverClient, rules.internals, rules.entry, rules.declared].some(
+    (spec) => spec !== null,
+  );
 
 const APP_RUNTIME = `function realPathOf(filename) {
   try {
@@ -225,13 +235,13 @@ const INTERNALS_RUNTIME = `function makeInternalsRule(spec) {
   );
 }`;
 
-const ENTRY_RUNTIME = `const APP_ROLES = APP_ROLE_RULES.map(({ role, source }) => ({ role, test: new RegExp(source) }));
+const ROLE_RUNTIME = `const APP_ROLES = APP_ROLE_RULES.map(({ role, source }) => ({ role, test: new RegExp(source) }));
 
 function roleOf(file) {
   return APP_ROLES[firstMatchingRule(file, APP_ROLES)]?.role ?? 'UNKNOWN';
-}
+}`;
 
-function makeEntryRule(spec) {
+const ENTRY_RUNTIME = `function makeEntryRule(spec) {
   return appRule(spec, (context, file) =>
     spec.entryRoles.includes(roleOf(file))
       ? {}
@@ -301,7 +311,7 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     ignored: rules.ignored,
     tests: (ROLE_PATTERNS.get('TEST') ?? []).map((pattern) => pattern.source),
   };
-  const { layers, phantom, serverClient, internals, entry } = rules;
+  const { layers, phantom, serverClient, internals, entry, declared } = rules;
   const json = (value: unknown): string => JSON.stringify(value, null, 2);
   const specs = [
     ...layers.map((spec) => ({ spec, make: 'makeLayerRule' })),
@@ -309,9 +319,11 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     ...(serverClient === null ? [] : [{ spec: serverClient, make: 'makeServerClientRule' }]),
     ...(internals === null ? [] : [{ spec: internals, make: 'makeInternalsRule' }]),
     ...(entry === null ? [] : [{ spec: entry, make: 'makeEntryRule' }]),
+    ...(declared?.rules ?? []).map((spec) => ({ spec, make: 'makeDeclaredRule' })),
   ];
   const needsPackages = phantom !== null || internals !== null;
   const needsTargets = serverClient !== null || entry !== null;
+  const needsRoles = entry !== null || declared !== null;
   const source = [
     `const APP = ${json(app)};`,
     `const APP_RULES = ${json(specs.map(({ spec, make }) => ({ ...spec, make })))};`,
@@ -324,7 +336,15 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     APP_RUNTIME,
     ...(layers.length === 0 ? [] : [layerRootOf.toString(), LAYER_RUNTIME]),
     ...(needsPackages ? [packageName.toString(), PACKAGE_RUNTIME] : []),
-    ...(needsTargets ? [firstPartyCandidates.toString(), TARGET_RUNTIME] : []),
+    ...(needsTargets || declared !== null ? [firstPartyCandidates.toString()] : []),
+    ...(needsTargets ? [TARGET_RUNTIME] : []),
+    ...(needsRoles
+      ? [
+          `const APP_ROLE_RULES = ${json(ROLE_RULE_SOURCES)};`,
+          firstMatchingRule.toString(),
+          ROLE_RUNTIME,
+        ]
+      : []),
     ...(phantom === null
       ? []
       : [
@@ -340,12 +360,14 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
           SERVER_CLIENT_RUNTIME,
         ]),
     ...(internals === null ? [] : [isPackageInternal.toString(), INTERNALS_RUNTIME]),
-    ...(entry === null
+    ...(entry === null ? [] : [ENTRY_RUNTIME]),
+    ...(declared === null
       ? []
       : [
-          `const APP_ROLE_RULES = ${json(ROLE_RULE_SOURCES)};`,
-          firstMatchingRule.toString(),
-          ENTRY_RUNTIME,
+          `const DECLARED_ROOTS = ${json(declared.roots)};`,
+          aliasesFor.toString(),
+          resolveImportTarget.toString(),
+          DECLARED_RUNTIME,
         ]),
     `const APP_MAKERS = { ${[...new Set(specs.map(({ make }) => make))].join(', ')} };`,
   ].join('\n\n');

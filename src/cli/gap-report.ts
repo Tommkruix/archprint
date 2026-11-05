@@ -4,6 +4,7 @@ import {
   type DeclaredViolation,
   loadCodebase,
   measureDeclared,
+  type DeclaredDefinition,
   type PackageTarget,
 } from '../detector/declared-rules.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
@@ -13,6 +14,7 @@ import {
   declaredRuleId,
   type InferredSentence,
   isDeclaredRule,
+  type MappedSentence,
   type MappingEntry,
   parseMapping,
   type SentenceSource,
@@ -72,7 +74,7 @@ const packagePhrase = (target: PackageTarget): string =>
     : `${joined(target.imports)} from ${target.name}`;
 
 /** A declared rule restated from its template, in the words the report and the rule card use. */
-export function restate(rule: DeclaredRule): string {
+export function restate(rule: DeclaredDefinition): string {
   const except = rule.except.length > 0 ? ` (except ${joined(rule.except)})` : '';
   const scope = `files matching ${joined(rule.files)}${except}`;
   switch (rule.template) {
@@ -155,11 +157,14 @@ function appDirsUnder(root: string): string[] {
   return dirs;
 }
 
-/**
- * Verifies each sentence of an agent's mapping against the repository at `root` (globs and source files are
- * relative to it): that the quote is in the file, that the mapping matches code, and what follows or breaks it.
- */
-export function buildGapReport(root: string, mapping: unknown): GapReport {
+/** A mapping entry with its verdict, and the sentence it maps when the entry was valid. */
+export interface VerifiedSentence {
+  entry: GapEntry;
+  sentence: MappedSentence | null;
+}
+
+/** Each entry of a mapping verified against the repository at `root`, in the mapping's order. */
+export function verifyMapping(root: string, mapping: unknown): VerifiedSentence[] {
   const absoluteRoot = path.resolve(root);
   const parsed: MappingEntry[] = parseMapping(mapping);
   const apps = appDirsUnder(absoluteRoot);
@@ -180,10 +185,7 @@ export function buildGapReport(root: string, mapping: unknown): GapReport {
       rules: summarizeRules(scanRepo(dir, { deep: false }), Number.POSITIVE_INFINITY),
     })));
 
-  const entries = parsed.map((entry): GapEntry => {
-    if ('invalid' in entry)
-      return { status: 'invalid', source: entry.source, reason: entry.invalid };
-    const { sentence } = entry;
+  const verify = (sentence: MappedSentence): GapEntry => {
     const named = isDeclaredRule(sentence)
       ? { id: declaredRuleId(sentence.name), mapped: restate(sentence) }
       : {};
@@ -206,9 +208,30 @@ export function buildGapReport(root: string, mapping: unknown): GapReport {
       return { ...base, status: 'guidance', reason: sentence.reason };
     if (sentence.template === 'inferred') return { ...base, ...inferredEntry(sentence, scans) };
     return { ...base, ...declaredEntry(sentence, measures.get(sentence)!) };
-  });
-  return { entries };
+  };
+  return parsed.map((entry) =>
+    'invalid' in entry
+      ? {
+          entry: { status: 'invalid', source: entry.source, reason: entry.invalid },
+          sentence: null,
+        }
+      : { entry: verify(entry.sentence), sentence: entry.sentence },
+  );
 }
+
+/**
+ * Verifies each sentence of an agent's mapping against the repository at `root` (globs and source files are
+ * relative to it): that the quote is in the file, that the mapping matches code, and what follows or breaks it.
+ */
+export function buildGapReport(root: string, mapping: unknown): GapReport {
+  return { entries: verifyMapping(root, mapping).map(({ entry }) => entry) };
+}
+
+/** How an entry is named in output: its rule id, `guidance`, or its template when it has neither. */
+export const entryLabel = (entry: GapEntry): string =>
+  entry.id ??
+  entry.rule?.id ??
+  (entry.status === 'guidance' ? 'guidance' : (entry.template ?? 'entry'));
 
 const GROUPS: readonly { title: string; statuses: readonly GapStatus[] }[] = [
   { title: 'Enforce now', statuses: ['enforce-now'] },
@@ -258,9 +281,7 @@ function entryLines(entry: GapEntry): string[] {
   const where = entry.source
     ? `${entry.source.file}${entry.source.line === undefined ? '' : `:${entry.source.line}`}`
     : 'no source';
-  const label =
-    entry.id ?? entry.rule?.id ?? (entry.status === 'guidance' ? 'guidance' : entry.template);
-  const lines = [`${label ?? 'entry'}  (${where})`];
+  const lines = [`${entryLabel(entry)}  (${where})`];
   if (entry.source) lines.push(`  "${entry.source.quote}"`);
   if (entry.mapped) lines.push(`  Mapped as: ${entry.mapped}.`);
   if (entry.rule) {

@@ -1,6 +1,6 @@
 /**
- * Layer placement and import resolution shared by the layer detector and the generated ESLint rule. Each function
- * is self-contained (no imports, no outer references) because the generator emits its source verbatim.
+ * Layer placement and import resolution shared by the detectors and the generated ESLint rules. Each function is
+ * self-contained (no imports; only other functions of this file) because the generator emits its source verbatim.
  */
 
 export interface LayerAlias {
@@ -53,4 +53,36 @@ export function resolveImportPath(
     else if (segments.pop() === undefined) return null;
   }
   return segments.join('/');
+}
+
+/** A workspace package by repo-relative directory, with the source file its root import resolves to, if known. */
+export interface WorkspacePackage {
+  name: string;
+  dir: string;
+  entry: string | null;
+}
+
+/**
+ * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path, or a
+ * workspace package (its entry for the root import; its directory with a trailing `/` when the entry is unknown).
+ * `fileFor` picks the source file a path names, if any (`x` may be `x.ts` or `x/index.ts`); else the bare path
+ * stands. Null for a package outside the repository.
+ */
+export function resolveImportTarget(
+  fromPath: string,
+  specifier: string,
+  aliases: readonly LayerAlias[],
+  packages: readonly WorkspacePackage[],
+  fileFor: (base: string) => string | null,
+): string | null {
+  let base = resolveImportPath(fromPath, specifier, aliases);
+  if (base === null) {
+    const owner = packages.find(
+      ({ name }) => specifier === name || specifier.startsWith(`${name}/`),
+    );
+    if (owner === undefined) return null;
+    if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
+    base = `${owner.dir}${specifier.slice(owner.name.length)}`;
+  }
+  return fileFor(base) ?? base;
 }
