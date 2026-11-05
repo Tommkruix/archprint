@@ -41,6 +41,8 @@ import {
   type FailOn,
 } from './check.js';
 import { CheckSetupError } from './check-git.js';
+import { parseMappingJson } from './declared-mapping.js';
+import { buildGapReport, renderGapReport } from './gap-report.js';
 
 const LEGACY_ROOT_CONFIG = 'archprint.json';
 
@@ -565,6 +567,20 @@ export function buildProgram(version = readVersion()): Command {
     });
 
   program
+    .command('gap-report')
+    .description(
+      'Verify the rules your context files state (CLAUDE.md, AGENTS.md) against the code: your agent maps each rule-like sentence to a template, archprint checks the mapping and measures what follows or breaks it. Writes nothing.',
+    )
+    .argument('<mapping>', 'the mapping your agent wrote, a JSON file ("-" reads it from stdin)')
+    .argument('[path]', 'repository root, where the context files are', '.')
+    .option('--json', 'print the report as JSON')
+    .action((mapping: string, input: string, options: { json?: boolean }) => {
+      const text = readFileSync(mapping === '-' ? 0 : mapping, 'utf8');
+      const report = buildGapReport(input, parseMappingJson(text));
+      console.log(options.json ? JSON.stringify(report, null, 2) : renderGapReport(report));
+    });
+
+  program
     .command('wire')
     .description(
       "Reference archprint's generated rules from the enforcement tools your repo uses (managed, reversible)",
@@ -699,7 +715,7 @@ export function buildProgram(version = readVersion()): Command {
   program
     .command('mcp')
     .description(
-      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain, check. Serves over stdio by default; --http runs a remote server that scans a public repo by URL (scan, recommend, explain).',
+      'Run archprint as an MCP server for Claude, Cursor, and other agents. Read-only tools: scan, recommend, explain, check, gap report. Serves over stdio by default; --http runs a remote server that scans a public repo by URL (scan, recommend, explain).',
     )
     .option('--http', 'serve over HTTP (Streamable HTTP) instead of stdio, for remote clients')
     .option('--port <port>', 'port for --http', process.env.PORT ?? '8848')
