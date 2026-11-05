@@ -36,14 +36,14 @@ import {
   relocateSources,
   remeasure,
 } from './declared-adoption.js';
-
-const isDeclared = (rule: AdoptedRule): rule is DeclaredAdoptedRule => rule.family === 'declared';
 import {
   allowedFilesByRule,
   LEGACY_ALLOW_FILE,
   readAllowed,
   sortAllowed,
 } from './allowed-exceptions.js';
+
+const isDeclared = (rule: AdoptedRule): rule is DeclaredAdoptedRule => rule.family === 'declared';
 
 export interface WriteLayoutOptions {
   structural?: boolean;
