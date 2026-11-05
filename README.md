@@ -162,8 +162,11 @@ the CLI the mapping file your agent wrote:
 Each sentence comes back as enforce now (nothing breaks it today), enforce with a baseline (broken today, with the
 files and lines), already an archprint rule, check the mapping (the quote is not in the file, or the mapping
 matches no code), or guidance only. Archprint never calls a model: the agent only maps prose to a template, and
-every number in the report is computed from your code. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report)
-for the templates.
+every number in the report is computed from your code. Adopt the ones you approve with
+`archprint generate <app> --declare mapping.json` (add `--baseline` for those the code breaks today): each becomes
+an ESLint rule whose error is your team's sentence, with its line in CLAUDE.md, and `archprint check` enforces it in
+pull requests. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report) for
+the templates.
 
 **See it catch something.** After step 4, break a rule on purpose: for example, make a route file import your
 database client directly, then run your linter. That is the whole loop the
@@ -195,6 +198,9 @@ archprint recommend apps/web
 
 # Check the rules your CLAUDE.md or AGENTS.md states against the code, from a mapping your agent wrote
 archprint gap-report mapping.json .
+
+# Enforce the ones you approve (with --baseline, also those the code breaks today)
+archprint generate apps/web --declare mapping.json
 
 # Upgrading from 0.5.x? Move an older archprint-rules/ setup to the .archprint layout
 archprint migrate
@@ -347,7 +353,8 @@ this layout and rewires your configs in place.
 
 `archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
-evidence. It works in any CI, and on GitHub it shows each finding inline on the pull request
+evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
+and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
