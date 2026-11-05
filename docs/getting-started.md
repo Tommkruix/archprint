@@ -135,6 +135,9 @@ archprint generate apps/web --include-structural --rules no-lib-to-hooks --basel
 
 # Also write the granular per-family files, rule cards, fixtures, and graph
 archprint generate apps/web --expand
+
+# Check the rules your CLAUDE.md or AGENTS.md states against the code, from a mapping your agent wrote
+archprint gap-report mapping.json .
 ```
 
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
@@ -163,6 +166,15 @@ followed-but-reported-only / review / adopt-from-day-one, names the installed to
 can write (or what to install), and the adopt
 tier is backed by a census of tens of thousands of public TypeScript repos (stack-aware), not hand-picked
 defaults.
+
+## Check the rules you wrote down
+
+If your CLAUDE.md or AGENTS.md already states architecture rules, ask your agent (with the MCP server below set up)
+"Which of the rules in our CLAUDE.md does the code actually follow?". It maps each rule-like sentence to a template
+and calls `archprint_gap_report`, which reports what the code follows, what breaks it today, and which mappings
+match nothing. Without MCP, have the agent write the mapping to a file and run `archprint gap-report mapping.json .`
+from the repository root. [The gap report](/concepts#written-rules-the-gap-report) lists the templates and what each
+result means.
 
 ## CI
 
@@ -258,12 +270,13 @@ success and `1` on error.
 
 `archprint mcp` runs archprint as an MCP server over stdio so Claude, Cursor, and other agents can inspect the
 rules your repo already follows before they write code. It exposes read-only `archprint_scan`,
-`archprint_recommend`, `archprint_explain`, and `archprint_check` tools. Each rule comes back stated in plain
+`archprint_recommend`, `archprint_explain`, `archprint_check`, and `archprint_gap_report` tools. Each rule comes back stated in plain
 words, with its evidence, the files that break it, and whether archprint enforces it, holds it for review, or only
 reports it. `archprint_explain` takes any rule from the scan by its id, label or ESLint name (for example `AP-002`,
 `env-access`, `no-lib-to-app` or `lib !-> app`).
 `archprint_check` reports the adopted rules the agent's current change breaks, uncommitted edits included, so it
-can fix them before it finishes. Point any MCP client at it:
+can fix them before it finishes. `archprint_gap_report` checks the agent's mapping of your CLAUDE.md or AGENTS.md
+sentences against the code. Point any MCP client at it:
 
 ```json
 {
@@ -307,7 +320,7 @@ your source never leaves your machine, whichever git host you use.
 To scan a public repository by URL instead, run a remote server over HTTP with `archprint mcp --http`: it clones
 the repo shallow to a temp dir (public `github.com`, `gitlab.com`, or `bitbucket.org` only), runs the same
 read-only analysis, returns the result, and deletes the clone. The tools then take a `repo` URL and an optional
-`ref`. It binds `0.0.0.0:8848/mcp` by default; pass `--host 127.0.0.1` to keep it on your own machine, or `--port`
+`ref`; the gap report and check stay local, since they read your files and your change. It binds `0.0.0.0:8848/mcp` by default; pass `--host 127.0.0.1` to keep it on your own machine, or `--port`
 (or `$PORT`) to change the port. Health checks answer at `/health` (use this one on Cloud Run, which reserves
 `/healthz`) and `/healthz`. Every request clones and scans, so keep a hosted instance behind authentication, such
 as Cloud Run's IAM, unless you accept paying for anyone's scans.

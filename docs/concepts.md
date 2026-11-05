@@ -120,12 +120,87 @@ Upgrading from an older `archprint-rules/` layout? `archprint migrate` (alias `u
 and rewrites the reference in your linter config in place, writing the new files before removing the old ones so
 the config never points at a file that has been deleted.
 
+## Written rules: the gap report
+
+Inference finds the rules your code already follows. Your team has usually also written rules down, in
+CLAUDE.md, AGENTS.md or `.cursor/rules`, and agents treat those as guidance. The gap report checks them against
+the code, without anyone writing rules by hand:
+
+1. Your agent reads the context files and maps each rule-like sentence to one template, quoting the sentence.
+2. Archprint verifies each mapping and measures it: `archprint gap-report <mapping.json> [path]`, or the
+   `archprint_gap_report` MCP tool. It writes nothing.
+
+Archprint never calls a model. The agent only turns prose into a template's parameters; every number in the report
+is computed from your code.
+
+**Templates.** Every template takes `files` (the files it covers) and an optional `except`, as globs relative to
+the path you pass (normally the repository root, where the context files are), matched the way ESLint matches its
+`files`.
+
+| Template        | The sentence says                 | Parameters                                                                                                                  |
+| --------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `forbid-import` | these files must not import that  | `targets`: path globs, matched on the file an import resolves to; `packages`: specifier globs, each with optional `imports` |
+| `forbid-usage`  | these files must not use a global | `usage`: a global (`fetch`, `window`, `localStorage`) or a global and member (`process.env`)                                |
+| `forbid-file`   | no new file here                  | none: the files there today are recorded, and only a new one would break it                                                 |
+| `inferred`      | a rule archprint already finds    | `rule`: its id from `archprint scan`                                                                                        |
+| `none`          | something no template checks      | `reason`, for example a style rule a standard linter covers                                                                 |
+
+A mapping is `{ "rules": [ ... ] }`, one entry per sentence:
+
+```json
+{
+  "rules": [
+    {
+      "source": { "file": "CLAUDE.md", "quote": "packages/mcds must not import the app" },
+      "name": "no-mcds-to-app",
+      "template": "forbid-import",
+      "files": ["packages/mcds/**"],
+      "targets": ["apps/web/**"]
+    },
+    {
+      "source": { "file": "AGENTS.md", "quote": "Do not use Next.js unstable_cache()" },
+      "name": "no-unstable-cache",
+      "template": "forbid-import",
+      "files": ["**"],
+      "packages": [{ "name": "next/cache", "imports": ["unstable_cache"] }]
+    }
+  ]
+}
+```
+
+Each sentence comes back in one group:
+
+- **Enforce now**: the code follows it. A `forbid-file` rule is always here, with the files it freezes.
+- **Enforce with a baseline**: some files break it today, listed with the line.
+- **Already an archprint rule**: the rule's own status and evidence.
+- **Check the mapping**: the quote is not in the file, the files or a target match no source file, or the entry is
+  not a valid mapping (the reason says which).
+- **Guidance only**: no template fits.
+
+A declared rule is named `doc-<name>`, for example `doc-no-fetch-in-components`.
+
+**What it checks, and what it does not.** The quote check proves the sentence is in the file, not that the
+mapping means the same thing, so the report restates every mapping in plain words next to the quote for you to
+compare. A rule nothing in the code breaks, in scope or out, is marked as such: the evidence cannot tell it from a
+mapping that names the wrong thing. Declared rules skip the confidence gate, because your team stated them; the
+risk is a wrong mapping, not a coincidence. Some details:
+
+- Imports are matched on what they name, not on what a barrel re-exports. Type-only imports never count. Neither do
+  test files, except for `forbid-file`. `export ... from` counts as an import.
+- With `imports` names, a namespace import (`import * as cache`) and `export * from` count, as in ESLint's
+  `no-restricted-imports`; an `import()` call and a bare `import 'x'` do not, since the names they take are unknown.
+  A default import counts as the name `default`.
+- A read of a global counts unless the name resolves, in the scope around it, to the file's own import, variable,
+  parameter, function or class, the way ESLint resolves it. A type of the same name does not hide the global.
+- Whether files were added under a `forbid-file` glob after the sentence was written is not checked.
+
 ## Use from an AI agent (MCP)
 
 `archprint mcp` runs Archprint as a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio,
 so an assistant like Claude or Cursor can read a repo's architecture on demand. It exposes the read-only half of
-the CLI as four tools, `archprint_scan`, `archprint_recommend`, `archprint_explain`, and `archprint_check`, which
-return the same evidence-gated findings as the commands of the same name (as JSON) and never write to your project. Generating and wiring
+the CLI as five tools, `archprint_scan`, `archprint_recommend`, `archprint_explain`, `archprint_check`, and
+`archprint_gap_report`, which return the same findings as the commands of the same name (as JSON) and never write to
+your project. Generating and wiring
 rules stays a deliberate command you run yourself. The stdio server runs on your machine against your local
 checkout, so it suits private code: nothing leaves your machine. `archprint mcp --http` instead runs a remote server
 that scans a public repository by URL: it clones the repo ephemerally, runs the same read-only analysis (scan,
