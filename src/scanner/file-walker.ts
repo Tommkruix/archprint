@@ -9,7 +9,7 @@ import {
   hasUseServerDirective,
   type RoleClassification,
 } from './role-classifier.js';
-import { buildWorkspaceMap } from './workspace-resolver.js';
+import { buildWorkspaceMap, owningConfigPath } from './workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from './workspace-packages.js';
 import { createIgnoreFilter } from './ignore-filter.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
@@ -406,39 +406,52 @@ export function createImportAnalyzer(
   const isWorkspacePath = (filePath: string): boolean =>
     isWorkspacePackagePath(filePath, workspacePackages);
 
-  const project = new Project({
-    tsConfigFilePath: path.join(appDir, 'tsconfig.json'),
-    skipAddingFilesFromTsConfig: true,
-    resolutionHost: (moduleResolutionHost, getCompilerOptions) => {
-      const compilerOptions = getCompilerOptions();
-      const blocksExternal = (filePath: string): boolean =>
-        filePath.includes('/node_modules/') && !isWorkspacePath(filePath);
-      const firstPartyOnlyHost: ts.ModuleResolutionHost = {
-        ...moduleResolutionHost,
-        fileExists: (filePath) =>
-          !blocksExternal(filePath) && moduleResolutionHost.fileExists(filePath),
-        directoryExists: moduleResolutionHost.directoryExists
-          ? (dirPath) => !blocksExternal(dirPath) && moduleResolutionHost.directoryExists!(dirPath)
-          : undefined,
-      };
-      const canonical = (f: string): string =>
-        ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase();
-      const cache = ts.createModuleResolutionCache(appDir, canonical, compilerOptions);
-      return {
-        resolveModuleNames: (moduleNames, containingFile) =>
-          moduleNames.map(
-            (moduleName) =>
-              ts.resolveModuleName(
-                moduleName,
-                containingFile,
-                compilerOptions,
-                firstPartyOnlyHost,
-                cache,
-              ).resolvedModule,
-          ),
-      };
-    },
-  });
+  const createProject = (tsConfigFilePath: string): Project =>
+    new Project({
+      tsConfigFilePath,
+      skipAddingFilesFromTsConfig: true,
+      resolutionHost: (moduleResolutionHost, getCompilerOptions) => {
+        const compilerOptions = getCompilerOptions();
+        const blocksExternal = (filePath: string): boolean =>
+          filePath.includes('/node_modules/') && !isWorkspacePath(filePath);
+        const firstPartyOnlyHost: ts.ModuleResolutionHost = {
+          ...moduleResolutionHost,
+          fileExists: (filePath) =>
+            !blocksExternal(filePath) && moduleResolutionHost.fileExists(filePath),
+          directoryExists: moduleResolutionHost.directoryExists
+            ? (dirPath) =>
+                !blocksExternal(dirPath) && moduleResolutionHost.directoryExists!(dirPath)
+            : undefined,
+        };
+        const canonical = (f: string): string =>
+          ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase();
+        const cache = ts.createModuleResolutionCache(appDir, canonical, compilerOptions);
+        return {
+          resolveModuleNames: (moduleNames, containingFile) =>
+            moduleNames.map(
+              (moduleName) =>
+                ts.resolveModuleName(
+                  moduleName,
+                  containingFile,
+                  compilerOptions,
+                  firstPartyOnlyHost,
+                  cache,
+                ).resolvedModule,
+            ),
+        };
+      },
+    });
+  const configFor = owningConfigPath(appDir);
+  const projects = new Map<string, Project>();
+  const projectFor = (absoluteFilePath: string): Project => {
+    const configPath = configFor(absoluteFilePath);
+    let project = projects.get(configPath);
+    if (project === undefined) {
+      project = createProject(configPath);
+      projects.set(configPath, project);
+    }
+    return project;
+  };
   const aliasDirs = Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
     prefix: key.replace(/\/?\*$/, ''),
     dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
@@ -468,6 +481,7 @@ export function createImportAnalyzer(
         classifyEdge(specifier, undefined),
       );
     }
+    const project = projectFor(absoluteFilePath);
     const sourceFile = project.addSourceFileAtPath(absoluteFilePath);
     const results: ResolvedImport[] = sourceFile
       .getImportDeclarations()

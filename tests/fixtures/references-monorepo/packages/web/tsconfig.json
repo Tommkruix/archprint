@@ -1,0 +1,5 @@
+{
+  "compilerOptions": { "module": "ESNext", "moduleResolution": "bundler", "strict": true, "composite": true, "paths": { "@/*": ["./src/*"] } },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.common.json" }]
+}

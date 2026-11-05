@@ -56,8 +56,14 @@ Nothing whose inferred layer or role could be wrong is written as enforcement wi
 - **Fast** (default for `scan`) extracts imports with the TypeScript parser and matches at the import-specifier
   level. It is quick and, for direct-import boundaries (the common case), gives the same answer as deep.
 - **Deep** (default for `generate`, since generation is the commitment point) resolves through barrel files and
-  workspace aliases with the type-aware resolver. Use it to catch a forbidden import that is hidden behind a
-  barrel re-export.
+  workspace aliases with the type-aware resolver, using the compiler options of the tsconfig project that includes
+  each file. Use it to catch a forbidden import that is hidden behind a barrel re-export.
+
+Both modes read `paths` and `baseUrl` from the app's `tsconfig.json` and its `extends` chain. When that file only
+lists other projects under `references` (the solution-style layout create-vite, Angular and Nx generate),
+archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`, as
+TypeScript does. An alias in the `tsconfig.json` itself takes precedence, and an alias two referenced projects map
+to different folders stays unresolved in the fast pass rather than guessed.
 
 Layer boundaries are the exception: they are always found from imports as written, in both modes, because that
 is how the generated ESLint rule reads an import, and how dependency-cruiser names the file it points at.
