@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./src/app/*"
+      ]
+    }
+  },
+  "include": [
+    "src/app",
+    "src/shared"
+  ]
+}

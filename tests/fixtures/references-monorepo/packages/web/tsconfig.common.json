@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "module": "ESNext", "moduleResolution": "bundler", "strict": true, "composite": true, "paths": { "#common/*": ["../common/*"] } },
+  "include": ["../common"]
+}

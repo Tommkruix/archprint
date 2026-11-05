@@ -640,6 +640,11 @@ Structural analysis (cycles, orphans, reachability, public-API) always uses the 
 resolution for those, and public-API detection in fact requires it (deep resolution would resolve through a barrel
 and erase the barrel-versus-deep signal).
 
+**Path aliases.** archprint reads `paths` and `baseUrl` from the app's `tsconfig.json` and its `extends` chain.
+When that file only lists other projects under `references` (the solution-style layout create-vite, Angular and Nx
+generate), archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`,
+as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it.
+
 **Determinism.** The same repo at the same version produces the same output. Analysis is pure and sorted; there is
 no randomness, and the analysis engine is pinned to an exact version.
 

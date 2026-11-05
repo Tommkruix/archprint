@@ -73,7 +73,9 @@ node dist/cli.js scan <path-to-your-app>
 
 Requires Node >= 20. Point Archprint at a directory that has a `tsconfig.json` (for a monorepo, a package such
 as `apps/web`; a monorepo root works too, Archprint discovers the app directories and skips whatever git ignores,
-including nested `.gitignore` files and `.git/info/exclude`).
+including nested `.gitignore` files and `.git/info/exclude`). A solution-style `tsconfig.json` that only lists
+`references`, as create-vite generates, works too: Archprint reads the aliases of the referenced project that
+compiles the app's files.
 
 ## The 60-second path
 
