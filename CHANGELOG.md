@@ -1,5 +1,17 @@
 # archprint
 
+## 0.18.0
+
+### Minor Changes
+
+- `archprint generate <app> --declare <mapping>` enforces the rules your CLAUDE.md or AGENTS.md states, from the mapping your agent wrote for `archprint gap-report`. It verifies the mapping again and adopts, for that app, every sentence the code follows, and with `--baseline` also those it breaks today, recording each breaking file as an exception that only shrinks. A sentence it cannot adopt is listed with the reason. Each adopted rule becomes an `archprint/doc-<name>` rule in `.archprint/eslint.mjs` whose error message is your team's sentence and its line, for example `Components never call fetch directly. (CLAUDE.md:2)`, and `archprint check` finds the same breaks, file for file and line for line, and reports the ones a pull request adds. `archprint allow` and `archprint explain` (and the `archprint_explain` MCP tool) take its id. Later runs of `generate` keep these rules, refuse a new break, and say when a rule's sentence is no longer in its file. dependency-cruiser does not enforce them.
+- New `archprint gap-report` command and `archprint_gap_report` MCP tool check the architecture rules your CLAUDE.md or AGENTS.md already states against your code. Your agent maps each rule-like sentence to one of a few templates, quoting it: forbid an import (by path, package or named export), forbid a global such as `fetch` or `process.env`, allow no new files under a folder, or point at a rule archprint already finds. Archprint checks the quote is in the file and the mapping matches real files, then groups every sentence: enforce now, enforce with a baseline (the files and lines that break it today), already an archprint rule, check the mapping, or guidance only. Each mapping is restated in plain words next to the quote, so you can compare the two, and a rule nothing in the code breaks is marked as such. Archprint calls no model: every number is computed from your code. Nothing is written.
+
+### Patch Changes
+
+- `archprint check` now counts the breaks of each rule in a file, the way ESLint's bulk suppressions do, with the base branch as the baseline. Earlier, a file that already broke a rule could break it again in a pull request unnoticed, as long as the new break looked like the old one (the same rule and the same import or global). Now, when a file breaks a rule more times than it did on the base, `check` reports it and lists every break of that rule in the file, since which one is new cannot be told; fewer than on the base counts as fixed.
+- `archprint check` now points at the right line in Vue and Svelte files. Lines were counted from the start of the `<script>` block rather than the file, so an annotation on a `.vue` or `.svelte` file landed above the import that broke the rule.
+
 ## 0.17.0
 
 ### Minor Changes
