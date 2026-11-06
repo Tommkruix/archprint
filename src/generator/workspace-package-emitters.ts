@@ -13,10 +13,17 @@ export function toEslintWorkspacePackageApi(
   if (analysis.consumerCount === 0 || analysis.packages.length === 0) return null;
   if (analysis.gate.status !== 'AUTO') return null;
   const group = analysis.packages.map(escapeRegExp).join('|');
+  const exported = Object.entries(analysis.subpaths).filter(([, subpaths]) => subpaths.length > 0);
   return {
     name: WORKSPACE_PACKAGE_RULE,
-    message: 'Import a workspace package by its name, not a deep path into its source.',
+    message:
+      'Import a workspace package by its name or a subpath it exports, not a deep path into its source.',
     ignores: withMinedExemptions([...TEST_GLOBS], analysis.violations),
-    check: { kind: 'import', regex: `^(${group})/`, typeImports: false },
+    check: {
+      kind: 'import',
+      regex: `^(${group})/`,
+      typeImports: false,
+      ...(exported.length > 0 && { exports: Object.fromEntries(exported) }),
+    },
   };
 }

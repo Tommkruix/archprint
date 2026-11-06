@@ -1,11 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { findTsconfigDirs } from '../scanner/app-dirs.js';
 import { valueModuleImports, walkRepo } from '../scanner/file-walker.js';
 import { globalReferences, type GlobalReference } from '../scanner/global-references.js';
 import { matchesAnyGlob, matchesGlob } from '../scanner/globs.js';
 import { buildWorkspacePackageMap, findWorkspaceRoots } from '../scanner/workspace-packages.js';
-import { packageEntry, packageSubpaths, sourceFileFor } from './import-target.js';
+import { packageEntry, packageSubpaths, readManifest, sourceFileFor } from './import-target.js';
 import { layerAliases } from './layer-detector.js';
 import { type LayerAlias, resolveImportTarget, type WorkspacePackage } from './layer-paths.js';
 
@@ -62,15 +62,6 @@ export interface DeclaredMeasure {
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
-function readJson(file: string): unknown {
-  try {
-    return JSON.parse(readFileSync(file, 'utf8'));
-  } catch {
-    /* v8 ignore next -- defensive: the manifest changed after the workspace map read it */
-    return undefined;
-  }
-}
-
 /** The packages of every workspace under `root` and the one above it; on a name clash, the shallowest workspace's. */
 function workspacePackages(root: string, isFile: (path: string) => boolean): WorkspacePackage[] {
   const packages = new Map<string, WorkspacePackage>();
@@ -78,7 +69,7 @@ function workspacePackages(root: string, isFile: (path: string) => boolean): Wor
     for (const [name, absoluteDir] of Object.entries(buildWorkspacePackageMap(workspaceRoot))) {
       const dir = toPosix(path.relative(root, absoluteDir));
       if (dir === '' || dir.startsWith('..') || packages.has(name)) continue;
-      const manifest = readJson(path.join(absoluteDir, 'package.json'));
+      const manifest = readManifest(absoluteDir);
       packages.set(name, {
         name,
         dir,

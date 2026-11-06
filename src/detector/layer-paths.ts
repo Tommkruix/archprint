@@ -73,6 +73,24 @@ export interface WorkspacePackage {
 }
 
 /**
+ * The `exports` key Node.js matches a subpath (`./x`) with: an exact key, else the first `*` pattern, `subpaths` being
+ * in Node's order (exact keys first, then the most specific pattern); the `*` stands for at least one character.
+ */
+export function matchingSubpath(
+  subpaths: readonly PackageSubpath[],
+  subpath: string,
+): PackageSubpath | undefined {
+  return subpaths.find(({ key }) => {
+    const star = key.indexOf('*');
+    return star === -1
+      ? key === subpath
+      : subpath.length >= key.length &&
+          subpath.startsWith(key.slice(0, star)) &&
+          subpath.endsWith(key.slice(star + 1));
+  });
+}
+
+/**
  * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path, or a
  * workspace package (its entry for the root import; its directory with a trailing `/` when the entry is unknown;
  * for a subpath, the first target of the `exports` key it matches that names a source file, else the path under the
@@ -94,14 +112,7 @@ export function resolveImportTarget(
     if (owner === undefined) return null;
     if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
     const subpath = `.${specifier.slice(owner.name.length)}`;
-    const exported = owner.subpaths.find(({ key }) => {
-      const star = key.indexOf('*');
-      return star === -1
-        ? key === subpath
-        : subpath.length >= key.length &&
-            subpath.startsWith(key.slice(0, star)) &&
-            subpath.endsWith(key.slice(star + 1));
-    });
+    const exported = matchingSubpath(owner.subpaths, subpath);
     if (exported !== undefined) {
       const star = exported.key.indexOf('*');
       const expand = (target: string): string =>

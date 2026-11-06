@@ -10,10 +10,14 @@ function analysis(
   offenderCount: number,
   packages: string[],
   files: string[] = [],
+  subpaths: WorkspacePackageAnalysis['subpaths'] = Object.fromEntries(
+    packages.map((name) => [name, []]),
+  ),
 ): WorkspacePackageAnalysis {
   return {
     appDir: 'x',
     packages,
+    subpaths,
     consumerCount,
     offenderCount,
     gate: evaluateGate({
@@ -38,6 +42,20 @@ describe('toEslintWorkspacePackageApi', () => {
       regex: '^(@scope/pkg-a|@scope/pkg-b)/',
       typeImports: false,
     });
+  });
+
+  it('carries the subpath exports of the packages that define any, which the rule lets through', () => {
+    const button = { key: './button', targets: ['packages/ui/src/button.tsx'] };
+    const config = toEslintWorkspacePackageApi(
+      analysis(40, 0, ['@scope/kit', '@scope/ui'], [], { '@scope/kit': [], '@scope/ui': [button] }),
+    );
+    expect(config?.check).toEqual({
+      kind: 'import',
+      regex: '^(@scope/kit|@scope/ui)/',
+      typeImports: false,
+      exports: { '@scope/ui': [button] },
+    });
+    expect(config?.message).toContain('or a subpath it exports');
   });
 
   it('emits null with no consumers, no packages, or below AUTO', () => {

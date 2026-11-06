@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { firstPartyCandidates } from '../scanner/resolve-import.js';
 import type { PackageSubpath } from './layer-paths.js';
@@ -13,6 +14,16 @@ const stringLeaves = (value: unknown): string[] =>
       : isRecord(value)
         ? Object.values(value).flatMap(stringLeaves)
         : [];
+
+/** The parsed package.json in a package directory; undefined when it cannot be read. */
+export function readManifest(packageDir: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+  } catch {
+    /* v8 ignore next -- defensive: the manifest changed after the workspace map read it */
+    return undefined;
+  }
+}
 
 /** `exports['.']`, or `exports` itself when it is a string, a list or a conditions object. */
 function rootExport(exportsField: unknown): unknown {

@@ -170,8 +170,11 @@ it as `archprint/env-access`. **When not to use:** `NEXT_PUBLIC_*` variables rea
 
 ### Workspace-package API (Review)
 
-Detects importing a workspace package by a deep path into its source rather than by its name. ESLint reports it
-as `archprint/workspace-package`. **When not to use:** a build-config file consuming a shared preset by path when that is its only entry point.
+Detects importing a workspace package by a deep path into its source rather than by its name or a subpath the
+package exports. A subpath counts as exported the way Node.js matches `exports` (an exact key, then the most specific
+`*` pattern), when that key has a `./` target; a `null` target blocks it. A package without `exports` exposes only
+its name, and imports of a package that exports every subpath (`./*`, nothing blocked) count neither way. ESLint reports it as
+`archprint/workspace-package`. **When not to use:** a build-config file consuming a shared preset by path when that is its only entry point.
 
 ### Stories isolation (Review)
 
