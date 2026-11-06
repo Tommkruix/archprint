@@ -10,6 +10,7 @@ import { buildAliasEntries } from '../scanner/import-graph.js';
 import { declaredPackages } from '../scanner/package-name.js';
 import { resolveFirstPartyImport } from '../scanner/resolve-import.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
+import { packageEntriesUnder } from './package-entries.js';
 import { REQUEST_ENTRY_ROLES } from './pattern-detector.js';
 import { STORY } from './stories-isolation-detector.js';
 
@@ -106,6 +107,10 @@ export function detectOrphans(appDir: string): OrphanAnalysis {
   const root = path.resolve(appDir);
   const files = walkRepo(root);
   const nextPage = nextPagesUnder(root);
+  const packageEntries = packageEntriesUnder(
+    root,
+    files.map((file) => file.relativePath),
+  );
   const relByAbs = new Map(files.map((file) => [file.absolutePath, file.relativePath]));
   const aliases = buildAliasEntries(root);
   const referrers = new Map<string, Set<string>>(
@@ -139,7 +144,9 @@ export function detectOrphans(appDir: string): OrphanAnalysis {
   const orphans: string[] = [];
   const testOnly: string[] = [];
   for (const file of production) {
-    if (isEntry(file) || nextPage(file.relativePath)) continue;
+    if (isEntry(file) || nextPage(file.relativePath) || packageEntries.has(file.relativePath)) {
+      continue;
+    }
     const from = [...referrers.get(file.relativePath)!];
     if (from.length === 0) orphans.push(file.relativePath);
     else if (from.every((referrer) => isTest.has(referrer))) testOnly.push(file.relativePath);
