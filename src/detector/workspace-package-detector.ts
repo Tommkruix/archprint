@@ -7,6 +7,8 @@ import {
 } from '../scanner/file-walker.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
+import { packageSubpaths, readManifest } from './import-target.js';
+import { matchingSubpath, type PackageSubpath } from './layer-paths.js';
 
 export interface WorkspacePackageViolation {
   file: string;
@@ -17,6 +19,8 @@ export interface WorkspacePackageViolation {
 export interface WorkspacePackageAnalysis {
   appDir: string;
   packages: string[];
+  /** Each package's subpath exports, in the order Node.js matches them; empty when it defines none. */
+  subpaths: Record<string, PackageSubpath[]>;
   consumerCount: number;
   offenderCount: number;
   gate: GateResult;
@@ -34,16 +38,23 @@ function matchPackage(specifier: string, names: readonly string[]): string | nul
   return null;
 }
 
+/**
+ * The files that import a workspace package, and those that reach past what it exports: a package without `exports`
+ * exposes only its name. A package that exports every subpath (`./*`, nothing blocked) has no deep path, so importing
+ * it is evidence neither way and is left out.
+ */
 export function detectWorkspacePackageApi(
   appDir: string,
   options: WorkspacePackageOptions = {},
 ): WorkspacePackageAnalysis {
   const root = path.resolve(appDir);
-  const names = Object.keys(buildWorkspacePackageMap(findWorkspaceRoot(root)));
+  const packageDirs = buildWorkspacePackageMap(findWorkspaceRoot(root));
+  const names = Object.keys(packageDirs).sort();
   if (names.length === 0) {
     return {
       appDir: root,
       packages: [],
+      subpaths: {},
       consumerCount: 0,
       offenderCount: 0,
       gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),
@@ -51,6 +62,24 @@ export function detectWorkspacePackageApi(
     };
   }
 
+  const subpaths = Object.fromEntries(
+    names.map((name) => [
+      name,
+      packageSubpaths(
+        readManifest(packageDirs[name]!),
+        path.relative(root, packageDirs[name]!).split(path.sep).join('/'),
+      ),
+    ]),
+  );
+  const exported = (pkg: string, specifier: string): boolean =>
+    (matchingSubpath(subpaths[pkg]!, `.${specifier.slice(pkg.length)}`)?.targets.length ?? 0) > 0;
+  const open = new Set(
+    names.filter(
+      (name) =>
+        subpaths[name]!.some(({ key, targets }) => key === './*' && targets.length > 0) &&
+        subpaths[name]!.every(({ targets }) => targets.length > 0),
+    ),
+  );
   const files = walkRepo(root).filter((file: WalkedFile) => file.role !== 'TEST');
   const analyze = createImportAnalyzer(root, { resolve: options.resolve ?? false });
   const consumers = new Set<string>();
@@ -67,9 +96,9 @@ export function detectWorkspacePackageApi(
     for (const imp of imports) {
       if (!imp.hasValueBinding) continue;
       const pkg = matchPackage(imp.specifier, names);
-      if (pkg === null) continue;
+      if (pkg === null || open.has(pkg)) continue;
       consumers.add(file.relativePath);
-      if (imp.specifier !== pkg) {
+      if (imp.specifier !== pkg && !exported(pkg, imp.specifier)) {
         offenders.add(file.relativePath);
         violations.push({ file: file.relativePath, specifier: imp.specifier, package: pkg });
       }
@@ -78,7 +107,8 @@ export function detectWorkspacePackageApi(
 
   return {
     appDir: root,
-    packages: names.sort(),
+    packages: names,
+    subpaths,
     consumerCount: consumers.size,
     offenderCount: offenders.size,
     gate: evaluateGate({

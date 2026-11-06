@@ -7,7 +7,8 @@ export const FAMILY_STATEMENTS = {
   'import-style': 'prefer workspace aliases over deep relative imports',
   'console-isolation': 'library code must not use console',
   'env-access': 'read process.env only in the config layer',
-  'workspace-package-api': 'import workspace packages by name, not a deep path',
+  'workspace-package-api':
+    'import workspace packages by name or an exported subpath, not a deep path',
   'stories-isolation': 'Storybook stories must not be imported by other code',
   'ui-data': 'UI components must not import the data layer directly',
   'server-client': '"use client" modules must not import server-only code',

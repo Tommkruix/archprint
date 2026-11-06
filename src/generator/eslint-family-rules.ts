@@ -1,8 +1,18 @@
+import type { PackageSubpath } from '../detector/layer-paths.js';
 import { LINTED_FILES } from './eslint-plugin-emitter.js';
 
-/** What a family rule reports: an import whose specifier matches, or a property read such as `process.env`. */
+/**
+ * What a family rule reports: an import whose specifier matches, or a property read such as `process.env`. With
+ * `exports` (package name to its subpath exports), a match is not reported when the package, named by the regex's
+ * first group, exports the subpath.
+ */
 export type FamilyCheck =
-  | { kind: 'import'; regex: string; typeImports: boolean }
+  | {
+      kind: 'import';
+      regex: string;
+      typeImports: boolean;
+      exports?: Record<string, PackageSubpath[]>;
+    }
   | { kind: 'member'; object: string; property?: string };
 
 /**
@@ -25,7 +35,12 @@ export const MAKE_FAMILY_RULE_FUNCTION = `function makeFamilyRule(spec) {
       const report = (node) => context.report({ node, messageId: 'forbidden' });
       if (pattern !== null) {
         return importVisitors((node, specifier) => {
-          if (pattern.test(specifier)) report(node);
+          const match = pattern.exec(specifier);
+          if (match === null) return;
+          const subpaths = check.exports?.[match[1]];
+          const subpath = '.' + specifier.slice((match[1] ?? '').length);
+          if (subpaths !== undefined && (matchingSubpath(subpaths, subpath)?.targets.length ?? 0) > 0) return;
+          report(node);
         }, check.typeImports);
       }
       return {

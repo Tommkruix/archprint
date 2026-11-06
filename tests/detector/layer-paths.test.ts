@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { layerRootOf, resolveImportPath } from '../../src/detector/layer-paths.js';
+import { packageSubpaths } from '../../src/detector/import-target.js';
+import { layerRootOf, matchingSubpath, resolveImportPath } from '../../src/detector/layer-paths.js';
 
 const aliases = [
   { prefix: '@', dir: 'src' },
@@ -32,5 +33,39 @@ describe('resolveImportPath', () => {
     expect(resolveImportPath('src/lib/a.ts', 'library', aliases)).toBeNull();
     expect(resolveImportPath('src/lib/a.ts', '../../../outside', aliases)).toBeNull();
     expect(resolveImportPath('src/lib/a.ts', '@api/routes', aliases)).toBeNull();
+  });
+});
+
+describe('matchingSubpath', () => {
+  const subpaths = packageSubpaths(
+    {
+      exports: {
+        './*': './src/*.ts',
+        './icons/*': './src/icons/*.tsx',
+        './icons/internal/*': null,
+        './button': './src/button.tsx',
+      },
+    },
+    'pkg',
+  );
+  const key = (subpath: string): string | undefined => matchingSubpath(subpaths, subpath)?.key;
+
+  it('matches an exact key before any pattern, then the most specific pattern', () => {
+    expect(key('./button')).toBe('./button');
+    expect(key('./icons/star')).toBe('./icons/*');
+    expect(key('./theme')).toBe('./*');
+  });
+
+  it('returns a blocked key with its empty targets, so a broader pattern does not let the subpath through', () => {
+    expect(matchingSubpath(subpaths, './icons/internal/raw')).toEqual({
+      key: './icons/internal/*',
+      targets: [],
+    });
+  });
+
+  it('matches nothing when no key covers the subpath', () => {
+    expect(
+      matchingSubpath(packageSubpaths({ exports: { './button': './b.ts' } }, 'pkg'), './card'),
+    ).toBeUndefined();
   });
 });

@@ -45,6 +45,62 @@ describe('buildWorkspacePackageMap', () => {
   });
 });
 
+describe('workspace globs when pnpm-workspace.yaml and package.json both list them', () => {
+  let root: string;
+  const pnpmYaml = 'packages:\n  - "apps/*"\n  - "internal/*"\n';
+  const packages = {
+    'apps/web/package.json': JSON.stringify({ name: '@acme/web' }),
+    'internal/ui/package.json': JSON.stringify({ name: '@acme/ui' }),
+  };
+  const names = (dir: string): string[] =>
+    Object.keys(buildWorkspacePackageMap(path.join(root, dir))).sort();
+  beforeAll(() => {
+    root = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-ws-globs-')));
+    const stale = JSON.stringify({ name: 'root', workspaces: ['apps/*'] });
+    const tree: Record<string, string> = {};
+    for (const [dir, extra] of Object.entries({
+      'pnpm-lock': { 'pnpm-lock.yaml': "lockfileVersion: '9.0'\n" },
+      'pnpm-field': {},
+      yarn: { 'yarn.lock': '# yarn lockfile v1\n' },
+    })) {
+      tree[`${dir}/pnpm-workspace.yaml`] = pnpmYaml;
+      tree[`${dir}/package.json`] =
+        dir === 'pnpm-field'
+          ? JSON.stringify({ name: 'root', packageManager: 'pnpm@9.15.0', workspaces: ['apps/*'] })
+          : stale;
+      for (const [file, content] of Object.entries({ ...packages, ...extra })) {
+        tree[`${dir}/${file}`] = content;
+      }
+    }
+    tree['malformed/package.json'] = '{ "workspaces": [';
+    tree['malformed/pnpm-workspace.yaml'] = 'packages:\n  - "lib"\n';
+    tree['malformed/lib/package.json'] = JSON.stringify({ name: '@acme/lib' });
+    tree['settings-only/pnpm-workspace.yaml'] = 'onlyBuiltDependencies:\n  - esbuild\n';
+    tree['settings-only/pnpm-lock.yaml'] = "lockfileVersion: '9.0'\n";
+    tree['settings-only/package.json'] = JSON.stringify({ workspaces: ['lib'] });
+    tree['settings-only/lib/package.json'] = JSON.stringify({ name: '@acme/lib' });
+    writeTree(root, tree);
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it('reads pnpm-workspace.yaml in a pnpm repository, which pnpm uses, over a stale package.json list', () => {
+    expect(names('pnpm-lock')).toEqual(['@acme/ui', '@acme/web']);
+    expect(names('pnpm-field')).toEqual(['@acme/ui', '@acme/web']);
+  });
+
+  it('reads package.json in a repository another package manager installs', () => {
+    expect(names('yarn')).toEqual(['@acme/web']);
+  });
+
+  it('falls back to package.json when pnpm-workspace.yaml lists no packages', () => {
+    expect(names('settings-only')).toEqual(['@acme/lib']);
+  });
+
+  it('falls back to pnpm-workspace.yaml when package.json cannot be read', () => {
+    expect(names('malformed')).toEqual(['@acme/lib']);
+  });
+});
+
 describe('findWorkspaceRoots', () => {
   let root: string;
   beforeAll(() => {

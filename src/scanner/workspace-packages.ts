@@ -50,37 +50,58 @@ export function findWorkspaceRoots(root: string): string[] {
   return isWorkspaceRoot(above) ? [above, ...below] : below;
 }
 
-function readWorkspaceGlobs(rootDir: string): string[] {
+function readManifestFields(rootDir: string): { workspaces?: unknown; packageManager?: unknown } {
   const packageJsonPath = path.join(rootDir, 'package.json');
-  if (existsSync(packageJsonPath)) {
-    try {
-      const workspaces: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8')).workspaces;
-      const globs = Array.isArray(workspaces)
-        ? workspaces
-        : Array.isArray((workspaces as { packages?: unknown })?.packages)
-          ? (workspaces as { packages: string[] }).packages
-          : [];
-      if (globs.length > 0) return globs as string[];
-    } catch {}
+  if (!existsSync(packageJsonPath)) return {};
+  try {
+    return JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  } catch {
+    return {};
   }
+}
+
+function packageJsonGlobs(workspaces: unknown): string[] {
+  const globs = Array.isArray(workspaces)
+    ? workspaces
+    : Array.isArray((workspaces as { packages?: unknown })?.packages)
+      ? (workspaces as { packages: string[] }).packages
+      : [];
+  return globs as string[];
+}
+
+function pnpmGlobs(rootDir: string): string[] {
   const pnpmPath = path.join(rootDir, 'pnpm-workspace.yaml');
-  if (existsSync(pnpmPath)) {
-    const globs: string[] = [];
-    let inPackages = false;
-    for (const line of readFileSync(pnpmPath, 'utf-8').split('\n')) {
-      if (/^packages:/.test(line)) {
-        inPackages = true;
-        continue;
-      }
-      if (inPackages) {
-        const captured = line.match(/^\s*-\s*["']?([^"'#]+?)["']?\s*$/)?.[1];
-        if (captured !== undefined) globs.push(captured.trim());
-        else if (/^\S/.test(line)) break;
-      }
+  if (!existsSync(pnpmPath)) return [];
+  const globs: string[] = [];
+  let inPackages = false;
+  for (const line of readFileSync(pnpmPath, 'utf-8').split('\n')) {
+    if (/^packages:/.test(line)) {
+      inPackages = true;
+      continue;
     }
-    return globs;
+    if (inPackages) {
+      const captured = line.match(/^\s*-\s*["']?([^"'#]+?)["']?\s*$/)?.[1];
+      if (captured !== undefined) globs.push(captured.trim());
+      else if (/^\S/.test(line)) break;
+    }
   }
-  return [];
+  return globs;
+}
+
+/**
+ * The package globs of a workspace root. pnpm reads only pnpm-workspace.yaml and npm, yarn and bun only package.json
+ * `workspaces`, so in a pnpm repository (a pnpm-lock.yaml, or `packageManager: pnpm@...`) the yaml comes first;
+ * otherwise package.json does. The other list is the fallback when the first lists nothing.
+ */
+function readWorkspaceGlobs(rootDir: string): string[] {
+  const manifest = readManifestFields(rootDir);
+  const usesPnpm =
+    existsSync(path.join(rootDir, 'pnpm-lock.yaml')) ||
+    (typeof manifest.packageManager === 'string' && manifest.packageManager.startsWith('pnpm@'));
+  const fromYaml = pnpmGlobs(rootDir);
+  const fromPackageJson = packageJsonGlobs(manifest.workspaces);
+  const [first, second] = usesPnpm ? [fromYaml, fromPackageJson] : [fromPackageJson, fromYaml];
+  return first.length > 0 ? first : second;
 }
 
 function expandGlobs(rootDir: string, globs: string[]): string[] {
