@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { nextPagesUnder } from '../../src/detector/orphan-detector.js';
 import { detectOrphans } from '../../src/index.js';
+import { writeTree } from '../integration/layer-app.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, '..', 'fixtures', 'orphans');
@@ -72,5 +74,61 @@ describe('detectOrphans', () => {
     it('reports a production file only its test imports separately', () => {
       expect(detectOrphans(app).testOnly).toEqual(['components/pm-view.tsx']);
     });
+  });
+});
+
+describe('Next.js pages-router pages', () => {
+  const page = 'export default function Page() { return null; }\n';
+  let repo: string;
+  let hoisted: string;
+  beforeAll(() => {
+    repo = mkdtempSync(path.join(tmpdir(), 'archprint-next-pages-'));
+    writeTree(repo, {
+      'package.json': JSON.stringify({ name: 'root', private: true, workspaces: ['apps/*'] }),
+      'apps/web/package.json': JSON.stringify({ name: 'web', dependencies: { next: '15.0.0' } }),
+      'apps/web/src/pages/trace/[traceId].tsx': page,
+      'apps/web/src/components/pages/card.tsx': page,
+      'apps/vite/package.json': JSON.stringify({ name: 'vite', dependencies: { react: '19.0.0' } }),
+      'apps/vite/src/pages/home.tsx': page,
+      'apps/docs/next.config.mjs': 'export default {};\n',
+      'apps/docs/pages/guide.tsx': page,
+    });
+    hoisted = mkdtempSync(path.join(tmpdir(), 'archprint-next-hoisted-'));
+    writeTree(hoisted, {
+      'package.json': JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['apps/*'],
+        devDependencies: { next: '15.0.0' },
+      }),
+      'apps/admin/package.json': JSON.stringify({ name: 'admin' }),
+      'apps/admin/pages/users.tsx': page,
+      'apps/admin/src/components/pages/row.tsx': page,
+    });
+  });
+  afterAll(() => {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(hoisted, { recursive: true, force: true });
+  });
+
+  it('are the files under pages/ or src/pages/ of a package that declares next, or of a folder with next.config', () => {
+    const isPage = nextPagesUnder(repo);
+    expect(isPage('apps/web/src/pages/trace/[traceId].tsx')).toBe(true);
+    expect(isPage('apps/docs/pages/guide.tsx')).toBe(true);
+    expect(nextPagesUnder(hoisted)('apps/admin/pages/users.tsx')).toBe(true);
+  });
+
+  it('leave out a pages folder below the project root, and one in an app without Next.js', () => {
+    const isPage = nextPagesUnder(repo);
+    expect(isPage('apps/web/src/components/pages/card.tsx')).toBe(false);
+    expect(isPage('apps/vite/src/pages/home.tsx')).toBe(false);
+    expect(nextPagesUnder(hoisted)('apps/admin/src/components/pages/row.tsx')).toBe(false);
+  });
+
+  it('are not orphans, while a Vite app page nothing imports still is', () => {
+    expect(detectOrphans(path.join(repo, 'apps/web')).orphans).toEqual([
+      'src/components/pages/card.tsx',
+    ]);
+    expect(detectOrphans(path.join(repo, 'apps/vite')).orphans).toEqual(['src/pages/home.tsx']);
   });
 });
