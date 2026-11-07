@@ -286,7 +286,7 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Env access                         | Read `process.env` only in the config/env layer                                                                            | Review   |
 | Workspace package API              | Import a monorepo workspace package by its name or a subpath it exports, not a deep path into its source                   | Review   |
 | Stories isolation                  | Storybook `.stories` files must not be imported by other code                                                              | Review   |
-| Orphan modules                     | Files nothing imports and that are not framework entries (dead code candidates)                                            | Report   |
+| Orphan modules                     | Files nothing imports and that are not framework entries (candidates to check, about half are used)                        | Report   |
 | Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
 `recommend` (and `init`) sort every rule family into tiers: rules your code already follows (enforce now), rules
