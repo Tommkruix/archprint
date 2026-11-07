@@ -195,9 +195,12 @@ any file under `pages/` or `src/pages/` of a project that declares `next` (in it
 root's) or has a `next.config.*`; a `pages/` folder in an app without Next.js is checked like any other. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
 `*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
-`out/`, counts for the source file it was built from. Reported only, never enforced: a file a workspace package
-imports by package name, or one loaded by a tool archprint does not read, can still be listed. A dedicated
-dead-code tool such as knip covers more of these cases.
+`out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
+runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
+config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint
+glob, are not entries. Reported only, never enforced: a file a workspace package imports by package name, or one
+loaded by a tool archprint does not read, can still be listed. A dedicated dead-code tool such as knip covers more
+of these cases.
 
 ### Reachability (Report)
 

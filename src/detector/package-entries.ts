@@ -25,15 +25,84 @@ function stringLeaves(value: unknown): string[] {
   return Object.values(value).flatMap(stringLeaves);
 }
 
-/** The relative paths a package.json exposes: `main`, `module`, `types`, `browser`, `bin` and every `exports` target. */
-export function manifestTargets(manifest: Record<string, unknown>): string[] {
-  const fields = ['main', 'module', 'types', 'typings', 'browser', 'bin', 'exports'];
-  return fields
-    .flatMap((field) => stringLeaves(manifest[field]))
+const localPaths = (targets: readonly string[]): string[] =>
+  targets
     .map((target) => target.replace(/^\.\//, ''))
     .filter(
       (target) => target !== '' && !target.startsWith('../') && !/^[a-z]+:|^\//i.test(target),
     );
+
+/** The relative paths a package.json exposes: `main`, `module`, `types`, `browser`, `bin` and every `exports` target. */
+export function manifestTargets(manifest: Record<string, unknown>): string[] {
+  const fields = ['main', 'module', 'types', 'typings', 'browser', 'bin', 'exports'];
+  return localPaths(fields.flatMap((field) => stringLeaves(manifest[field])));
+}
+
+const RUNNERS = new Set([
+  'node',
+  'tsx',
+  'ts-node',
+  'ts-node-esm',
+  'bun',
+  'deno',
+  'esno',
+  'esr',
+  'babel-node',
+  'nodemon',
+  'vite-node',
+  'jiti',
+]);
+/** Runner flags whose value is a module the runner loads (`--import ./register.ts`) or a config file. */
+const VALUE_FLAGS = new Set([
+  '-r',
+  '--require',
+  '--import',
+  '--loader',
+  '--experimental-loader',
+  '-c',
+  '--config',
+]);
+const SOURCE_FILE = /\.(tsx?|jsx?|mjs|cjs|mts|cts)$/;
+
+/** The files one shell command runs: a runner's first positional argument and the modules or config its flags name. */
+function commandTargets(command: string): string[] {
+  const words = command
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.replace(/^['"]|['"]$/g, ''));
+  const runner = words.findIndex((word) => RUNNERS.has(word));
+  if (runner === -1) return [];
+  const targets: string[] = [];
+  for (let index = runner + 1; index < words.length; index++) {
+    const word = words[index]!;
+    if (index === runner + 1 && word === 'run') continue;
+    const [flag, inline] = word.split('=', 2) as [string, string | undefined];
+    if (VALUE_FLAGS.has(flag)) {
+      const value = inline ?? words[++index];
+      if (value !== undefined && SOURCE_FILE.test(value)) targets.push(value);
+      continue;
+    }
+    if (word.startsWith('-')) continue;
+    if (SOURCE_FILE.test(word)) targets.push(word);
+    break;
+  }
+  return targets;
+}
+
+/**
+ * The files package.json `scripts` run through a JavaScript runtime (`node`, `tsx`, `bun`, ...), as knip reads them:
+ * the first positional argument and the modules or config a runner flag names. Other tools' arguments, such as a lint
+ * glob, are not entries.
+ */
+export function scriptTargets(manifest: Record<string, unknown>): string[] {
+  const scripts = manifest.scripts;
+  if (scripts === null || typeof scripts !== 'object') return [];
+  return localPaths(
+    Object.values(scripts)
+      .filter((command): command is string => typeof command === 'string')
+      .flatMap((command) => command.split(/&&|\|\||[;|]/))
+      .flatMap(commandTargets),
+  );
 }
 
 interface CompiledRoot {
@@ -106,7 +175,7 @@ function exposedBy(packageDir: string, files: readonly string[]): string[] {
   const manifest = readJson(path.join(packageDir, 'package.json'));
   if (manifest === null) return [];
   const roots = compiledRoots(packageDir);
-  const matchers = manifestTargets(manifest)
+  const matchers = [...manifestTargets(manifest), ...scriptTargets(manifest)]
     .flatMap((target) => sourceCandidates(target, roots))
     .map(matcherFor);
   return files.filter((file) => matchers.some((matches) => matches(stem(file))));
@@ -135,8 +204,8 @@ function pathsInPackage(
 }
 
 /**
- * The files under `root` (paths from it) that a package exposes through its package.json, so whoever installs or runs
- * the package loads them: those of every package at or below `root`, and of the nearest one above it. A target built
+ * The files under `root` (paths from it) that a package exposes or runs through its package.json, so whoever installs
+ * or runs the package loads them: those of every package at or below `root`, and of the nearest one above it. A target built
  * into a tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or `out/`, counts for the source file it was built from.
  */
 export function packageEntriesUnder(root: string, files: readonly string[]): Set<string> {
