@@ -202,6 +202,12 @@ glob, are not entries. Reported only, never enforced: a file a workspace package
 loaded by a tool archprint does not read, can still be listed. A dedicated dead-code tool such as knip covers more
 of these cases.
 
+**How precise it is.** In a blind audit of 99 listed orphans from 66 open-source repositories (November 2026), about
+half were in use: imported from another package of the same repository, imported through an alias or from a file
+type archprint does not resolve (such as `.astro`), started by Vite's `index.html`, loaded by `import.meta.glob`, a
+computed `import()`, a build config or a framework's file-based routing. Treat the list as candidates to check before
+deleting anything, not as dead code.
+
 ### Reachability (Report)
 
 A layer boundary a plain import rule passes but that leaks through an intermediary layer. Surfaced as a note on
