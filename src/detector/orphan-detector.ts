@@ -1,17 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import {
-  moduleReferences,
-  stringLiterals,
-  walkRepo,
-  type WalkedFile,
-} from '../scanner/file-walker.js';
-import { buildAliasEntries } from '../scanner/import-graph.js';
+import { walkRepo, type WalkedFile } from '../scanner/file-walker.js';
 import { declaredPackages } from '../scanner/package-name.js';
-import { resolveFirstPartyImport } from '../scanner/resolve-import.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { packageEntriesUnder } from './package-entries.js';
 import { REQUEST_ENTRY_ROLES } from './pattern-detector.js';
+import { CONFIG_FILE, type ReferenceGraphs, referenceGraphs } from './reference-graph.js';
 import { STORY } from './stories-isolation-detector.js';
 
 const ENTRY_FILENAME =
@@ -20,7 +14,6 @@ const ENTRY_FILENAME =
 const NEXT_APP_FILE =
   /(^|\/)app\/(.*\/)?(robots|sitemap|manifest|opengraph-image|twitter-image|icon|apple-icon|global-not-found|forbidden|unauthorized)\.(ts|tsx)$/;
 const NEXT_ROOT_FILE = /^(src\/)?(instrumentation-client|proxy)\.(ts|tsx)$/;
-const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
 function isEntry(file: WalkedFile): boolean {
   return (
@@ -88,22 +81,15 @@ export interface OrphanAnalysis {
   testOnly: string[];
 }
 
-/** The tool configs at the app root and among its source files, whose string literals name setup files. */
-function configFiles(root: string, files: readonly WalkedFile[]): string[] {
-  const atRoot = readdirSync(root).filter((name) => CONFIG_FILE.test(name));
-  return [
-    ...new Set([
-      ...atRoot.map((name) => path.join(root, name)),
-      ...files.filter((file) => CONFIG_FILE.test(file.relativePath)).map((f) => f.absolutePath),
-    ]),
-  ];
-}
-
 /**
- * Files nothing references, and files only tests reference. A reference is any import, type-only included, an
- * `export ... from` or `import()`, or a tool config naming the file (`setupFiles: ['./vitest.setup.ts']`).
+ * Files nothing in the repository references, and files only tests reference. A reference is any import, type-only
+ * included, an `export ... from` or `import()`, a `require()`, or a tool config naming the file
+ * (`setupFiles: ['./vitest.setup.ts']`), from any file of the app's workspace, each resolved through its own tsconfig.
  */
-export function detectOrphans(appDir: string): OrphanAnalysis {
+export function detectOrphans(
+  appDir: string,
+  options: { references?: ReferenceGraphs } = {},
+): OrphanAnalysis {
   const root = path.resolve(appDir);
   const files = walkRepo(root);
   const nextPage = nextPagesUnder(root);
@@ -111,35 +97,10 @@ export function detectOrphans(appDir: string): OrphanAnalysis {
     root,
     files.map((file) => file.relativePath),
   );
-  const relByAbs = new Map(files.map((file) => [file.absolutePath, file.relativePath]));
-  const aliases = buildAliasEntries(root);
-  const referrers = new Map<string, Set<string>>(
-    files.map((file) => [file.relativePath, new Set()]),
-  );
-  const refer = (from: string, specifier: string, fromAbsPath: string): void => {
-    const target = resolveFirstPartyImport(specifier, fromAbsPath, aliases);
-    const rel = target === null ? undefined : relByAbs.get(target);
-    if (rel !== undefined && rel !== from) referrers.get(rel)!.add(from);
-  };
-  for (const file of files) {
-    let specifiers: string[];
-    try {
-      specifiers = moduleReferences(file.absolutePath);
-    } catch {
-      /* v8 ignore next -- defensive: an unreadable or malformed file references nothing */
-      specifiers = [];
-    }
-    for (const specifier of specifiers) refer(file.relativePath, specifier, file.absolutePath);
-  }
-  for (const config of configFiles(root, files)) {
-    const from = path.relative(root, config).split(path.sep).join('/');
-    for (const literal of stringLiterals(config)) {
-      const specifier = literal.replace(/^<rootDir>\//, './');
-      refer(from, specifier.startsWith('.') ? specifier : `./${specifier}`, config);
-    }
-  }
+  const graph = (options.references ?? referenceGraphs())(root);
+  const prefix = path.relative(graph.root, root).split(path.sep).join('/');
+  const inGraph = (file: string): string => (prefix === '' ? file : `${prefix}/${file}`);
 
-  const isTest = new Set(files.filter((file) => file.role === 'TEST').map((f) => f.relativePath));
   const production = files.filter((file) => file.role !== 'TEST');
   const orphans: string[] = [];
   const testOnly: string[] = [];
@@ -147,9 +108,12 @@ export function detectOrphans(appDir: string): OrphanAnalysis {
     if (isEntry(file) || nextPage(file.relativePath) || packageEntries.has(file.relativePath)) {
       continue;
     }
-    const from = [...referrers.get(file.relativePath)!];
-    if (from.length === 0) orphans.push(file.relativePath);
-    else if (from.every((referrer) => isTest.has(referrer))) testOnly.push(file.relativePath);
+    const referrers = graph.referrers.get(inGraph(file.relativePath));
+    if (referrers === undefined) continue;
+    if (referrers.size === 0) orphans.push(file.relativePath);
+    else if ([...referrers].every((referrer) => graph.tests.has(referrer))) {
+      testOnly.push(file.relativePath);
+    }
   }
   return {
     appDir: root,

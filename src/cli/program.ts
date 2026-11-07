@@ -6,6 +6,7 @@ import { adoptedAllowances, excludeAllowed } from './allowed-evidence.js';
 import { InvalidRulesError, LEGACY_RULES_FILE } from './adopted-rules.js';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+import { referenceGraphs } from '../detector/reference-graph.js';
 import { checkSelfConsistency } from '../detector/self-consistency.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import { detectEnforcers, type InstalledEnforcers } from '../scanner/enforcers.js';
@@ -255,17 +256,18 @@ export function buildProgram(version = readVersion()): Command {
           `No tsconfig.json found under ${root}. Point archprint at an app directory (a directory with a tsconfig.json); a monorepo root is fine.`,
         );
       }
+      const references = referenceGraphs();
       if (options.json) {
         const apps = appDirs.map((appDir) => ({
           app: displayPath(appDir, root),
-          ...toScanSummary(scanRepo(appDir, { deep: options.deep })),
+          ...toScanSummary(scanRepo(appDir, { deep: options.deep, references })),
         }));
         console.log(JSON.stringify({ archprintVersion: version, apps }, null, 2));
         return;
       }
       const started = performance.now();
       const reports = appDirs.map((appDir) => {
-        const scan = scanRepo(appDir, { deep: options.deep });
+        const scan = scanRepo(appDir, { deep: options.deep, references });
         const label = appDirs.length > 1 ? `### ${path.relative(root, appDir) || '.'}\n` : '';
         return label + renderReport(scan, version, undefined, options.deep);
       });
@@ -534,9 +536,10 @@ export function buildProgram(version = readVersion()): Command {
           `No tsconfig.json found under ${root}. Point archprint at an app directory (a directory with a tsconfig.json); a monorepo root is fine.`,
         );
       }
+      const references = referenceGraphs();
       const recommendFor = (appDir: string) =>
         buildRecommendations(
-          scanRepo(appDir, { deep: false }),
+          scanRepo(appDir, { deep: false, references }),
           detectStack(appDir),
           detectEnforcers(appDir),
         );

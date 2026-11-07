@@ -185,9 +185,11 @@ heuristic. **When not to use:** rarely; low volume.
 
 ### Orphans (Report)
 
-Production files nothing references, listed after the files only tests import (dead code the tests keep alive,
-usually the more actionable list). A reference is any import, type-only included, an `export ... from` through a
-barrel, an `import()` call, or a tool config naming the file, such as Vitest's `setupFiles`. Framework and tool
+Production files nothing in the workspace references, listed after the files only tests import (dead code the
+tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
+from` through a barrel, an `import()` or `require()` call, or a tool config naming the file, such as Vitest's
+`setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
+through its own nearest tsconfig, so another package's import or a nested app's alias counts. Framework and tool
 entries are never reported: Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
 `opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
 `instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. A pages-router page is
@@ -198,9 +200,8 @@ file a package exposes through its package.json (`main`, `module`, `types`, `bro
 `out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
 runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
 config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint
-glob, are not entries. Reported only, never enforced: a file a workspace package imports by package name, or one
-loaded by a tool archprint does not read, can still be listed. A dedicated dead-code tool such as knip covers more
-of these cases.
+glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be
+listed. A dedicated dead-code tool such as knip covers more of these cases.
 
 ### Reachability (Report)
 
