@@ -7,6 +7,7 @@ import {
   type DeclaredDefinition,
   type PackageTarget,
 } from '../detector/declared-rules.js';
+import { referenceGraphs } from '../detector/reference-graph.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import {
@@ -179,10 +180,11 @@ export function verifyMapping(root: string, mapping: unknown): VerifiedSentence[
   }
 
   let summaries: { app: string; rules: RuleSummary[] }[] | undefined;
+  const references = referenceGraphs();
   const scans = (): { app: string; rules: RuleSummary[] }[] =>
     (summaries ??= apps.map((dir) => ({
       app: path.relative(absoluteRoot, dir) || '.',
-      rules: summarizeRules(scanRepo(dir, { deep: false }), Number.POSITIVE_INFINITY),
+      rules: summarizeRules(scanRepo(dir, { deep: false, references }), Number.POSITIVE_INFINITY),
     })));
 
   const verify = (sentence: MappedSentence): GapEntry => {
