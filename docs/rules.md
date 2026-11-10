@@ -82,9 +82,9 @@ path (or its entry) under `src` as public API.
 
 Detects an imported third-party package that is not declared in `package.json` (a phantom/transitive
 dependency). Resolves monorepo hoisting to the workspace root. Node builtins, tsconfig aliases, `#` subpath
-imports and `scheme:` specifiers (such as `bun:` or `virtual:`) are not packages. Held for review because the
-dependency-cruiser rule matches resolved dependency types, so a workspace package with no local `package.json`
-entry can surface as phantom.
+imports, `scheme:` specifiers (such as `bun:` or `virtual:`) and, in a SvelteKit project, its `$app`, `$env` and
+`$service-worker` modules are not packages. Held for review because the dependency-cruiser rule matches resolved
+dependency types, so a workspace package with no local `package.json` entry can surface as phantom.
 
 It is the rule `no-phantom-dependencies`: dependency-cruiser enforces it when your repo uses it, otherwise
 `.archprint/eslint.mjs` does as `archprint/no-phantom-dependencies`. The ESLint rule reads your `package.json` (and

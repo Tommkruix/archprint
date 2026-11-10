@@ -340,6 +340,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     patterns: [],
     layerBoundaries: [],
     layerAliases: [],
+    virtualModules: [],
     gitignoredPaths: [],
     cycles: emptyCycles(),
     orphans: emptyOrphans(),
