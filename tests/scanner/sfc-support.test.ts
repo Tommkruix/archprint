@@ -2,7 +2,13 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createImportAnalyzer, importLocations, walkRepo } from '../../src/scanner/file-walker.js';
+import {
+  createImportAnalyzer,
+  importLocations,
+  moduleReferences,
+  readSource,
+  walkRepo,
+} from '../../src/scanner/file-walker.js';
 import { resolveFirstPartyImport } from '../../src/scanner/resolve-import.js';
 
 describe('single-file component support', () => {
@@ -75,5 +81,57 @@ describe('single-file component support', () => {
     expect(importLocations(path.join(dir, 'src', 'Page.svelte'))).toEqual([
       { specifier: './store', line: 2 },
     ]);
+  });
+});
+
+describe('Astro component support', () => {
+  let dir: string;
+  const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
+  const astro = (name: string, lines: string[]): string => {
+    const file = path.join(dir, name);
+    writeFileSync(file, lines.join('\n'));
+    return file;
+  };
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'archprint-astro-'));
+  });
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('parses the frontmatter and script blocks in place, the fences and template blanked', () => {
+    const file = astro('Page.astro', [
+      '---',
+      "import { a } from './a';",
+      '---',
+      "<p>import x from './x';</p>",
+      '<script>',
+      "import { b } from './b';",
+      '</script>',
+      '',
+    ]);
+    expect(readSource(file).source).toBe(
+      [
+        blank('---'),
+        "import { a } from './a';",
+        blank('---'),
+        blank("<p>import x from './x';</p>"),
+        blank('<script>'),
+        "import { b } from './b';",
+        blank('</script>'),
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('parses the script blocks of a component without frontmatter', () => {
+    const file = astro('Plain.astro', [
+      '<h1>Plain</h1>',
+      '<script>',
+      "import { c } from './c';",
+      '</script>',
+      '',
+    ]);
+    expect(moduleReferences(file)).toEqual(['./c']);
   });
 });

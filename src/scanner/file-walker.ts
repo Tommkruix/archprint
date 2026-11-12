@@ -34,6 +34,28 @@ function componentScript(text: string): string {
   return source + blank(text.slice(end));
 }
 
+const ASTRO_FRONTMATTER = /^\s*---[^\S\r\n]*\r?\n([\s\S]*?)^---/m;
+
+/** An Astro component's frontmatter and script blocks where they are in the file, everything else blanked. */
+function astroScript(text: string): string {
+  const match = ASTRO_FRONTMATTER.exec(text);
+  if (match?.index !== 0) return componentScript(text);
+  const [fenced, body = ''] = match;
+  const bodyStart = fenced.length - '---'.length - body.length;
+  return (
+    blank(text.slice(0, bodyStart)) +
+    body +
+    blank('---') +
+    componentScript(text.slice(fenced.length))
+  );
+}
+
+const SCRIPT_KINDS: Readonly<Record<string, ts.ScriptKind>> = {
+  '.tsx': ts.ScriptKind.TSX,
+  '.js': ts.ScriptKind.JS,
+  '.jsx': ts.ScriptKind.JSX,
+};
+
 function parseableSource(
   absoluteFilePath: string,
   text: string,
@@ -41,13 +63,19 @@ function parseableSource(
   if (isSingleFileComponent(absoluteFilePath)) {
     return { source: componentScript(text), scriptKind: ts.ScriptKind.TS };
   }
+  if (absoluteFilePath.endsWith('.astro')) {
+    return { source: astroScript(text), scriptKind: ts.ScriptKind.TS };
+  }
   return {
     source: text,
-    scriptKind: absoluteFilePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    scriptKind: SCRIPT_KINDS[path.extname(absoluteFilePath)] ?? ts.ScriptKind.TS,
   };
 }
 
-/** A source file's text as TypeScript parses it: Vue and Svelte files contribute their script blocks. */
+/**
+ * A source file's text as TypeScript parses it: Vue and Svelte files contribute their script blocks, Astro files
+ * their frontmatter and script blocks.
+ */
 export function readSource(absoluteFilePath: string): {
   source: string;
   scriptKind: ts.ScriptKind;
@@ -103,7 +131,10 @@ export interface SourceTree {
   ignored: string[];
 }
 
-export function walkSourceTree(rootDir: string): SourceTree {
+export function walkSourceTree(
+  rootDir: string,
+  isWanted: (name: string) => boolean = isSourceFileName,
+): SourceTree {
   const files: string[] = [];
   const ignored: string[] = [];
   const isIgnored = createIgnoreFilter(rootDir);
@@ -118,7 +149,7 @@ export function walkSourceTree(rootDir: string): SourceTree {
         if (isSkippedFolder(entry.name)) continue;
         if (isIgnored(relativeTo(full), true)) ignored.push(relativeTo(full));
         else walk(full);
-      } else if (entry.isFile() && isSourceFileName(entry.name)) {
+      } else if (entry.isFile() && isWanted(entry.name)) {
         if (isIgnored(relativeTo(full), false)) ignored.push(relativeTo(full));
         else files.push(full);
       }
@@ -128,8 +159,11 @@ export function walkSourceTree(rootDir: string): SourceTree {
   return { files, ignored: ignored.map((file) => file.split(path.sep).join('/')) };
 }
 
-export function listSourceFiles(rootDir: string): string[] {
-  return walkSourceTree(rootDir).files;
+export function listSourceFiles(
+  rootDir: string,
+  isWanted: (name: string) => boolean = isSourceFileName,
+): string[] {
+  return walkSourceTree(rootDir, isWanted).files;
 }
 
 function readHead(file: string, bytes = 512): string {
@@ -190,6 +224,8 @@ interface RawImport {
   reexport: boolean;
   /** `import('x')`: the names it takes are unknown. */
   dynamic: boolean;
+  /** `require('x')`: a reference the orphan and dead-code scans count, not an import the rule families count. */
+  require: boolean;
 }
 
 function valueBindingsOf(clause: ts.ImportClause | undefined): ValueBinding[] {
@@ -246,6 +282,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         line: lineOf(statement),
         reexport: false,
         dynamic: false,
+        require: false,
       });
     }
     if (
@@ -261,6 +298,7 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         line: lineOf(statement),
         reexport: true,
         dynamic: false,
+        require: false,
       });
     }
   }
@@ -278,6 +316,24 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
         line: lineOf(node),
         reexport: false,
         dynamic: true,
+        require: false,
+      });
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'require' &&
+      node.arguments.length > 0 &&
+      ts.isStringLiteral(node.arguments[0]!)
+    ) {
+      raw.push({
+        specifier: node.arguments[0].text,
+        hasValueBinding: true,
+        valueBindings: [],
+        line: lineOf(node),
+        reexport: false,
+        dynamic: false,
+        require: true,
       });
     }
     ts.forEachChild(node, visit);
@@ -303,7 +359,7 @@ export function valueImportBindings(
 }
 
 function importsOf(absoluteFilePath: string): RawImport[] {
-  return parseFastImports(absoluteFilePath).filter((imp) => !imp.reexport);
+  return parseFastImports(absoluteFilePath).filter((imp) => !imp.reexport && !imp.require);
 }
 
 /** A module a file takes values from, as written; `names` are the exported names (`*` for all), null for `import('x')`. */
@@ -316,7 +372,7 @@ export interface ModuleImport {
 /** A file's value imports, `import('x')` calls and value re-exports, in source order; type-only ones are left out. */
 export function valueModuleImports(absoluteFilePath: string): ModuleImport[] {
   return parseFastImports(absoluteFilePath)
-    .filter((imp) => imp.hasValueBinding)
+    .filter((imp) => imp.hasValueBinding && !imp.require)
     .map((imp) => ({
       specifier: imp.specifier,
       line: imp.line,
@@ -328,7 +384,7 @@ export function importLocations(absoluteFilePath: string): ImportLocation[] {
   return importsOf(absoluteFilePath).map(({ specifier, line }) => ({ specifier, line }));
 }
 
-/** Every module a file names: its imports of any kind, `import('x')` calls and `export ... from 'x'`. */
+/** Every module a file names: its imports of any kind, `import('x')` and `require('x')` calls, and `export ... from 'x'`. */
 export function moduleReferences(absoluteFilePath: string): string[] {
   return parseFastImports(absoluteFilePath).map((imp) => imp.specifier);
 }

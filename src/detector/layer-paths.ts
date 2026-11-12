@@ -55,18 +55,47 @@ export function resolveImportPath(
   return segments.join('/');
 }
 
-/** A workspace package by repo-relative directory, with the source file its root import resolves to, if known. */
+/** A key of a package's `exports` (`./x`, or a pattern with one `*`) with its target paths from the root. */
+export interface PackageSubpath {
+  key: string;
+  targets: string[];
+}
+
+/**
+ * A workspace package by repo-relative directory, with the source file its root import resolves to, if known, and
+ * its subpath exports in the order Node.js matches them.
+ */
 export interface WorkspacePackage {
   name: string;
   dir: string;
   entry: string | null;
+  subpaths: PackageSubpath[];
+}
+
+/**
+ * The `exports` key Node.js matches a subpath (`./x`) with: an exact key, else the first `*` pattern, `subpaths` being
+ * in Node's order (exact keys first, then the most specific pattern); the `*` stands for at least one character.
+ */
+export function matchingSubpath(
+  subpaths: readonly PackageSubpath[],
+  subpath: string,
+): PackageSubpath | undefined {
+  return subpaths.find(({ key }) => {
+    const star = key.indexOf('*');
+    return star === -1
+      ? key === subpath
+      : subpath.length >= key.length &&
+          subpath.startsWith(key.slice(0, star)) &&
+          subpath.endsWith(key.slice(star + 1));
+  });
 }
 
 /**
  * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path, or a
- * workspace package (its entry for the root import; its directory with a trailing `/` when the entry is unknown).
- * `fileFor` picks the source file a path names, if any (`x` may be `x.ts` or `x/index.ts`); else the bare path
- * stands. Null for a package outside the repository.
+ * workspace package (its entry for the root import; its directory with a trailing `/` when the entry is unknown;
+ * for a subpath, the first target of the `exports` key it matches that names a source file, else the path under the
+ * package directory). `fileFor` picks the source file a path names, if any (`x` may be `x.ts` or `x/index.ts`); else
+ * the bare path stands. Null for a package outside the repository.
  */
 export function resolveImportTarget(
   fromPath: string,
@@ -82,6 +111,21 @@ export function resolveImportTarget(
     );
     if (owner === undefined) return null;
     if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
+    const subpath = `.${specifier.slice(owner.name.length)}`;
+    const exported = matchingSubpath(owner.subpaths, subpath);
+    if (exported !== undefined) {
+      const star = exported.key.indexOf('*');
+      const expand = (target: string): string =>
+        star === -1
+          ? target
+          : target
+              .split('*')
+              .join(subpath.slice(star, subpath.length - exported.key.length + star + 1));
+      for (const target of exported.targets) {
+        const file = fileFor(expand(target));
+        if (file !== null) return file;
+      }
+    }
     base = `${owner.dir}${specifier.slice(owner.name.length)}`;
   }
   return fileFor(base) ?? base;

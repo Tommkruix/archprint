@@ -36,6 +36,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   patterns: [],
   layerBoundaries: [],
   layerAliases: [],
+  virtualModules: [],
   gitignoredPaths: [],
   cycles: {
     appDir: '/app',
@@ -106,6 +107,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   workspacePackageApi: {
     appDir: '/app',
     packages: [],
+    subpaths: {},
     consumerCount: 0,
     offenderCount: 0,
     gate: evaluateGate({ roleFileCount: 0, violatingFileCount: 0, roleConfidence: 1 }),

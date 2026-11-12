@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { walkSourceTree } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { svelteKitModules } from '../scanner/sveltekit.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
 import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
 import {
@@ -11,6 +12,7 @@ import {
 } from '../detector/layer-detector.js';
 import type { LayerAlias } from '../detector/layer-paths.js';
 import { detectOrphans, type OrphanAnalysis } from '../detector/orphan-detector.js';
+import type { ReferenceGraphs } from '../detector/reference-graph.js';
 import { computeLayerReachability, type ReachabilityAnalysis } from '../detector/reachability.js';
 import {
   detectPublicApiBoundaries,
@@ -88,6 +90,7 @@ export interface ScanResult {
   patterns: ScannedPattern[];
   layerBoundaries: LayerBoundary[];
   layerAliases: LayerAlias[];
+  virtualModules: string[];
   gitignoredPaths: string[];
   cycles: CycleAnalysis;
   orphans: OrphanAnalysis;
@@ -113,7 +116,10 @@ export function hasTsConfig(appDir: string): boolean {
   return existsSync(path.join(appDir, 'tsconfig.json'));
 }
 
-export function scanRepo(appDir: string, options: { deep?: boolean } = {}): ScanResult {
+export function scanRepo(
+  appDir: string,
+  options: { deep?: boolean; references?: ReferenceGraphs } = {},
+): ScanResult {
   const sourceTree = walkSourceTree(appDir);
   const fileCount = sourceTree.files.length;
   const aliasCount = Object.keys(buildWorkspaceMap(appDir)).length;
@@ -145,7 +151,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
   const layerBoundaries = detectLayerBoundaries(appDir, { resolve: false }).boundaries;
   const graph = buildImportGraph(appDir, { resolve: false });
   const cycles = detectCycles(appDir, { graph });
-  const orphans = detectOrphans(appDir);
+  const orphans = detectOrphans(appDir, { references: options.references });
   const reachability = computeLayerReachability(appDir, { graph });
   const publicApi = detectPublicApiBoundaries(appDir, { graph });
   const featureSlices = detectFeatureSliceIsolation(appDir, { graph });
@@ -170,6 +176,7 @@ export function scanRepo(appDir: string, options: { deep?: boolean } = {}): Scan
     patterns,
     layerBoundaries,
     layerAliases: layerAliases(appDir),
+    virtualModules: svelteKitModules(appDir),
     gitignoredPaths: sourceTree.ignored,
     cycles,
     orphans,

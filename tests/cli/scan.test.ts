@@ -260,6 +260,7 @@ function fakeWpkg(consumerCount: number, offenderCount: number): WorkspacePackag
   return {
     appDir: 'x',
     packages: consumerCount > 0 ? ['@scope/pkg'] : [],
+    subpaths: consumerCount > 0 ? { '@scope/pkg': [] } : {},
     consumerCount,
     offenderCount,
     gate: evaluateGate({
@@ -339,6 +340,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     patterns: [],
     layerBoundaries: [],
     layerAliases: [],
+    virtualModules: [],
     gitignoredPaths: [],
     cycles: emptyCycles(),
     orphans: emptyOrphans(),

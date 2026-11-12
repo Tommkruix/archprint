@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { valueImportBindings, valueModuleImports } from '../../src/scanner/file-walker.js';
+import {
+  moduleReferences,
+  valueImportBindings,
+  valueModuleImports,
+} from '../../src/scanner/file-walker.js';
 import { globPattern, matchesGlob } from '../../src/scanner/globs.js';
 import { writeTree } from '../integration/layer-app.js';
 
@@ -68,6 +72,13 @@ describe('valueModuleImports', () => {
       { specifier: './ns', line: 3, names: ['*'] },
       { specifier: './lazy', line: 4, names: null },
     ]);
+  });
+
+  it('counts require() as a module reference, but not as an import the rules check', () => {
+    const source = file("import { a } from './a';\nconst b = require('./b');\nexport { a, b };\n");
+    expect(moduleReferences(source)).toEqual(['./a', './b']);
+    expect(valueModuleImports(source).map((imp) => imp.specifier)).toEqual(['./a']);
+    expect(valueImportBindings(source).map((binding) => binding.specifier)).toEqual(['./a']);
   });
 
   it('keeps valueImportBindings to imports, without the names re-exports take', () => {

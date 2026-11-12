@@ -82,9 +82,9 @@ path (or its entry) under `src` as public API.
 
 Detects an imported third-party package that is not declared in `package.json` (a phantom/transitive
 dependency). Resolves monorepo hoisting to the workspace root. Node builtins, tsconfig aliases, `#` subpath
-imports and `scheme:` specifiers (such as `bun:` or `virtual:`) are not packages. Held for review because the
-dependency-cruiser rule matches resolved dependency types, so a workspace package with no local `package.json`
-entry can surface as phantom.
+imports, `scheme:` specifiers (such as `bun:` or `virtual:`) and, in a SvelteKit project, its `$app`, `$env` and
+`$service-worker` modules are not packages. Held for review because the dependency-cruiser rule matches resolved
+dependency types, so a workspace package with no local `package.json` entry can surface as phantom.
 
 It is the rule `no-phantom-dependencies`: dependency-cruiser enforces it when your repo uses it, otherwise
 `.archprint/eslint.mjs` does as `archprint/no-phantom-dependencies`. The ESLint rule reads your `package.json` (and
@@ -170,8 +170,11 @@ it as `archprint/env-access`. **When not to use:** `NEXT_PUBLIC_*` variables rea
 
 ### Workspace-package API (Review)
 
-Detects importing a workspace package by a deep path into its source rather than by its name. ESLint reports it
-as `archprint/workspace-package`. **When not to use:** a build-config file consuming a shared preset by path when that is its only entry point.
+Detects importing a workspace package by a deep path into its source rather than by its name or a subpath the
+package exports. A subpath counts as exported the way Node.js matches `exports` (an exact key, then the most specific
+`*` pattern), when that key has a `./` target; a `null` target blocks it. A package without `exports` exposes only
+its name, and imports of a package that exports every subpath (`./*`, nothing blocked) count neither way. ESLint reports it as
+`archprint/workspace-package`. **When not to use:** a build-config file consuming a shared preset by path when that is its only entry point.
 
 ### Stories isolation (Review)
 
@@ -182,14 +185,31 @@ heuristic. **When not to use:** rarely; low volume.
 
 ### Orphans (Report)
 
-Production files nothing references, listed after the files only tests import (dead code the tests keep
-alive, usually the more actionable list). A reference is any import, type-only included, an `export ... from`
-through a barrel, an `import()` call, or a tool config naming the file, such as Vitest's `setupFiles`. Framework
-and tool entries are never reported: Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
+Production files nothing in the workspace references, listed after the files only tests import (dead code the
+tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
+from` through a barrel, an `import()` or `require()` call, or a tool config naming the file, such as Vitest's
+`setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
+through its own nearest tsconfig, so another package's import or a nested app's alias counts. JavaScript files
+(`.js`, `.jsx`, `.mjs`, `.cjs`), `.mts` and `.cts` files, and Astro components (their frontmatter and `<script>`
+blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
+Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
 `opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
-`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. Reported only, never
-enforced: a file a workspace package imports by package name, or one loaded by a tool archprint does not read, can
-still be listed. A dedicated dead-code tool such as knip covers more of these cases.
+`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. A pages-router page is
+any file under `pages/` or `src/pages/` of a project that declares `next` (in its package.json or its workspace
+root's) or has a `next.config.*`; a `pages/` folder in an app without Next.js is checked like any other. Nor is a
+file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
+`*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
+`out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
+runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
+config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint
+glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be
+listed. A dedicated dead-code tool such as knip covers more of these cases.
+
+**How precise it is.** In a blind audit of 99 listed orphans from 66 open-source repositories (November 2026), about
+half were in use: imported from another package of the same repository, imported through an alias or from a file
+type archprint did not read at the time (`.js`, `.astro`, both read since), started by Vite's `index.html`, loaded by `import.meta.glob`, a
+computed `import()`, a build config or a framework's file-based routing. Treat the list as candidates to check before
+deleting anything, not as dead code.
 
 ### Reachability (Report)
 

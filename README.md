@@ -284,9 +284,9 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Feature-slice isolation            | Sibling slices under a `features`/`modules`/`slices`/`domains` container must not import each other                        | Review   |
 | App isolation                      | Sibling apps under an `apps`/`services` container must not import each other directly                                      | Review   |
 | Env access                         | Read `process.env` only in the config/env layer                                                                            | Review   |
-| Workspace package API              | Import a monorepo workspace package by its name, not a deep path into its source                                           | Review   |
+| Workspace package API              | Import a monorepo workspace package by its name or a subpath it exports, not a deep path into its source                   | Review   |
 | Stories isolation                  | Storybook `.stories` files must not be imported by other code                                                              | Review   |
-| Orphan modules                     | Files nothing imports and that are not framework entries (dead code candidates)                                            | Report   |
+| Orphan modules                     | Files nothing imports and that are not framework entries (candidates to check, about half are used)                        | Report   |
 | Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
 `recommend` (and `init`) sort every rule family into tiers: rules your code already follows (enforce now), rules
@@ -643,7 +643,19 @@ and erase the barrel-versus-deep signal).
 **Path aliases.** archprint reads `paths` and `baseUrl` from the app's `tsconfig.json` and its `extends` chain.
 When that file only lists other projects under `references` (the solution-style layout create-vite, Angular and Nx
 generate), archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`,
-as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it.
+as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it. A key
+whose `*` follows its prefix directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target
+(`@components/button` is `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that
+declares `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
+`svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
+fresh checkout does not have; an alias the tsconfig maps itself wins.
+
+**Workspace packages.** archprint reads a monorepo's packages from `pnpm-workspace.yaml` in a pnpm repository (one
+with a `pnpm-lock.yaml` or `packageManager: pnpm@...`), as pnpm does, and from `package.json` `workspaces` otherwise,
+each falling back to the other when it lists no packages.
+For your written rules (`gap-report`, and the `doc-` rules `check` and ESLint enforce), a package subpath import such
+as `@acme/ui/button` follows the package's `exports` as Node.js matches it, and the JavaScript workspaces nested below
+the folder you pass count too.
 
 **Determinism.** The same repo at the same version produces the same output. Analysis is pure and sorted; there is
 no randomness, and the analysis engine is pinned to an exact version.

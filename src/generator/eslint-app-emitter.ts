@@ -59,6 +59,8 @@ export interface EntryRuleSpec extends AppRule {
 export interface AppScope {
   appDir: string;
   aliases: LayerAlias[];
+  /** Modules the app's framework supplies, which no package provides, such as SvelteKit's `$app`. */
+  virtualModules: string[];
   ignored: string[];
 }
 
@@ -218,7 +220,7 @@ const LAYER_RUNTIME = `function makeLayerRule(spec) {
 }`;
 
 const PACKAGE_RUNTIME = `const APP_ALIAS_PREFIXES = APP.aliases.map((alias) => alias.prefix);
-const BUILTINS = new Set(builtinModules);`;
+const BUILTINS = new Set([...builtinModules, ...APP.virtualModules]);`;
 
 const TARGET_RUNTIME = `function firstPartyTarget(file, specifier) {
   const base = resolveImportPath(file, specifier, APP.aliases);
@@ -308,6 +310,7 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
   const app = {
     app: relativeToConfig(rules.appDir),
     aliases: rules.aliases,
+    virtualModules: rules.virtualModules,
     ignored: rules.ignored,
     tests: (ROLE_PATTERNS.get('TEST') ?? []).map((pattern) => pattern.source),
   };

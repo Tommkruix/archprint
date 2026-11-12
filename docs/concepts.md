@@ -63,7 +63,12 @@ Both modes read `paths` and `baseUrl` from the app's `tsconfig.json` and its `ex
 lists other projects under `references` (the solution-style layout create-vite, Angular and Nx generate),
 archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`, as
 TypeScript does. An alias in the `tsconfig.json` itself takes precedence, and an alias two referenced projects map
-to different folders stays unresolved in the fast pass rather than guessed.
+to different folders stays unresolved in the fast pass rather than guessed. A key whose `*` follows its prefix
+directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target (`@components/button` is
+`src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that declares
+`@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
+`svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
+fresh checkout does not have; an alias the tsconfig maps itself wins.
 
 Layer boundaries are the exception: they are always found from imports as written, in both modes, because that
 is how the generated ESLint rule reads an import, and how dependency-cruiser names the file it points at.
@@ -195,6 +200,15 @@ risk is a wrong mapping, not a coincidence. Some details:
 
 - Imports are matched on what they name, not on what a barrel re-exports. Type-only imports never count. Neither do
   test files, except for `forbid-file`. `export ... from` counts as an import.
+- A `targets` glob is matched on the file an import resolves to: a relative path, a tsconfig `paths` alias, or a
+  workspace package by name. A package subpath such as `@acme/ui/button` follows the package's `exports` the way
+  Node.js matches it (an exact key first, then the most specific `*` pattern) and takes the first of that key's
+  targets that is a source file in the repository (`.ts`, `.tsx`, `.vue` or `.svelte`; a `.js` target counts as its
+  `.ts` source). Declaration files (`.d.ts`) are tried last, for the root import too, so where a package lists both
+  its built types and its source, the source is used whether or not the package has been built. When no target is
+  such a file, the import stays the path under the package folder; a looser pattern is not tried. Workspaces nested
+  below the folder you pass count too, such as a JavaScript workspace in `web/` of a repository whose root is not
+  one; if two workspaces have a package of the same name, the shallower workspace's package is used.
 - With `imports` names, a namespace import (`import * as cache`) and `export * from` count, as in ESLint's
   `no-restricted-imports`; an `import()` call and a bare `import 'x'` do not, since the names they take are unknown.
   A default import counts as the name `default`.

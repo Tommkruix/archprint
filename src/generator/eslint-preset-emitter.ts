@@ -1,3 +1,4 @@
+import { matchingSubpath } from '../detector/layer-paths.js';
 import type { RenderedAppRules } from './eslint-app-emitter.js';
 import {
   type EslintFamilyRule,
@@ -35,6 +36,8 @@ ${MAKE_RULE_FUNCTION}
 ${IMPORT_RUNTIME}
 
 ${MAKE_FAMILY_RULE_FUNCTION}
+
+${matchingSubpath.toString()}
 ${app ? `\n${app.source}\n` : ''}
 const rules = ${rules};
 const plugin = { rules };
