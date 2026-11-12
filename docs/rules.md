@@ -189,8 +189,10 @@ Production files nothing in the workspace references, listed after the files onl
 tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
 from` through a barrel, an `import()` or `require()` call, or a tool config naming the file, such as Vitest's
 `setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
-through its own nearest tsconfig, so another package's import or a nested app's alias counts. Framework and tool
-entries are never reported: Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
+through its own nearest tsconfig, so another package's import or a nested app's alias counts. JavaScript files
+(`.js`, `.jsx`, `.mjs`, `.cjs`), `.mts` and `.cts` files, and Astro components (their frontmatter and `<script>`
+blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
+Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
 `opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
 `instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. A pages-router page is
 any file under `pages/` or `src/pages/` of a project that declares `next` (in its package.json or its workspace
@@ -205,7 +207,7 @@ listed. A dedicated dead-code tool such as knip covers more of these cases.
 
 **How precise it is.** In a blind audit of 99 listed orphans from 66 open-source repositories (November 2026), about
 half were in use: imported from another package of the same repository, imported through an alias or from a file
-type archprint does not resolve (such as `.astro`), started by Vite's `index.html`, loaded by `import.meta.glob`, a
+type archprint did not read at the time (`.js`, `.astro`, both read since), started by Vite's `index.html`, loaded by `import.meta.glob`, a
 computed `import()`, a build config or a framework's file-based routing. Treat the list as candidates to check before
 deleting anything, not as dead code.
 

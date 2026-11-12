@@ -1,13 +1,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
-import {
-  moduleReferences,
-  stringLiterals,
-  walkRepo,
-  type WalkedFile,
-} from '../scanner/file-walker.js';
+import { listSourceFiles, moduleReferences, stringLiterals } from '../scanner/file-walker.js';
 import { classifyFile } from '../scanner/role-classifier.js';
+import { isSourceFileName } from '../scanner/source-paths.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { type ConfigAliases, aliasesFor, importResolution } from './declared-rules.js';
 import { sourceFileFor } from './import-target.js';
@@ -15,7 +11,7 @@ import { resolveImportTarget } from './layer-paths.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
-/** Who references each source file under a root, by paths from that root. */
+/** Who references each file under a root the graph reads, by paths from that root. */
 export interface ReferenceGraph {
   root: string;
   /** Whether each file is a test, judged on its path from the root or inside its app. */
@@ -55,21 +51,40 @@ const readSafely = (read: () => string[]): string[] => {
   }
 };
 
+const REFERRER_ONLY = /(?<!\.d)\.(js|jsx|mjs|cjs|mts|cts|astro)$/;
+
+/** Files the graph reads: source files, and the JavaScript, `.mts`, `.cts` and Astro files that can import them. */
+const readsReferences = (name: string): boolean =>
+  isSourceFileName(name) || REFERRER_ONLY.test(name);
+
+/** A path judged as its TypeScript counterpart would be, so `a.test.js` is a test as `a.test.ts` is. */
+const asTypeScript = (file: string): string =>
+  file.replace(/\.([mc]?js|[mc]ts)$/, '.ts').replace(/\.jsx$/, '.tsx');
+
+const isTest = (file: string): boolean => classifyFile(asTypeScript(file)).role === 'TEST';
+
+interface GraphFile {
+  absolutePath: string;
+  relativePath: string;
+}
+
 /**
  * The files the graph reads: those a scan of `root` reads, and those a scan of any app under it reads, by paths from
  * `root`. An app's scan applies only the ignore files inside it, so it can read a folder a parent ignore file excludes
  * (a tracked `src/lib` under a root `.gitignore` entry `lib`); its files must still count as referrers.
  */
-function graphFiles(root: string): WalkedFile[] {
-  const files = new Map(walkRepo(root).map((file) => [file.absolutePath, file]));
-  for (const appDir of discoverAppDirs(root)) {
-    for (const file of walkRepo(appDir)) {
-      if (files.has(file.absolutePath)) continue;
-      const relativePath = path.relative(root, file.absolutePath).split(path.sep).join('/');
-      files.set(file.absolutePath, { ...file, relativePath });
+function graphFiles(root: string): GraphFile[] {
+  const files = new Map<string, string>();
+  for (const dir of [root, ...discoverAppDirs(root)]) {
+    for (const absolutePath of listSourceFiles(dir, readsReferences)) {
+      if (!files.has(absolutePath)) {
+        files.set(absolutePath, path.relative(root, absolutePath).split(path.sep).join('/'));
+      }
     }
   }
-  return [...files.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return [...files]
+    .map(([absolutePath, relativePath]) => ({ absolutePath, relativePath }))
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 /**
@@ -86,10 +101,9 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   const walked = graphFiles(absoluteRoot);
   const tests = new Set<string>();
   const referrers = new Map<string, Set<string>>();
-  for (const file of walked) {
-    const appRole = classifyFile(pathInApp(file.relativePath, configs)).role;
-    if (file.role === 'TEST' || appRole === 'TEST') tests.add(file.relativePath);
-    referrers.set(file.relativePath, new Set());
+  for (const { relativePath } of walked) {
+    if (isTest(relativePath) || isTest(pathInApp(relativePath, configs))) tests.add(relativePath);
+    referrers.set(relativePath, new Set());
   }
   const refer = (from: string, target: string | null): void => {
     if (target !== null && target !== from) referrers.get(target)?.add(from);
