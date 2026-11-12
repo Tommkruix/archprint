@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
+import { isSourceFileName } from './source-paths.js';
 import { svelteKitAliases } from './sveltekit.js';
 
 function ownPackageName(rootDir: string): string | null {
@@ -68,6 +69,33 @@ function owningProjects(appDir: string): OwningProjects | null {
   return { root, references };
 }
 
+/**
+ * A `paths` key whose `*` follows its prefix directly (`"@*": ["./src/*"]`, so `@components/x` is `src/components/x`):
+ * one alias per folder and source file of the target, the way `baseUrl` folders become aliases, and the prefix itself,
+ * since TypeScript also matches `@/components/x` (the `*` taking the slash).
+ */
+function gluedPatternAliases(prefix: string, targetDir: string): Record<string, string> {
+  const map: Record<string, string> = prefix === '' ? {} : { [prefix]: targetDir };
+  let entries;
+  try {
+    entries = readdirSync(targetDir, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
+  } catch {
+    return map;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+    if (entry.isDirectory()) {
+      map[prefix + entry.name] = path.resolve(targetDir, entry.name);
+    } else if (entry.isFile() && isSourceFileName(entry.name)) {
+      const stem = entry.name.replace(/\.[^.]+$/, '');
+      map[prefix + stem] = path.resolve(targetDir, stem);
+    }
+  }
+  return map;
+}
+
 function configAliases({ configPath, config }: TsProject): Record<string, string> {
   const options = config.options;
   const paths = options.paths ?? {};
@@ -79,6 +107,14 @@ function configAliases({ configPath, config }: TsProject): Record<string, string
   for (const [alias, targets] of Object.entries(paths)) {
     const firstTarget = targets?.[0];
     if (firstTarget === undefined) {
+      continue;
+    }
+    if (alias.endsWith('*') && !alias.endsWith('/*') && firstTarget.endsWith('/*')) {
+      const glued = gluedPatternAliases(
+        alias.slice(0, -1),
+        path.resolve(base, firstTarget.slice(0, -2)),
+      );
+      for (const [key, dir] of Object.entries(glued)) map[key] ??= dir;
       continue;
     }
     const cleanAlias = alias.replace(/\/\*$/, '');
