@@ -645,7 +645,10 @@ When that file only lists other projects under `references` (the solution-style 
 generate), archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`,
 as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it. A key
 whose `*` follows its prefix directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target
-(`@components/button` is `src/components/button`), the way `baseUrl` folders do.
+(`@components/button` is `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that
+declares `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
+`svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
+fresh checkout does not have; an alias the tsconfig maps itself wins.
 
 **Workspace packages.** archprint reads a monorepo's packages from `pnpm-workspace.yaml` in a pnpm repository (one
 with a `pnpm-lock.yaml` or `packageManager: pnpm@...`), as pnpm does, and from `package.json` `workspaces` otherwise,

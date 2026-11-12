@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
 import { isSourceFileName } from './source-paths.js';
+import { svelteKitAliases } from './sveltekit.js';
 
 function ownPackageName(rootDir: string): string | null {
   try {
@@ -167,6 +168,8 @@ export function buildWorkspaceMap(rootDir: string): Record<string, string> {
 
   const rootAliases = configAliases(projects.root);
   const map = { ...rootAliases, ...referencedAliases(projects.references, rootAliases) };
+
+  for (const [alias, dir] of Object.entries(svelteKitAliases(rootDir))) map[alias] ??= dir;
 
   const self = ownPackageName(rootDir);
   if (self !== null && map[self] === undefined) map[self] = path.resolve(rootDir);
