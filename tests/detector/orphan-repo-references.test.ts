@@ -107,3 +107,39 @@ describe('orphans: a folder a parent ignore file excludes but the app scan reads
     );
   });
 });
+
+describe('orphans: a paths pattern with no slash after its prefix, next to a scoped workspace package', () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-orphans-glued-')));
+    writeTree(repo, {
+      'package.json': json({ name: 'root', private: true, workspaces: ['apps/*', 'packages/*'] }),
+      'apps/dash/package.json': json({ name: 'dash' }),
+      'apps/dash/tsconfig.json': json({ files: [], references: [{ path: './tsconfig.app.json' }] }),
+      'apps/dash/tsconfig.app.json': json({
+        compilerOptions: { baseUrl: '.', paths: { '@*': ['./src/*'] } },
+        include: ['src'],
+      }),
+      'apps/dash/src/main.tsx':
+        "import Dialog from '@components/shared/Dialog';\nimport { useFetch } from '@/hooks/useFetch';\nimport { Button } from '@acme/ui/button';\nexport default [Dialog, useFetch, Button];\n",
+      'apps/dash/src/components/shared/Dialog.tsx': SOURCE,
+      'apps/dash/src/hooks/useFetch.ts': SOURCE,
+      'apps/dash/src/components/shared/Unused.tsx': SOURCE,
+      'packages/ui/package.json': json({ name: '@acme/ui', private: true }),
+      'packages/ui/tsconfig.json': json({ compilerOptions: { strict: true } }),
+      'packages/ui/button.tsx': SOURCE,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('resolves @components/... and @/hooks/... through "@*" in a referenced tsconfig', () => {
+    const { orphans } = detectOrphans(path.join(repo, 'apps', 'dash'));
+    expect(orphans).not.toContain('src/components/shared/Dialog.tsx');
+    expect(orphans).not.toContain('src/hooks/useFetch.ts');
+    expect(orphans).toContain('src/components/shared/Unused.tsx');
+  });
+
+  it('still resolves a scoped workspace package the pattern could shadow', () => {
+    expect(detectOrphans(path.join(repo, 'packages', 'ui')).orphans).toEqual([]);
+  });
+});
