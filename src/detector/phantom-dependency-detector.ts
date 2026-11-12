@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { builtinModules } from 'node:module';
 import * as path from 'node:path';
+import { coreModules } from '../scanner/core-modules.js';
 import {
   createImportAnalyzer,
   type ResolvedImport,
@@ -11,8 +11,6 @@ import { declaredPackages, packageName } from '../scanner/package-name.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
-
-const BUILTINS = new Set(builtinModules);
 
 /** The names of the workspace's packages, which count as declared. */
 export const workspacePackageNames = (appDir: string): string[] =>
@@ -61,6 +59,7 @@ export function detectPhantomDependencies(
   const aliasPrefixes = Object.keys(buildWorkspaceMap(root)).map((key) =>
     key.replace(/\/?\*$/, ''),
   );
+  const builtins = coreModules(root);
 
   const packageJsons = declaringPackageJsons(root);
   const workspacePackages = workspacePackageNames(root);
@@ -83,7 +82,7 @@ export function detectPhantomDependencies(
     }
     for (const imp of imports) {
       if (!imp.hasValueBinding) continue;
-      const name = packageName(imp.specifier, aliasPrefixes, BUILTINS);
+      const name = packageName(imp.specifier, aliasPrefixes, builtins);
       if (name === null) continue;
       externalImporters.add(file.relativePath);
       if (!declared.has(name)) {

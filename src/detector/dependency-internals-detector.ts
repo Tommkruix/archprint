@@ -1,4 +1,4 @@
-import { builtinModules } from 'node:module';
+import { coreModules } from '../scanner/core-modules.js';
 import {
   createImportAnalyzer,
   type ResolvedImport,
@@ -9,8 +9,6 @@ import { isPackageInternal, packageName } from '../scanner/package-name.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
 import * as path from 'node:path';
 import { evaluateGate, type GateResult } from './confidence-gate.js';
-
-const BUILTINS = new Set(builtinModules);
 
 export interface DependencyInternalViolation {
   file: string;
@@ -39,6 +37,7 @@ export function detectDependencyInternals(
   const aliasPrefixes = Object.keys(buildWorkspaceMap(root)).map((key) =>
     key.replace(/\/?\*$/, ''),
   );
+  const builtins = coreModules(root);
   const analyze = createImportAnalyzer(root, { resolve });
 
   const externalImporters = new Set<string>();
@@ -54,7 +53,7 @@ export function detectDependencyInternals(
     }
     for (const imp of imports) {
       if (!imp.hasValueBinding) continue;
-      const name = packageName(imp.specifier, aliasPrefixes, BUILTINS);
+      const name = packageName(imp.specifier, aliasPrefixes, builtins);
       if (name === null) continue;
       externalImporters.add(file.relativePath);
       if (isPackageInternal(imp.specifier, name)) {

@@ -63,7 +63,12 @@ Both modes read `paths` and `baseUrl` from the app's `tsconfig.json` and its `ex
 lists other projects under `references` (the solution-style layout create-vite, Angular and Nx generate),
 archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`, as
 TypeScript does. An alias in the `tsconfig.json` itself takes precedence, and an alias two referenced projects map
-to different folders stays unresolved in the fast pass rather than guessed.
+to different folders stays unresolved in the fast pass rather than guessed. A key whose `*` follows its prefix
+directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target (`@components/button` is
+`src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that declares
+`@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
+`svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
+fresh checkout does not have; an alias the tsconfig maps itself wins.
 
 Layer boundaries are the exception: they are always found from imports as written, in both modes, because that
 is how the generated ESLint rule reads an import, and how dependency-cruiser names the file it points at.

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { walkSourceTree } from '../scanner/file-walker.js';
 import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { svelteKitModules } from '../scanner/sveltekit.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
 import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
 import {
@@ -89,6 +90,7 @@ export interface ScanResult {
   patterns: ScannedPattern[];
   layerBoundaries: LayerBoundary[];
   layerAliases: LayerAlias[];
+  virtualModules: string[];
   gitignoredPaths: string[];
   cycles: CycleAnalysis;
   orphans: OrphanAnalysis;
@@ -174,6 +176,7 @@ export function scanRepo(
     patterns,
     layerBoundaries,
     layerAliases: layerAliases(appDir),
+    virtualModules: svelteKitModules(appDir),
     gitignoredPaths: sourceTree.ignored,
     cycles,
     orphans,

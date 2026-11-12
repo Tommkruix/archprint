@@ -331,6 +331,7 @@ export function collectEnforcement(
   const appRules: EslintAppRules = {
     appDir: scan.appDir,
     aliases: scan.layerAliases,
+    virtualModules: scan.virtualModules,
     ignored: scan.gitignoredPaths,
     layers: layerRuleSpecs(layers, allowedFor),
     phantom:
@@ -608,6 +609,7 @@ export interface EmitResult {
 const emptyAppRules = (scan: ScanResult): EslintAppRules => ({
   appDir: scan.appDir,
   aliases: scan.layerAliases,
+  virtualModules: scan.virtualModules,
   ignored: scan.gitignoredPaths,
   layers: [],
   phantom: null,
