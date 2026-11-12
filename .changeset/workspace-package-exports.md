@@ -1,5 +1,0 @@
----
-'archprint': patch
----
-
-The workspace-package rule now lets through a subpath a package exports. Importing `@acme/ui/button` when `@acme/ui` lists `"./button"` in its `exports` is using the package's public API, not reaching into its source, so neither `check` nor ESLint reports it any more; a subpath no export covers, or one an export blocks with `null`, still breaks the rule, and a package without `exports` still exposes only its name. Imports of a package that exports every subpath (`"./*"` with nothing blocked) no longer count as evidence for the rule, since none of them could break it. Before, every subpath counted as a deep import, so the rule was rejected on repositories that import mostly through `exports` and its evidence counted their public imports as breaks. Run `archprint generate` again to update an adopted rule. In a pnpm repository (one with a `pnpm-lock.yaml` or `packageManager: pnpm@...`), archprint now also reads the workspace's packages from `pnpm-workspace.yaml`, which is what pnpm uses, instead of a `workspaces` list in `package.json` that pnpm ignores and that may be out of date.
