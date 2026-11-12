@@ -205,11 +205,12 @@ config its `--require`, `--import`, `--loader` or `--config` flags name; other t
 glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be
 listed. A dedicated dead-code tool such as knip covers more of these cases.
 
-**How precise it is.** In a blind audit of 99 listed orphans from 66 open-source repositories (November 2026), about
-half were in use: imported from another package of the same repository, imported through an alias or from a file
-type archprint did not read at the time (`.js`, `.astro`, both read since), started by Vite's `index.html`, loaded by `import.meta.glob`, a
-computed `import()`, a build config or a framework's file-based routing. Treat the list as candidates to check before
-deleting anything, not as dead code.
+**How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
+November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of a
+file-based router archprint does not model (SvelteKit `+page` files, Expo Router), pages started by a Vite or Parcel
+HTML entry, files a folder loader picks up (migrations, `import.meta.glob`, a code generator's glob), project templates
+a tool copies, and computed `import()` paths. Of 35 files listed as test-only, 31 were imported only by tests. Treat
+the list as candidates to check before deleting anything, not as dead code.
 
 ### Reachability (Report)
 
