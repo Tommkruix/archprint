@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { walkRepo, type WalkedFile } from '../scanner/file-walker.js';
 import { declaredPackages } from '../scanner/package-name.js';
+import { isSvelteKitProject } from '../scanner/sveltekit.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { packageEntriesUnder } from './package-entries.js';
 import { REQUEST_ENTRY_ROLES } from './pattern-detector.js';
@@ -27,6 +28,13 @@ function isEntry(file: WalkedFile): boolean {
 
 const NEXT_CONFIG = /^next\.config\.(js|mjs|cjs|ts|mts)$/;
 const PAGES_DIR = /^(src\/)?pages\//;
+/**
+ * SvelteKit's files at their default locations: route files (layout resets such as `+page@.svelte` included), hooks,
+ * param matchers (each file of `src/params/` in SvelteKit 2, one `src/params` module in SvelteKit 3), the service
+ * worker and instrumentation.
+ */
+const SVELTEKIT_FILE =
+  /^src\/(routes\/(.*\/)?\+(page|page\.server|layout|layout\.server|error|server)(@[^/]*)?\.(svelte|[jt]s)|(hooks(\.server|\.client)?|params|service-worker|instrumentation\.server)\.[jt]s|params\/[^/]+\.[jt]s)$/;
 
 function declaresNext(dir: string): boolean {
   try {
@@ -36,29 +44,45 @@ function declaresNext(dir: string): boolean {
   }
 }
 
+/** A folder holding a `next.config.*`, or a package whose package.json or workspace root declares `next`. */
+function isNextProject(dir: string): boolean {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    /* v8 ignore next -- defensive: a folder removed while scanning */
+    names = [];
+  }
+  return (
+    names.some((name) => NEXT_CONFIG.test(name)) ||
+    (names.includes('package.json') && (declaresNext(dir) || declaresNext(findWorkspaceRoot(dir))))
+  );
+}
+
+interface FileRoutedFramework {
+  isProject: (dir: string) => boolean;
+  /** The paths, from a project folder, of the files the framework loads by their location. */
+  loads: RegExp;
+}
+
+const FILE_ROUTED_FRAMEWORKS: readonly FileRoutedFramework[] = [
+  { isProject: isNextProject, loads: PAGES_DIR },
+  { isProject: isSvelteKitProject, loads: SVELTEKIT_FILE },
+];
+
 /**
- * Whether a file under `root` is a Next.js pages-router page, which the framework routes by its path: its path from
- * a Next.js project starts with `pages/` or `src/pages/`. A project is a folder holding a `next.config.*`, or a
- * package whose package.json or workspace root declares `next`.
+ * Whether a file under `root` is one a framework loads by its location, so nothing needs to import it: a Next.js
+ * pages-router page (`pages/` or `src/pages/` of a Next.js project), or a SvelteKit route file, hook, param matcher,
+ * service worker or instrumentation file at its default location in a SvelteKit project.
  */
-export function nextPagesUnder(root: string): (relativePath: string) => boolean {
+export function frameworkFilesUnder(root: string): (relativePath: string) => boolean {
   const projects = new Map<string, boolean>();
-  const isProject = (dir: string): boolean => {
-    let known = projects.get(dir);
+  const isProject = (framework: number, dir: string): boolean => {
+    const key = `${framework}\0${dir}`;
+    let known = projects.get(key);
     if (known === undefined) {
-      const absolute = path.join(root, dir);
-      let names: string[];
-      try {
-        names = readdirSync(absolute);
-      } catch {
-        /* v8 ignore next -- defensive: a folder removed while scanning */
-        names = [];
-      }
-      known =
-        names.some((name) => NEXT_CONFIG.test(name)) ||
-        (names.includes('package.json') &&
-          (declaresNext(absolute) || declaresNext(findWorkspaceRoot(absolute))));
-      projects.set(dir, known);
+      known = FILE_ROUTED_FRAMEWORKS[framework]!.isProject(path.join(root, dir));
+      projects.set(key, known);
     }
     return known;
   };
@@ -66,7 +90,10 @@ export function nextPagesUnder(root: string): (relativePath: string) => boolean 
     for (let dir = path.posix.dirname(relativePath); ; dir = path.posix.dirname(dir)) {
       const project = dir === '.' ? '' : dir;
       const inside = project === '' ? relativePath : relativePath.slice(project.length + 1);
-      if (PAGES_DIR.test(inside) && isProject(project)) return true;
+      const loaded = FILE_ROUTED_FRAMEWORKS.some(
+        (framework, index) => framework.loads.test(inside) && isProject(index, project),
+      );
+      if (loaded) return true;
       if (project === '') return false;
     }
   };
@@ -92,7 +119,7 @@ export function detectOrphans(
 ): OrphanAnalysis {
   const root = path.resolve(appDir);
   const files = walkRepo(root);
-  const nextPage = nextPagesUnder(root);
+  const frameworkFile = frameworkFilesUnder(root);
   const packageEntries = packageEntriesUnder(
     root,
     files.map((file) => file.relativePath),
@@ -105,7 +132,11 @@ export function detectOrphans(
   const orphans: string[] = [];
   const testOnly: string[] = [];
   for (const file of production) {
-    if (isEntry(file) || nextPage(file.relativePath) || packageEntries.has(file.relativePath)) {
+    if (
+      isEntry(file) ||
+      frameworkFile(file.relativePath) ||
+      packageEntries.has(file.relativePath)
+    ) {
       continue;
     }
     const referrers = graph.referrers.get(inGraph(file.relativePath));

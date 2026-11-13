@@ -68,7 +68,9 @@ directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the t
 `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that declares
 `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
 `svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
-fresh checkout does not have; an alias the tsconfig maps itself wins.
+fresh checkout does not have; an alias the tsconfig maps itself wins. A SvelteKit project without a `svelte.config`, such as
+every SvelteKit 3 project, is found by its Vite config importing `@sveltejs/kit/vite` and gets `$lib` as `src/lib`;
+the `alias` option it passes to the plugin is not read yet.
 
 Layer boundaries are the exception: they are always found from imports as written, in both modes, because that
 is how the generated ESLint rule reads an import, and how dependency-cruiser names the file it points at.
