@@ -37,6 +37,18 @@ export default config;
       'spread/svelte.config.js': 'export default { kit: { files: sharedFiles } };\n',
       'plain/package.json': json({ name: 'plain', devDependencies: { svelte: '5.0.0' } }),
       'plain/svelte.config.js': 'export default { preprocess: [] };\n',
+      'vite-kit/package.json': KIT,
+      'vite-kit/vite.config.ts':
+        "import { sveltekit } from '@sveltejs/kit/vite';\nexport default { plugins: [sveltekit()] };\n",
+      'vite-undeclared/package.json': json({
+        name: 'vite-undeclared',
+        devDependencies: { vite: '7.0.0' },
+      }),
+      'vite-undeclared/vite.config.ts':
+        "import { sveltekit } from '@sveltejs/kit/vite';\nexport default { plugins: [sveltekit()] };\n",
+      'vite-svelte/package.json': json({ name: 'vite-svelte', devDependencies: { vite: '7.0.0' } }),
+      'vite-svelte/vite.config.js':
+        "import { svelte } from '@sveltejs/vite-plugin-svelte';\nexport default { plugins: [svelte()] };\n",
       'mapped/package.json': KIT,
       'mapped/svelte.config.js': 'export default { kit: {} };\n',
       'mapped/tsconfig.json': json({ compilerOptions: { paths: { $lib: ['./elsewhere'] } } }),
@@ -64,9 +76,22 @@ export default config;
     expect(svelteKitAliases(path.join(root, 'spread'))).toEqual({});
   });
 
+  it('maps $lib to src/lib in a SvelteKit 3 project, configured in its Vite config', () => {
+    expect(svelteKitAliases(path.join(root, 'vite-kit'))).toEqual({
+      $lib: path.join(root, 'vite-kit', 'src', 'lib'),
+    });
+    expect(svelteKitModules(path.join(root, 'vite-kit'))).toEqual([
+      '$app',
+      '$env',
+      '$service-worker',
+    ]);
+  });
+
   it('adds nothing to a Svelte project without SvelteKit', () => {
-    expect(svelteKitAliases(path.join(root, 'plain'))).toEqual({});
-    expect(svelteKitModules(path.join(root, 'plain'))).toEqual([]);
+    for (const dir of ['plain', 'vite-svelte', 'vite-undeclared']) {
+      expect(svelteKitAliases(path.join(root, dir)), dir).toEqual({});
+      expect(svelteKitModules(path.join(root, dir)), dir).toEqual([]);
+    }
   });
 
   it('lists the virtual modules of a SvelteKit project', () => {
