@@ -133,6 +133,7 @@ function compiledRoots(packageDir: string): CompiledRoot[] {
     if (options.outDir === undefined) continue;
     const relative = (dir: string): string => toPosix(path.relative(packageDir, dir));
     const inputs = fileNames.filter((file) => !/\.d\.[cm]?ts$/.test(file)).map(relative);
+    if (options.rootDir === undefined && inputs.length === 0) continue;
     const rootDir =
       options.rootDir === undefined ? commonDirectory(inputs) : relative(options.rootDir);
     const outDir = relative(options.outDir);

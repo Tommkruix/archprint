@@ -196,7 +196,14 @@ Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
 `opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
 `instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. A pages-router page is
 any file under `pages/` or `src/pages/` of a project that declares `next` (in its package.json or its workspace
-root's) or has a `next.config.*`; a `pages/` folder in an app without Next.js is checked like any other. Nor is a
+root's) or has a `next.config.*`; a `pages/` folder in an app without Next.js is checked like any other. In a
+SvelteKit project (a folder whose package.json or workspace root declares `@sveltejs/kit` and that holds a
+`svelte.config` or a Vite config importing `@sveltejs/kit/vite`, since a SvelteKit 3 project has no
+`svelte.config`), the files SvelteKit loads from their default locations are entries too: the `+page`,
+`+page.server`, `+layout`, `+layout.server`, `+error` and `+server` files under `src/routes/` (layout resets such as
+`+page@.svelte` included), `src/hooks`, `src/hooks.server` and `src/hooks.client`, the param matchers
+(`src/params/*` in SvelteKit 2, `src/params` in SvelteKit 3), `src/service-worker` and `src/instrumentation.server`;
+other files in a route folder are checked. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
 `*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
 `out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
@@ -205,11 +212,12 @@ config its `--require`, `--import`, `--loader` or `--config` flags name; other t
 glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be
 listed. A dedicated dead-code tool such as knip covers more of these cases.
 
-**How precise it is.** In a blind audit of 99 listed orphans from 66 open-source repositories (November 2026), about
-half were in use: imported from another package of the same repository, imported through an alias or from a file
-type archprint did not read at the time (`.js`, `.astro`, both read since), started by Vite's `index.html`, loaded by `import.meta.glob`, a
-computed `import()`, a build config or a framework's file-based routing. Treat the list as candidates to check before
-deleting anything, not as dead code.
+**How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
+November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
+a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3, and Expo Router),
+pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob`, a code
+generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
+31 were imported only by tests. Treat the list as candidates to check before deleting anything, not as dead code.
 
 ### Reachability (Report)
 

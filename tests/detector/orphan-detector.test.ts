@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { nextPagesUnder } from '../../src/detector/orphan-detector.js';
+import { frameworkFilesUnder } from '../../src/detector/orphan-detector.js';
 import { detectOrphans } from '../../src/index.js';
 import { writeTree } from '../integration/layer-app.js';
 
@@ -112,17 +112,17 @@ describe('Next.js pages-router pages', () => {
   });
 
   it('are the files under pages/ or src/pages/ of a package that declares next, or of a folder with next.config', () => {
-    const isPage = nextPagesUnder(repo);
+    const isPage = frameworkFilesUnder(repo);
     expect(isPage('apps/web/src/pages/trace/[traceId].tsx')).toBe(true);
     expect(isPage('apps/docs/pages/guide.tsx')).toBe(true);
-    expect(nextPagesUnder(hoisted)('apps/admin/pages/users.tsx')).toBe(true);
+    expect(frameworkFilesUnder(hoisted)('apps/admin/pages/users.tsx')).toBe(true);
   });
 
   it('leave out a pages folder below the project root, and one in an app without Next.js', () => {
-    const isPage = nextPagesUnder(repo);
+    const isPage = frameworkFilesUnder(repo);
     expect(isPage('apps/web/src/components/pages/card.tsx')).toBe(false);
     expect(isPage('apps/vite/src/pages/home.tsx')).toBe(false);
-    expect(nextPagesUnder(hoisted)('apps/admin/src/components/pages/row.tsx')).toBe(false);
+    expect(frameworkFilesUnder(hoisted)('apps/admin/src/components/pages/row.tsx')).toBe(false);
   });
 
   it('are not orphans, while a Vite app page nothing imports still is', () => {
@@ -130,5 +130,113 @@ describe('Next.js pages-router pages', () => {
       'src/components/pages/card.tsx',
     ]);
     expect(detectOrphans(path.join(repo, 'apps/vite')).orphans).toEqual(['src/pages/home.tsx']);
+  });
+});
+
+describe('SvelteKit route and convention files', () => {
+  const KIT = JSON.stringify({ name: 'site', devDependencies: { '@sveltejs/kit': '2.0.0' } });
+  const CONFIG = 'export default { kit: {} };\n';
+  const module = 'export const value = 1;\n';
+  const component = '<p>hello</p>\n';
+  let repo: string;
+  beforeAll(() => {
+    repo = mkdtempSync(path.join(tmpdir(), 'archprint-sveltekit-routes-'));
+    writeTree(repo, {
+      'package.json': JSON.stringify({ name: 'root', private: true, workspaces: ['apps/*'] }),
+      'apps/site/package.json': KIT,
+      'apps/site/svelte.config.js': CONFIG,
+      'apps/site/src/routes/+page.svelte': component,
+      'apps/site/src/routes/+layout.svelte': component,
+      'apps/site/src/routes/+error.svelte': component,
+      'apps/site/src/routes/(app)/admin/+page@.svelte': component,
+      'apps/site/src/routes/blog/[slug]/+layout@(app).svelte': component,
+      'apps/site/src/routes/blog/[slug]/Card.svelte': component,
+      'apps/site/src/routes/blog/format.ts': module,
+      'apps/site/src/hooks.client.ts': module,
+      'apps/site/src/hooks.ts': module,
+      'apps/site/src/params/slug.ts': module,
+      'apps/site/src/params/shared/words.ts': module,
+      'apps/site/src/service-worker.ts': module,
+      'apps/site/src/instrumentation.server.ts': module,
+      'apps/site/src/components/routes/+page.svelte': component,
+      'apps/plain/package.json': JSON.stringify({
+        name: 'plain',
+        devDependencies: { svelte: '5.0.0' },
+      }),
+      'apps/plain/svelte.config.js': CONFIG,
+      'apps/plain/src/routes/+page.svelte': component,
+      'apps/next-kit/package.json': KIT,
+      'apps/next-kit/vite.config.ts':
+        "import { sveltekit } from '@sveltejs/kit/vite';\nexport default { plugins: [sveltekit()] };\n",
+      'apps/next-kit/src/routes/+page.svelte': component,
+      'apps/next-kit/src/params.ts': module,
+      'apps/vite/package.json': JSON.stringify({
+        name: 'vite',
+        devDependencies: { vite: '7.0.0' },
+      }),
+      'apps/vite/vite.config.ts':
+        "import { svelte } from '@sveltejs/vite-plugin-svelte';\nexport default { plugins: [svelte()] };\n",
+      'apps/vite/src/routes/+page.svelte': component,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('are the files SvelteKit loads by their location in a SvelteKit 2 or SvelteKit 3 project', () => {
+    const isLoaded = frameworkFilesUnder(repo);
+    for (const file of [
+      'src/routes/+page.svelte',
+      'src/routes/+page.ts',
+      'src/routes/+page.server.js',
+      'src/routes/+layout.svelte',
+      'src/routes/+layout.ts',
+      'src/routes/+layout.server.ts',
+      'src/routes/+error.svelte',
+      'src/routes/api/+server.ts',
+      'src/routes/(app)/admin/+page@.svelte',
+      'src/routes/blog/[slug]/+layout@(app).svelte',
+      'src/hooks.ts',
+      'src/hooks.server.ts',
+      'src/hooks.client.ts',
+      'src/params/slug.ts',
+      'src/service-worker.ts',
+      'src/instrumentation.server.ts',
+    ]) {
+      expect(isLoaded(`apps/site/${file}`), file).toBe(true);
+    }
+    expect(isLoaded('apps/next-kit/src/routes/+page.svelte')).toBe(true);
+    expect(isLoaded('apps/next-kit/src/params.ts')).toBe(true);
+  });
+
+  it('leave out other route folder files, nested param folders, routes below the project root, and a project without the kit', () => {
+    const isLoaded = frameworkFilesUnder(repo);
+    for (const file of [
+      'apps/site/src/routes/blog/[slug]/Card.svelte',
+      'apps/site/src/routes/blog/format.ts',
+      'apps/site/src/params/shared/words.ts',
+      'apps/site/src/components/routes/+page.svelte',
+      'apps/site/examples/demo/src/routes/+page.svelte',
+      'apps/site/src/routes/+page@x/Card.svelte',
+      'apps/site/src/lib/hooks.ts',
+      'apps/plain/src/routes/+page.svelte',
+      'apps/vite/src/routes/+page.svelte',
+    ]) {
+      expect(isLoaded(file), file).toBe(false);
+    }
+  });
+
+  it('are not orphans, while a colocated file nothing imports still is', () => {
+    expect(detectOrphans(path.join(repo, 'apps/site')).orphans).toEqual([
+      'src/components/routes/+page.svelte',
+      'src/params/shared/words.ts',
+      'src/routes/blog/[slug]/Card.svelte',
+      'src/routes/blog/format.ts',
+    ]);
+    expect(detectOrphans(path.join(repo, 'apps/plain')).orphans).toEqual([
+      'src/routes/+page.svelte',
+    ]);
+    expect(detectOrphans(path.join(repo, 'apps/next-kit')).orphans).toEqual([]);
+    expect(detectOrphans(path.join(repo, 'apps/vite')).orphans).toEqual([
+      'src/routes/+page.svelte',
+    ]);
   });
 });

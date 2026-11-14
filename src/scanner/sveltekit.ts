@@ -10,6 +10,14 @@ const CONFIG_NAMES = [
   'svelte.config.cjs',
   'svelte.config.ts',
 ];
+const VITE_CONFIG_NAMES = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'].map(
+  (ext) => `vite.config.${ext}`,
+);
+const KIT_VITE_PLUGIN = '@sveltejs/kit/vite';
+const DEFAULT_LIB = 'src/lib';
+
+const parse = (file: string): ts.SourceFile =>
+  ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, false);
 
 function declaresKit(dir: string): boolean {
   try {
@@ -21,11 +29,31 @@ function declaresKit(dir: string): boolean {
   }
 }
 
+const declaresKitFor = (dir: string): boolean =>
+  declaresKit(dir) || declaresKit(findWorkspaceRoot(dir));
+
 /** The svelte.config of a SvelteKit project folder: one whose project or workspace root declares `@sveltejs/kit`. */
 function svelteKitConfig(dir: string): string | undefined {
   const configPath = CONFIG_NAMES.map((name) => path.join(dir, name)).find(existsSync);
-  if (configPath === undefined) return undefined;
-  return declaresKit(dir) || declaresKit(findWorkspaceRoot(dir)) ? configPath : undefined;
+  return configPath !== undefined && declaresKitFor(dir) ? configPath : undefined;
+}
+
+/**
+ * Whether a folder's Vite config imports SvelteKit's plugin, which is where SvelteKit 3 takes its options, and the
+ * folder or its workspace root declares `@sveltejs/kit`.
+ */
+function loadsKitVitePlugin(dir: string): boolean {
+  const configPath = VITE_CONFIG_NAMES.map((name) => path.join(dir, name)).find(existsSync);
+  return (
+    configPath !== undefined &&
+    declaresKitFor(dir) &&
+    parse(configPath).statements.some(
+      (statement) =>
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === KIT_VITE_PLUGIN,
+    )
+  );
 }
 
 const propertyName = (property: ts.ObjectLiteralElementLike): string | undefined =>
@@ -67,28 +95,25 @@ function kitObject(source: ts.SourceFile): ts.ObjectLiteralExpression | undefine
 /** `kit.files.lib`: `src/lib` when the config leaves it unset, undefined when it sets it to a value not written as text. */
 function libFolder(kit: ts.ObjectLiteralExpression | undefined): string | undefined {
   const files = objectProperty(kit, 'files');
-  if (files === undefined) return 'src/lib';
+  if (files === undefined) return DEFAULT_LIB;
   if (!ts.isObjectLiteralExpression(files)) return undefined;
   const lib = objectProperty(files, 'lib');
-  return lib === undefined ? 'src/lib' : asString(lib);
+  return lib === undefined ? DEFAULT_LIB : asString(lib);
 }
 
 /**
  * SvelteKit's import aliases for a project folder, read from its svelte.config without running it: `$lib`
  * (`kit.files.lib`, `src/lib` by default, none when it is computed) and the string entries of `kit.alias`. SvelteKit
- * writes them into a generated `.svelte-kit/tsconfig.json`, which a fresh checkout does not have. Empty unless the
- * project or its workspace root declares `@sveltejs/kit`.
+ * writes them into a generated `.svelte-kit/tsconfig.json`, which a fresh checkout does not have. A project with no
+ * svelte.config, found by its Vite config, gets `$lib` as `src/lib`: the default, and the only place SvelteKit 3
+ * allows. Empty outside a SvelteKit project.
  */
 export function svelteKitAliases(dir: string): Record<string, string> {
   const configPath = svelteKitConfig(dir);
-  if (configPath === undefined) return {};
-  const source = ts.createSourceFile(
-    configPath,
-    readFileSync(configPath, 'utf8'),
-    ts.ScriptTarget.Latest,
-    false,
-  );
-  const kit = kitObject(source);
+  if (configPath === undefined) {
+    return loadsKitVitePlugin(dir) ? { $lib: path.resolve(dir, DEFAULT_LIB) } : {};
+  }
+  const kit = kitObject(parse(configPath));
   const lib = libFolder(kit);
   const aliases: Record<string, string> = lib === undefined ? {} : { $lib: path.resolve(dir, lib) };
   for (const property of asObject(objectProperty(kit, 'alias'))?.properties ?? []) {
@@ -100,6 +125,13 @@ export function svelteKitAliases(dir: string): Record<string, string> {
   return aliases;
 }
 
+/**
+ * Whether a folder is a SvelteKit project: it or its workspace root declares `@sveltejs/kit`, and it holds a
+ * svelte.config or a Vite config that imports `@sveltejs/kit/vite` (a SvelteKit 3 project has no svelte.config).
+ */
+export const isSvelteKitProject = (dir: string): boolean =>
+  svelteKitConfig(dir) !== undefined || loadsKitVitePlugin(dir);
+
 /** SvelteKit's virtual modules (`$app/...`, `$env/...`, `$service-worker`), which no package provides. */
 export const svelteKitModules = (dir: string): string[] =>
-  svelteKitConfig(dir) === undefined ? [] : ['$app', '$env', '$service-worker'];
+  isSvelteKitProject(dir) ? ['$app', '$env', '$service-worker'] : [];

@@ -286,7 +286,7 @@ Archprint recognizes the stack (Next.js, Nest, SvelteKit, Nuxt, Remix) and class
 | Env access                         | Read `process.env` only in the config/env layer                                                                            | Review   |
 | Workspace package API              | Import a monorepo workspace package by its name or a subpath it exports, not a deep path into its source                   | Review   |
 | Stories isolation                  | Storybook `.stories` files must not be imported by other code                                                              | Review   |
-| Orphan modules                     | Files nothing imports and that are not framework entries (candidates to check, about half are used)                        | Report   |
+| Orphan modules                     | Files nothing imports and that are not framework entries (candidates to check, about a third are used)                     | Report   |
 | Transitive reachability            | A layer boundary that a plain import rule passes but that leaks through an intermediary layer                              | Report   |
 
 `recommend` (and `init`) sort every rule family into tiers: rules your code already follows (enforce now), rules
@@ -648,7 +648,9 @@ whose `*` follows its prefix directly, such as `"@*": ["./src/*"]`, maps each fo
 (`@components/button` is `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that
 declares `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
 `svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
-fresh checkout does not have; an alias the tsconfig maps itself wins.
+fresh checkout does not have; an alias the tsconfig maps itself wins. A SvelteKit project without a `svelte.config`, such as
+every SvelteKit 3 project, is found by its Vite config importing `@sveltejs/kit/vite` and gets `$lib` as `src/lib`;
+the `alias` option it passes to the plugin is not read yet.
 
 **Workspace packages.** archprint reads a monorepo's packages from `pnpm-workspace.yaml` in a pnpm repository (one
 with a `pnpm-lock.yaml` or `packageManager: pnpm@...`), as pnpm does, and from `package.json` `workspaces` otherwise,
