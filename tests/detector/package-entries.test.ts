@@ -31,6 +31,23 @@ const TREE: Record<string, string> = {
   'packages/inferred/tsconfig.json': json({ extends: './tsconfig.base.json', include: ['code'] }),
   'packages/inferred/tsconfig.base.json': json({ compilerOptions: { outDir: 'compiled' } }),
   'packages/inferred/code/cli.ts': SOURCE,
+  'packages/solution/package.json': json({ name: 'solution', main: './out-tsc/index.js' }),
+  'packages/solution/tsconfig.json': json({
+    compilerOptions: { outDir: 'out-tsc' },
+    include: [],
+    references: [{ path: './tsconfig.build.json' }],
+  }),
+  'packages/solution/tsconfig.build.json': json({
+    compilerOptions: { outDir: 'out-tsc' },
+    include: ['lib'],
+  }),
+  'packages/solution/lib/index.ts': SOURCE,
+  'packages/stated/package.json': json({ name: 'stated', main: './built/index.js' }),
+  'packages/stated/tsconfig.json': json({
+    compilerOptions: { outDir: 'built', rootDir: 'source' },
+    include: [],
+  }),
+  'packages/stated/source/index.ts': SOURCE,
   'packages/bundled/package.json': json({
     name: 'bundled',
     exports: {
@@ -138,6 +155,11 @@ describe('packageEntriesUnder', () => {
   it('maps a target in the tsconfig outDir to the source rootDir, explicit or inferred from the inputs', () => {
     expect(entries).toContain('packages/explicit/code/index.ts');
     expect(entries).toContain('packages/inferred/code/cli.ts');
+  });
+
+  it('infers no rootDir for a solution-style tsconfig with no inputs, and keeps a stated one', () => {
+    expect(entries).toContain('packages/solution/lib/index.ts');
+    expect(entries).toContain('packages/stated/source/index.ts');
   });
 
   it('maps a bundler output folder to src/, across export conditions, * patterns and folder targets', () => {
