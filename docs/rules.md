@@ -213,11 +213,11 @@ glob, are not entries. Reported only, never enforced: a file loaded by a tool ar
 listed. A dedicated dead-code tool such as knip covers more of these cases.
 
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
-November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of a
-file-based router archprint does not model (SvelteKit `+page` files, Expo Router), pages started by a Vite or Parcel
-HTML entry, files a folder loader picks up (migrations, `import.meta.glob`, a code generator's glob), project templates
-a tool copies, and computed `import()` paths. Of 35 files listed as test-only, 31 were imported only by tests. Treat
-the list as candidates to check before deleting anything, not as dead code.
+November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
+a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3, and Expo Router),
+pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob`, a code
+generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
+31 were imported only by tests. Treat the list as candidates to check before deleting anything, not as dead code.
 
 ### Reachability (Report)
 
