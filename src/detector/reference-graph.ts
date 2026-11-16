@@ -89,14 +89,15 @@ function graphFiles(root: string): GraphFile[] {
 
 /**
  * Every source file under `root` with the files that reference it, imports resolved first hop the way the scan and
- * the generated rules resolve them: through the importing file's deepest tsconfig aliases and the workspace packages.
+ * the generated rules resolve them: through the importing file's deepest tsconfig aliases, its package.json `imports`
+ * and the workspace packages.
  */
 export function buildReferenceGraph(root: string): ReferenceGraph {
   const absoluteRoot = path.resolve(root);
-  const { configs, packages } = importResolution(absoluteRoot);
+  const { configs, packages, scopes } = importResolution(absoluteRoot);
   const fileFor = sourceFileFor((candidate) => existsSync(path.join(absoluteRoot, candidate)));
   const resolve = (from: string, specifier: string): string | null =>
-    resolveImportTarget(from, specifier, aliasesFor(from, configs), packages, fileFor);
+    resolveImportTarget(from, specifier, aliasesFor(from, configs), packages, scopes, fileFor);
 
   const walked = graphFiles(absoluteRoot);
   const tests = new Set<string>();

@@ -64,15 +64,19 @@ export function packageEntry(
 }
 
 /**
- * A package's subpath exports as Node.js matches them: exact `./x` keys, then keys with one `*` from the most specific
- * (the longest part before `*`, then the longest key). Each target that is a relative path (`./...`) is kept from the
- * root, in the order written with declaration files last; `null` targets leave the key with none.
+ * The keys of a package's `exports` or `imports` that `isKey` accepts, as Node.js matches them: exact keys, then keys
+ * with one `*` from the most specific (the longest part before `*`, then the longest key). Each target that is a
+ * relative path (`./...`) is kept from the root, in the order written with declaration files last; `null` targets leave
+ * the key with none.
  */
-export function packageSubpaths(packageJson: unknown, dir: string): PackageSubpath[] {
-  const exportsField = isRecord(packageJson) ? packageJson.exports : undefined;
-  if (!isRecord(exportsField)) return [];
-  const keys = Object.keys(exportsField).filter(
-    (key) => key.startsWith('./') && !key.endsWith('/') && key.split('*').length <= 2,
+function subpathKeys(
+  field: unknown,
+  dir: string,
+  isKey: (key: string) => boolean,
+): PackageSubpath[] {
+  if (!isRecord(field)) return [];
+  const keys = Object.keys(field).filter(
+    (key) => isKey(key) && !key.endsWith('/') && key.split('*').length <= 2,
   );
   const prefixLength = (key: string): number => key.indexOf('*');
   const patterns = keys
@@ -81,10 +85,24 @@ export function packageSubpaths(packageJson: unknown, dir: string): PackageSubpa
   return [...keys.filter((key) => !key.includes('*')), ...patterns].map((key) => ({
     key,
     targets: declarationsLast(
-      stringLeaves(exportsField[key]).filter((target) => target.startsWith('./')),
+      stringLeaves(field[key]).filter((target) => target.startsWith('./')),
     ).map((target) => path.posix.join(dir, target)),
   }));
 }
+
+/** A package's subpath exports (`./x` keys) as Node.js matches them. */
+export const packageSubpaths = (packageJson: unknown, dir: string): PackageSubpath[] =>
+  subpathKeys(isRecord(packageJson) ? packageJson.exports : undefined, dir, (key) =>
+    key.startsWith('./'),
+  );
+
+/** A package's subpath imports (`#x` keys; `#` alone is not one) as Node.js matches them. */
+export const packageImports = (packageJson: unknown, dir: string): PackageSubpath[] =>
+  subpathKeys(
+    isRecord(packageJson) ? packageJson.imports : undefined,
+    dir,
+    (key) => key.startsWith('#') && key !== '#',
+  );
 
 /** The source file among a path's candidates (`x.ts`, `x/index.ts`, ...) that `isFile` accepts, if any. */
 export const sourceFileFor =
