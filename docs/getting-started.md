@@ -191,6 +191,12 @@ evidence. It counts like ESLint's bulk suppressions, with the base as the baseli
 and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
+When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
+`.github/copilot-instructions.md`, in the app, below it or in a folder above it), `check` also lists the sentences
+it adds that no adopted rule enforces, and marks the ones that read like rules on their line. It warns when a change
+removes the sentence behind a rule adopted from such a file. These notes never fail the check: a new rule sentence
+stays guidance until your team maps it with the gap report and adopts it.
+
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
 [GitHub Marketplace](https://github.com/marketplace/actions/archprint-check)):
 

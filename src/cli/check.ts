@@ -8,6 +8,7 @@ import {
   parseLegacyRules,
   readAdoptedRules,
   type AdoptedRule,
+  type DeclaredAdoptedRule,
 } from './adopted-rules.js';
 import { allowKey, readAllowed, type AllowedException } from './allowed-exceptions.js';
 import { diffFindings, partitionRules, type RuleChange } from './check-diff.js';
@@ -21,8 +22,15 @@ import {
   renamedPaths,
   repoRoot,
 } from './check-git.js';
+import {
+  type ContextFileChange,
+  contextReport,
+  type ContextReport,
+  type UncheckedSentence,
+} from './check-context.js';
 import { createLineLocator } from './check-locate.js';
 import { describeBurnDown, exceptionBurnDown, type ExceptionBurnDown } from './check-exceptions.js';
+import { staleSentenceMessage } from './declared-adoption.js';
 
 export type FailOn = 'none' | 'new';
 
@@ -66,6 +74,7 @@ export type CheckResult =
       allowedInChange: AllowedException[];
       unusedAllows: AllowedException[];
       exceptions: ExceptionBurnDown;
+      context: ContextReport;
     };
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
@@ -277,6 +286,13 @@ export function runCheck(options: CheckOptions): CheckResult {
         [...headFindings, ...adoptedFindings],
         renames,
       ),
+      context: contextReport({
+        root: realpathSync(root),
+        commit,
+        appPrefix,
+        rulesDir: realpathSync(outDir),
+        declared: adopted.filter((rule): rule is DeclaredAdoptedRule => rule.family === 'declared'),
+      }),
     };
   } finally {
     baseTree.dispose();
@@ -304,6 +320,40 @@ const ruleIds = (rules: readonly AdoptedRule[]): string => rules.map((rule) => r
 
 const rulesRemovedMessage = (result: Extract<CheckResult, { status: 'rules-removed' }>): string =>
   `This change removes the adopted rules in ${result.missingFile}, so the ${result.removed.length} rule(s) adopted on the base commit are no longer checked: ${ruleIds(result.removed)}.`;
+
+const LISTED_SENTENCES = 10;
+
+const ENFORCE_NEXT_STEP =
+  'To enforce one, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.';
+
+const UNCHECKED_SENTENCE_MESSAGE = `This reads like a rule, and no archprint rule checks it yet. ${ENFORCE_NEXT_STEP.replace('one', 'it')}`;
+
+const describeContextFile = (change: ContextFileChange): string =>
+  `${change.file}: ${change.unchecked} new sentence(s) no adopted rule checks${
+    change.ruleLike.length === 0 ? '.' : `; ${change.ruleLike.length} read(s) like a rule:`
+  }`;
+
+const listedSentences = (
+  change: ContextFileChange,
+): { shown: UncheckedSentence[]; more: number } => ({
+  shown: change.ruleLike.slice(0, LISTED_SENTENCES),
+  more: Math.max(0, change.ruleLike.length - LISTED_SENTENCES),
+});
+
+function contextTextLines(context: ContextReport): string[] {
+  const lines = context.stale.map((entry) => staleSentenceMessage(entry.rule));
+  if (context.files.length === 0) return lines;
+  lines.push('Context files this change edits:');
+  for (const change of context.files) {
+    lines.push(`  ${describeContextFile(change)}`);
+    const { shown, more } = listedSentences(change);
+    for (const sentence of shown)
+      lines.push(`    ${change.file}:${sentence.line}  ${sentence.text}`);
+    if (more > 0) lines.push(`    and ${more} more`);
+  }
+  lines.push(`  ${ENFORCE_NEXT_STEP}`);
+  return lines;
+}
 
 export function renderCheckText(result: CheckResult): string {
   if (result.status === 'skipped') return `archprint check did not run: ${result.reason}`;
@@ -335,6 +385,7 @@ export function renderCheckText(result: CheckResult): string {
       `Allowed exception no longer needed: ${entry.rule} reports nothing in ${entry.file}. Remove it with archprint allow --remove.`,
     );
   }
+  lines.push(...contextTextLines(result.context));
   return lines.join('\n');
 }
 
@@ -378,6 +429,15 @@ export function checkReport(result: CheckResult): Record<string, unknown> {
     allowedInChange: result.allowedInChange,
     unusedAllows: result.unusedAllows.map(({ rule, file }) => ({ rule, file })),
     exceptions: result.exceptions,
+    context: {
+      files: result.context.files,
+      stale: result.context.stale.map(({ rule, file }) => ({
+        rule: rule.id,
+        file,
+        line: rule.source.line,
+        statement: rule.statement,
+      })),
+    },
   };
 }
 
@@ -405,6 +465,19 @@ export function githubAnnotations(result: CheckResult, failOn: FailOn): string[]
     (entry) =>
       `::notice file=${escapeProperty(toPosix(path.posix.join(result.appPath, entry.file)))},title=${escapeProperty(`archprint: ${entry.rule} allowed`)}::${escapeData(`Allowed with a reason: ${entry.reason}`)}`,
   );
+  const stale = result.context.stale.map(
+    ({ rule, file }) =>
+      `::warning file=${escapeProperty(file)},line=${rule.source.line},title=${escapeProperty(`archprint: ${rule.id} sentence missing`)}::${escapeData(staleSentenceMessage(rule))}`,
+  );
+  const unchecked = result.context.files
+    .flatMap((change) =>
+      change.ruleLike.map((sentence) => ({ file: change.file, line: sentence.line })),
+    )
+    .slice(0, LISTED_SENTENCES)
+    .map(
+      ({ file, line }) =>
+        `::notice file=${escapeProperty(file)},line=${line},title=${escapeProperty('archprint: not enforced yet')}::${escapeData(UNCHECKED_SENTENCE_MESSAGE)}`,
+    );
   return [
     ...allowed,
     ...result.introduced.map((finding) => {
@@ -414,7 +487,24 @@ export function githubAnnotations(result: CheckResult, failOn: FailOn): string[]
       properties.push(`title=${escapeProperty(`archprint: ${finding.rule.id}`)}`);
       return `::${level} ${properties.join(',')}::${escapeData(findingMessage(finding.rule))}`;
     }),
+    ...stale,
+    ...unchecked,
   ];
+}
+
+function contextSummaryLines(context: ContextReport): string[] {
+  const lines: string[] = [];
+  for (const entry of context.stale) lines.push('', staleSentenceMessage(entry.rule));
+  if (context.files.length === 0) return lines;
+  lines.push('', '**Context files this change edits:**', '');
+  for (const change of context.files) {
+    lines.push(`- ${describeContextFile(change).replace(change.file, `\`${change.file}\``)}`);
+    const { shown, more } = listedSentences(change);
+    for (const sentence of shown) lines.push(`  - line ${sentence.line}: ${sentence.text}`);
+    if (more > 0) lines.push(`  - and ${more} more`);
+  }
+  lines.push('', ENFORCE_NEXT_STEP);
+  return lines;
 }
 
 export function githubSummary(result: CheckResult): string {
@@ -478,5 +568,6 @@ export function githubSummary(result: CheckResult): string {
       `Allowed exception no longer needed: \`${entry.rule}\` reports nothing in \`${entry.file}\`.`,
     );
   }
+  lines.push(...contextSummaryLines(result.context));
   return `${lines.join('\n')}\n`;
 }

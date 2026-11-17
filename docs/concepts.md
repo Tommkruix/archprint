@@ -241,8 +241,23 @@ baseline: a recorded file that breaks the rule more times than it did on the bas
 rule in that file is listed. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
 a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
 take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
-if the sentence is gone, `generate` says so and the rule stays until `--reset`. dependency-cruiser does not
-enforce declared rules.
+if the sentence is gone, `generate` says so (and so does `archprint check`, on each pull request) and the rule
+stays until `--reset`. dependency-cruiser does not enforce declared rules.
+
+**Keeping up as the files change.** When a change edits a context file, `archprint check` compares it with the
+base branch and lists, per file, the sentences the change adds that no adopted rule quotes. A file counts when it
+applies to the checked app: CLAUDE.md, AGENTS.md, GEMINI.md, `.cursorrules` or `.windsurfrules` in the app, below
+it or in a folder above it, and `.cursor/rules/`, `.github/copilot-instructions.md` and
+`.github/instructions/*.instructions.md` beside such a folder. Prose counts (paragraphs, list items, quotes, table
+rows); headings, code blocks, HTML and front matter do not.
+
+Archprint does not decide which sentences are rules: your agent does, in the gap report. `check` only marks the
+new sentences that read like instructions, a sentence with an obligation word (must, should, never, always, do
+not, avoid, prefer, ...) or one that opens with a command ("Use ...", "When adding a column, use ..."), on their
+line in the pull request, ten at most. On a hand-labelled sample of 160 sentences that real commits added to AGENTS.md and
+CLAUDE.md files, about 7 in 10 marked sentences were instructions, and about 7 in 10 instructions were marked; the count per
+file includes the rest, so an instruction that is not marked still shows up there. These notes never fail
+`check`.
 
 ## Use from an AI agent (MCP)
 

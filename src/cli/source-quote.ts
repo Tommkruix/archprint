@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 
-const MAX_SOURCE_BYTES = 1_000_000;
+export const MAX_SOURCE_BYTES = 1_000_000;
 
 /** Typographic characters an agent may write for their plain forms, or the reverse. */
 const PLAIN: Record<string, string> = {
@@ -15,7 +15,7 @@ const PLAIN: Record<string, string> = {
 const EMPHASIS = new Set(['*', '_', '`']);
 
 /** Text without markdown emphasis, with plain quotes and dashes and single spaces, and the line of each character. */
-function normalize(text: string): { text: string; lines: number[] } {
+export function normalize(text: string): { text: string; lines: number[] } {
   let normalized = '';
   const lines: number[] = [];
   let line = 1;

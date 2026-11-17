@@ -53,20 +53,55 @@ export function fileAtCommit(root: string, commit: string, relativePath: string)
   }
 }
 
-export function renamedPaths(root: string, commit: string): Map<string, string> {
-  const renames = new Map<string, string>();
-  const output = git(root, ['diff', '--name-status', '-M', '-z', commit]);
-  const fields = output.split('\u0000');
+interface DiffEntry {
+  status: string;
+  from: string;
+  to: string;
+}
+
+/** Each path the working tree changes against `commit`, with the path it had there (renames and copies). */
+function diffEntries(root: string, commit: string): DiffEntry[] {
+  const entries: DiffEntry[] = [];
+  const fields = git(root, ['diff', '--name-status', '-M', '-z', commit]).split('\u0000');
   for (let index = 0; index < fields.length; index++) {
     const status = fields[index]!;
-    if (status.startsWith('R')) {
-      renames.set(fields[index + 1]!, fields[index + 2]!);
+    if (status === '') continue;
+    if (status.startsWith('R') || status.startsWith('C')) {
+      entries.push({ status: status[0]!, from: fields[index + 1]!, to: fields[index + 2]! });
       index += 2;
-    } else if (status !== '') {
+    } else {
+      entries.push({ status: status[0]!, from: fields[index + 1]!, to: fields[index + 1]! });
       index += 1;
     }
   }
-  return renames;
+  return entries;
+}
+
+export function renamedPaths(root: string, commit: string): Map<string, string> {
+  return new Map(
+    diffEntries(root, commit)
+      .filter((entry) => entry.status === 'R')
+      .map((entry) => [entry.from, entry.to]),
+  );
+}
+
+export interface ChangedFile {
+  /** Repo-relative, POSIX. */
+  path: string;
+  /** Where its content was on `commit` (absent for an added file), or null for an untracked one. */
+  basePath: string | null;
+}
+
+/** Files the working tree has that differ from `commit`: changed, added, renamed or copied, and untracked ones. */
+export function changedFiles(root: string, commit: string): ChangedFile[] {
+  const changed = diffEntries(root, commit)
+    .filter((entry) => entry.status !== 'D')
+    .map((entry) => ({ path: entry.to, basePath: entry.from }));
+  const untracked = git(root, ['ls-files', '--others', '--exclude-standard', '-z'])
+    .split('\u0000')
+    .filter((file) => file !== '')
+    .map((file) => ({ path: file, basePath: null }));
+  return [...changed, ...untracked];
 }
 
 export interface BaseTree {
