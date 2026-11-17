@@ -210,13 +210,12 @@ export function describeDeclared(result: DeclaredResult, hasEslint: boolean): st
       lines.push(`  ${refusal.label}${quote}: ${refusal.reason}`);
     }
   }
-  for (const rule of result.stale) {
-    lines.push(
-      `The sentence behind ${rule.id} is no longer in ${rule.source.file}; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --reset.`,
-    );
-  }
+  for (const rule of result.stale) lines.push(staleSentenceMessage(rule));
   return lines;
 }
+
+export const staleSentenceMessage = (rule: DeclaredAdoptedRule): string =>
+  `The sentence behind ${rule.id} is no longer in ${rule.source.file}; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --reset.`;
 
 /** Whether a rule reference names a declared rule: its id, or its ESLint name. */
 export const isDeclaredRef = (ref: string): boolean => /^(?:archprint\/)?doc-/i.test(ref.trim());

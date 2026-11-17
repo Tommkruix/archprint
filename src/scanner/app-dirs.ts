@@ -2,14 +2,26 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { directoriesUnder } from './directory-walk.js';
 import { listSourceFiles } from './file-walker.js';
+import { hasProjectConfig, projectConfigPaths } from './workspace-resolver.js';
 
-/** Every directory under `root` with a tsconfig.json or tsconfig.base.json, the root included, skipping ignored ones. */
+const hasStandardConfig = (dir: string): boolean =>
+  existsSync(path.join(dir, 'tsconfig.json')) || existsSync(path.join(dir, 'tsconfig.base.json'));
+
+/**
+ * Every directory under `root` with a tsconfig.json or tsconfig.base.json, the root included, skipping ignored ones,
+ * and each one whose files a `tsconfig.*.json` beside it compiles, unless a directory with one of those two sits above it:
+ * TypeScript's lookup would find that config, not the variants.
+ */
 export function findTsconfigDirs(root: string): string[] {
-  return directoriesUnder(
+  const configured = directoriesUnder(
     root,
-    (dir) =>
-      existsSync(path.join(dir, 'tsconfig.json')) ||
-      existsSync(path.join(dir, 'tsconfig.base.json')),
+    (dir) => hasStandardConfig(dir) || projectConfigPaths(dir).length > 0,
+  );
+  const standard = configured.filter(hasStandardConfig);
+  const isUnderStandard = (dir: string): boolean =>
+    standard.some((owner) => dir.startsWith(owner + path.sep));
+  return configured.filter(
+    (dir) => hasStandardConfig(dir) || (!isUnderStandard(dir) && hasProjectConfig(dir)),
   );
 }
 

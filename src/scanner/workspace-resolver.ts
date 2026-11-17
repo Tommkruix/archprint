@@ -41,9 +41,10 @@ interface TsProject {
 }
 
 interface OwningProjects {
-  root: TsProject;
-  /** The direct references that compile files of the directory, in the order the config lists them. */
-  references: TsProject[];
+  /** The directory's tsconfig.json; null when variants configure it instead. */
+  root: TsProject | null;
+  /** The configs beside it that compile files of the directory: the root's direct references, or the variants. */
+  peers: TsProject[];
 }
 
 function readProject(configPath: string): TsProject | null {
@@ -51,22 +52,64 @@ function readProject(configPath: string): TsProject | null {
   return config === null ? null : { configPath, config };
 }
 
+const BASE_CONFIG = 'tsconfig.base.json';
+
+const isVariantConfig = (name: string): boolean =>
+  /^tsconfig\..+\.json$/.test(name) && name !== BASE_CONFIG;
+
+/**
+ * The tsconfig files that configure `dir`: its tsconfig.json; in a folder with neither tsconfig.json nor
+ * tsconfig.base.json, the `tsconfig.*.json` files beside it by name, the configs its builds name
+ * (`tsc -p tsconfig.web.json`, or a setup script that copies one to tsconfig.json).
+ */
+export function projectConfigPaths(dir: string): string[] {
+  const own = path.join(dir, 'tsconfig.json');
+  if (ts.sys.fileExists(own)) return [own];
+  if (ts.sys.fileExists(path.join(dir, BASE_CONFIG))) return [];
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter(isVariantConfig)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((name) => path.join(dir, name));
+}
+
 /**
  * The projects TypeScript compiles a directory's files with: its tsconfig.json, and each project it references that
  * includes a file whose nearest tsconfig.json is that one (a solution-style config such as create-vite's owns no
- * files itself). Direct references only, as oxc-resolver does.
+ * files itself), direct references only, as oxc-resolver does; without a tsconfig.json, each variant that includes
+ * such a file.
  */
 function owningProjects(appDir: string): OwningProjects | null {
   const dir = path.resolve(appDir);
-  const root = readProject(path.join(dir, 'tsconfig.json'));
+  const compilesDir = (project: TsProject): boolean =>
+    project.config.fileNames.some((file) => isNearestConfigDir(dir, path.resolve(file)));
+  const readAll = (configPaths: string[]): TsProject[] =>
+    configPaths
+      .map(readProject)
+      .filter((project): project is TsProject => project !== null)
+      .filter(compilesDir);
+  const [first, ...others] = projectConfigPaths(dir);
+  if (first === undefined) return null;
+  if (path.basename(first) !== 'tsconfig.json') {
+    const peers = readAll([first, ...others]);
+    return peers.length === 0 ? null : { root: null, peers };
+  }
+  const root = readProject(first);
   if (root === null) return null;
-  const references = (root.config.projectReferences ?? [])
-    .map((reference) => readProject(ts.resolveProjectReferencePath(reference)))
-    .filter((reference): reference is TsProject => reference !== null)
-    .filter((reference) =>
-      reference.config.fileNames.some((file) => isNearestConfigDir(dir, path.resolve(file))),
-    );
-  return { root, references };
+  const references = (root.config.projectReferences ?? []).map(ts.resolveProjectReferencePath);
+  return { root, peers: readAll(references) };
+}
+
+/** Whether `dir` has a project of its own: a tsconfig.json, or a `tsconfig.*.json` variant that compiles its files. */
+export function hasProjectConfig(dir: string): boolean {
+  const [first] = projectConfigPaths(dir);
+  if (first === undefined) return false;
+  return path.basename(first) === 'tsconfig.json' || owningProjects(dir) !== null;
 }
 
 /**
@@ -142,15 +185,15 @@ function configAliases({ configPath, config }: TsProject): Record<string, string
   return map;
 }
 
-/** The aliases the references add: those the root does not map, unless two references map them differently. */
-function referencedAliases(
-  references: readonly TsProject[],
+/** The aliases the peers add: those the root does not map, unless two peers map them differently. */
+function peerAliases(
+  peers: readonly TsProject[],
   rootAliases: Record<string, string>,
 ): Record<string, string> {
   const added: Record<string, string> = {};
   const ambiguous = new Set<string>();
-  for (const reference of references) {
-    for (const [alias, target] of Object.entries(configAliases(reference))) {
+  for (const peer of peers) {
+    for (const [alias, target] of Object.entries(configAliases(peer))) {
       if (Object.hasOwn(rootAliases, alias)) continue;
       if (Object.hasOwn(added, alias) && added[alias] !== target) ambiguous.add(alias);
       added[alias] ??= target;
@@ -166,8 +209,8 @@ export function buildWorkspaceMap(rootDir: string): Record<string, string> {
     return {};
   }
 
-  const rootAliases = configAliases(projects.root);
-  const map = { ...rootAliases, ...referencedAliases(projects.references, rootAliases) };
+  const rootAliases = projects.root === null ? {} : configAliases(projects.root);
+  const map = { ...rootAliases, ...peerAliases(projects.peers, rootAliases) };
 
   for (const [alias, dir] of Object.entries(svelteKitAliases(rootDir))) map[alias] ??= dir;
 
@@ -178,19 +221,23 @@ export function buildWorkspaceMap(rootDir: string): Record<string, string> {
 }
 
 /**
- * The tsconfig TypeScript compiles a file of `appDir` with: the first of its tsconfig.json and the references that
- * include the file, else its tsconfig.json.
+ * The tsconfig TypeScript compiles a file of `appDir` with: the first of its tsconfig.json and the peers that include
+ * the file, else the first of them.
  */
 export function owningConfigPath(appDir: string): (file: string) => string {
-  const rootConfig = path.join(path.resolve(appDir), 'tsconfig.json');
   const projects = owningProjects(appDir);
-  if (projects === null || projects.references.length === 0) return () => rootConfig;
-  const owners = [projects.root, ...projects.references].map(({ configPath, config }) => ({
+  const owners =
+    projects === null
+      ? []
+      : [...(projects.root === null ? [] : [projects.root]), ...projects.peers];
+  const fallback = owners[0]?.configPath ?? path.join(path.resolve(appDir), 'tsconfig.json');
+  if (owners.length <= 1) return () => fallback;
+  const files = owners.map(({ configPath, config }) => ({
     configPath,
     files: new Set(config.fileNames.map((file) => path.resolve(file))),
   }));
   return (file) => {
     const absolute = path.resolve(file);
-    return owners.find(({ files }) => files.has(absolute))?.configPath ?? rootConfig;
+    return files.find((owner) => owner.files.has(absolute))?.configPath ?? fallback;
   };
 }
