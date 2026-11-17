@@ -182,7 +182,14 @@ function makeDeclaredRule(spec) {
           return;
         }
         if (targets.length === 0) return;
-        const target = resolveImportTarget(rootFile, specifier, aliases, resolution.packages, fileFor);
+        const target = resolveImportTarget(
+          rootFile,
+          specifier,
+          aliases,
+          resolution.packages,
+          resolution.scopes,
+          fileFor,
+        );
         if (target !== null && targets.some((pattern) => pattern.test(target))) {
           context.report({ node, messageId: 'forbidden' });
         }

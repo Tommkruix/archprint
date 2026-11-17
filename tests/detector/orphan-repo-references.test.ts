@@ -143,3 +143,39 @@ describe('orphans: a paths pattern with no slash after its prefix, next to a sco
     expect(detectOrphans(path.join(repo, 'packages', 'ui')).orphans).toEqual([]);
   });
 });
+
+describe('orphans: references through package.json imports', () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-orphans-subpath-imports-')));
+    writeTree(repo, {
+      'package.json': json({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      'tsconfig.json': json({ compilerOptions: { strict: true } }),
+      'packages/cli/package.json': json({
+        name: '@acme/cli',
+        imports: { '#connection': './src/connection.ts', '#commands/*': './src/commands/*.ts' },
+      }),
+      'packages/cli/tsconfig.json': json({ compilerOptions: { strict: true } }),
+      'packages/cli/src/main.ts':
+        "import { connect } from '#connection';\nimport { list } from '#commands/accounts';\nexport { connect, list };\n",
+      'packages/cli/src/connection.ts': SOURCE,
+      'packages/cli/src/commands/accounts.ts': SOURCE,
+      'packages/cli/src/plugin/package.json': json({ name: 'plugin', private: true }),
+      'packages/cli/src/plugin/index.ts': "import { x } from '#commands/unused';\nexport { x };\n",
+      'packages/cli/src/commands/unused.ts': SOURCE,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('counts a file reached only through a "#" import as referenced', () => {
+    const orphans = detectOrphans(path.join(repo, 'packages/cli')).orphans;
+    expect(orphans).not.toContain('src/connection.ts');
+    expect(orphans).not.toContain('src/commands/accounts.ts');
+  });
+
+  it('resolves a "#" import against the nearest package.json only', () => {
+    expect(detectOrphans(path.join(repo, 'packages/cli')).orphans).toContain(
+      'src/commands/unused.ts',
+    );
+  });
+});

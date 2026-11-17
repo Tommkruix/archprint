@@ -1,13 +1,25 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { findTsconfigDirs } from '../scanner/app-dirs.js';
+import { directoriesUnder } from '../scanner/directory-walk.js';
 import { valueModuleImports, walkRepo } from '../scanner/file-walker.js';
 import { globalReferences, type GlobalReference } from '../scanner/global-references.js';
 import { matchesAnyGlob, matchesGlob } from '../scanner/globs.js';
 import { buildWorkspacePackageMap, findWorkspaceRoots } from '../scanner/workspace-packages.js';
-import { packageEntry, packageSubpaths, readManifest, sourceFileFor } from './import-target.js';
+import {
+  packageEntry,
+  packageImports,
+  packageSubpaths,
+  readManifest,
+  sourceFileFor,
+} from './import-target.js';
 import { layerAliases } from './layer-detector.js';
-import { type LayerAlias, resolveImportTarget, type WorkspacePackage } from './layer-paths.js';
+import {
+  type LayerAlias,
+  type PackageScope,
+  resolveImportTarget,
+  type WorkspacePackage,
+} from './layer-paths.js';
 
 /** A package specifier glob, optionally limited to some of its exported names (`default` for a default import). */
 export interface PackageTarget {
@@ -87,10 +99,40 @@ export interface ConfigAliases {
   aliases: LayerAlias[];
 }
 
-/** What resolves an import: each tsconfig directory with its aliases, deepest first, and the workspace packages. */
+/**
+ * What resolves an import: each tsconfig directory with its aliases, the workspace packages, and each package.json
+ * directory with its `#` imports; configs and scopes deepest first.
+ */
 export interface ImportResolution {
   configs: ConfigAliases[];
   packages: WorkspacePackage[];
+  scopes: PackageScope[];
+}
+
+const deepestFirst = (a: { dir: string }, b: { dir: string }): number =>
+  b.dir.length - a.dir.length || a.dir.localeCompare(b.dir);
+
+/**
+ * The package.json directories a file under `dir` can take `#` imports from: those under it, and those above it up to
+ * `root`, the nearest being its package scope.
+ */
+function packageScopes(root: string, dir: string): PackageScope[] {
+  const hasManifest = (candidate: string): boolean =>
+    existsSync(path.join(candidate, 'package.json'));
+  const depth = path.relative(root, dir);
+  const ancestors =
+    depth === '' || depth.startsWith('..') || path.isAbsolute(depth)
+      ? []
+      : depth
+          .split(path.sep)
+          .map((_, index, segments) => path.join(root, ...segments.slice(0, index)));
+  const above = ancestors.filter(hasManifest);
+  return [...directoriesUnder(dir, hasManifest), ...above]
+    .map((scopeDir) => {
+      const owner = toPosix(path.relative(root, scopeDir));
+      return { dir: owner, imports: packageImports(readManifest(scopeDir), owner) };
+    })
+    .sort(deepestFirst);
 }
 
 const fileUnder =
@@ -112,8 +154,12 @@ export function importResolution(root: string, dir: string = root): ImportResolu
         })),
       };
     })
-    .sort((a, b) => b.dir.length - a.dir.length || a.dir.localeCompare(b.dir));
-  return { configs, packages: workspacePackages(absoluteRoot, fileUnder(absoluteRoot)) };
+    .sort(deepestFirst);
+  return {
+    configs,
+    packages: workspacePackages(absoluteRoot, fileUnder(absoluteRoot)),
+    scopes: packageScopes(absoluteRoot, path.resolve(dir)),
+  };
 }
 
 /** The aliases of the deepest tsconfig directory above a root-relative file; `configs` come deepest first. */
@@ -131,7 +177,7 @@ export function loadCodebase(root: string, dir: string = root): DeclaredCodebase
   const absoluteRoot = path.resolve(root);
   const absoluteDir = path.resolve(dir);
   const prefix = toPosix(path.relative(absoluteRoot, absoluteDir));
-  const { configs, packages } = importResolution(absoluteRoot, absoluteDir);
+  const { configs, packages, scopes } = importResolution(absoluteRoot, absoluteDir);
   const fileFor = sourceFileFor(fileUnder(absoluteRoot));
   const files = walkRepo(absoluteDir).map((walked) => ({
     path: path.posix.join(prefix, walked.relativePath),
@@ -142,7 +188,14 @@ export function loadCodebase(root: string, dir: string = root): DeclaredCodebase
   return {
     files,
     targetOf: (file, specifier) =>
-      resolveImportTarget(file.path, specifier, aliasesFor(file.path, configs), packages, fileFor),
+      resolveImportTarget(
+        file.path,
+        specifier,
+        aliasesFor(file.path, configs),
+        packages,
+        scopes,
+        fileFor,
+      ),
   };
 }
 
