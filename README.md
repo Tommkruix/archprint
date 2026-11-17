@@ -657,7 +657,12 @@ as TypeScript does. A folder with no `tsconfig.json` or `tsconfig.base.json` who
 as `tsconfig.web.json` and `tsconfig.native.json`, is read the same way, keeping the aliases the variants agree on.
 Deep mode resolves each file with the compiler options of the project that includes it. A key
 whose `*` follows its prefix directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target
-(`@components/button` is `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that
+(`@components/button` is `src/components/button`), the way `baseUrl` folders do. As in TypeScript, an import takes the key with the longest matching prefix, the text the `*` matched replaces the
+`*` wherever it sits in a target (`"@vue/*": ["./packages/*/src"]` makes `@vue/shared` `packages/shared/src`), and
+the key's targets are tried in order, the first that names a source file winning; when none does, the import
+resolves as a workspace package of that name would. A key with text after its `*`, such as `"x/*.vue"`, is not read
+yet, and a key without a `*` also matches paths below it. Layer boundaries, which read imports as written without
+looking for files, use a key's first target. In a SvelteKit project (one that
 declares `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
 `svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
 fresh checkout does not have; an alias the tsconfig maps itself wins. A SvelteKit project without a `svelte.config`, such as
