@@ -669,7 +669,8 @@ with a `pnpm-lock.yaml` or `packageManager: pnpm@...`), as pnpm does, and from `
 each falling back to the other when it lists no packages.
 For your written rules (`gap-report`, and the `doc-` rules `check` and ESLint enforce), a package subpath import such
 as `@acme/ui/button` follows the package's `exports` as Node.js matches it, and the JavaScript workspaces nested below
-the folder you pass count too.
+the folder you pass count too. For those rules and for orphans, a `#` import such as `#hooks/useBudget` follows the
+`imports` field of the nearest package.json; a tsconfig alias of the same name wins, as in TypeScript.
 
 **Determinism.** The same repo at the same version produces the same output. Analysis is pure and sorted; there is
 no randomness, and the analysis engine is pinned to an exact version.

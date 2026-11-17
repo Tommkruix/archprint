@@ -55,7 +55,7 @@ export function resolveImportPath(
   return segments.join('/');
 }
 
-/** A key of a package's `exports` (`./x`, or a pattern with one `*`) with its target paths from the root. */
+/** A key of a package's `exports` (`./x`) or `imports` (`#x`), or a pattern with one `*`, with its target paths from the root. */
 export interface PackageSubpath {
   key: string;
   targets: string[];
@@ -73,7 +73,7 @@ export interface WorkspacePackage {
 }
 
 /**
- * The `exports` key Node.js matches a subpath (`./x`) with: an exact key, else the first `*` pattern, `subpaths` being
+ * The `exports` or `imports` key Node.js matches a subpath (`./x`, `#x`) with: an exact key, else the first `*` pattern, `subpaths` being
  * in Node's order (exact keys first, then the most specific pattern); the `*` stands for at least one character.
  */
 export function matchingSubpath(
@@ -91,41 +91,59 @@ export function matchingSubpath(
 }
 
 /**
- * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path, or a
- * workspace package (its entry for the root import; its directory with a trailing `/` when the entry is unknown;
- * for a subpath, the first target of the `exports` key it matches that names a source file, else the path under the
- * package directory). `fileFor` picks the source file a path names, if any (`x` may be `x.ts` or `x/index.ts`); else
- * the bare path stands. Null for a package outside the repository.
+ * A package.json directory, repo-relative, with its `imports` keys (`#x`, `#x/*`) in the order Node.js matches them.
+ * One without `imports` still ends the lookup: Node.js reads only the package.json nearest to the importing file.
+ */
+export interface PackageScope {
+  dir: string;
+  imports: PackageSubpath[];
+}
+
+/**
+ * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path (aliases win
+ * over `imports`, as in TypeScript), a `#` import (the first target of the key it matches in the nearest package.json's `imports` that names a source file, else
+ * null), or a workspace package (its entry for the root import; its directory with a trailing `/` when the entry is
+ * unknown; for a subpath, the first target of the `exports` key it matches that names a source file, else the path
+ * under the package directory). `scopes` come deepest first. `fileFor` picks the source file a path names, if any
+ * (`x` may be `x.ts` or `x/index.ts`); else the bare path stands. Null for a package outside the repository.
  */
 export function resolveImportTarget(
   fromPath: string,
   specifier: string,
   aliases: readonly LayerAlias[],
   packages: readonly WorkspacePackage[],
+  scopes: readonly PackageScope[],
   fileFor: (base: string) => string | null,
 ): string | null {
+  const subpathFile = (subpaths: readonly PackageSubpath[], subpath: string): string | null => {
+    const matched = matchingSubpath(subpaths, subpath);
+    if (matched === undefined) return null;
+    const star = matched.key.indexOf('*');
+    const expand = (target: string): string =>
+      star === -1
+        ? target
+        : target
+            .split('*')
+            .join(subpath.slice(star, subpath.length - matched.key.length + star + 1));
+    for (const target of matched.targets) {
+      const file = fileFor(expand(target));
+      if (file !== null) return file;
+    }
+    return null;
+  };
   let base = resolveImportPath(fromPath, specifier, aliases);
+  if (base === null && specifier.startsWith('#')) {
+    const scope = scopes.find(({ dir }) => dir === '' || fromPath.startsWith(`${dir}/`));
+    return scope === undefined ? null : subpathFile(scope.imports, specifier);
+  }
   if (base === null) {
     const owner = packages.find(
       ({ name }) => specifier === name || specifier.startsWith(`${name}/`),
     );
     if (owner === undefined) return null;
     if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
-    const subpath = `.${specifier.slice(owner.name.length)}`;
-    const exported = matchingSubpath(owner.subpaths, subpath);
-    if (exported !== undefined) {
-      const star = exported.key.indexOf('*');
-      const expand = (target: string): string =>
-        star === -1
-          ? target
-          : target
-              .split('*')
-              .join(subpath.slice(star, subpath.length - exported.key.length + star + 1));
-      for (const target of exported.targets) {
-        const file = fileFor(expand(target));
-        if (file !== null) return file;
-      }
-    }
+    const exported = subpathFile(owner.subpaths, `.${specifier.slice(owner.name.length)}`);
+    if (exported !== null) return exported;
     base = `${owner.dir}${specifier.slice(owner.name.length)}`;
   }
   return fileFor(base) ?? base;

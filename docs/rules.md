@@ -191,9 +191,11 @@ from` through a barrel, an `import()` or `require()` call, an `import.meta.glob`
 (webpack) call whose patterns or folder are written out (every file it matches; `!` patterns excluded; relative
 patterns start at a literal `base` option when there is one; a pattern starting with `/` starts at the nearest folder
 with a Vite config, else with a package.json, not at a `root` set inside the Vite config; a `require.context` filter
-that is not written out counts every file in its folder), or a tool config naming
-the file, such as Vitest's `setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
-through its own nearest tsconfig, so another package's import or a nested app's alias counts. JavaScript files
+that is not written out counts every file in its folder), or a tool config naming the file, such as Vitest's
+`setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
+through its own nearest tsconfig, so another package's import or a nested app's alias counts. A `#` import such as
+`#hooks/useBudget` resolves through the `imports` field of the nearest package.json, as Node.js does for `./`
+targets (see [concepts](./concepts.md)). JavaScript files
 (`.js`, `.jsx`, `.mjs`, `.cjs`), `.mts` and `.cts` files, and Astro components (their frontmatter and `<script>`
 blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
 Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,

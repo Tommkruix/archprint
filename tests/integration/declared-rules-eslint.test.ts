@@ -30,7 +30,10 @@ const REPO: Record<string, string> = {
     private: true,
     workspaces: ['apps/*', 'packages/*'],
   }),
-  'apps/web/package.json': JSON.stringify({ name: '@acme/web' }),
+  'apps/web/package.json': JSON.stringify({
+    name: '@acme/web',
+    imports: { '#data/*': './src/lib/*.ts' },
+  }),
   'apps/web/tsconfig.json': JSON.stringify({
     compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
   }),
@@ -59,6 +62,7 @@ const REPO: Record<string, string> = {
   'apps/web/src/components/reexport.ts':
     "export { db } from '../lib/db';\nexport * from '@/lib/db';\n",
   'apps/web/src/components/lazy.ts': "export const load = () => import('@/lib/db');\n",
+  'apps/web/src/components/subpath.ts': "import { db } from '#data/db';\nexport const s = db;\n",
   'apps/web/src/components/card.test.tsx':
     "import { db } from '@/lib/db';\nexport const t = [db, fetch('/t')];\n",
   'apps/web/src/cache/cache.ts':
@@ -167,6 +171,7 @@ const EXPECTED = [
   'src/components/reexport.ts:1 doc-components-not-lib',
   'src/components/reexport.ts:2 doc-components-not-lib',
   'src/components/shadow.tsx:2 doc-no-fetch-in-components',
+  'src/components/subpath.ts:1 doc-components-not-lib',
   'src/components/types.ts:3 doc-no-fetch-in-components',
   'src/legacy.ts:1 doc-web-not-mcds',
   'src/legacy.ts:2 doc-web-not-mcds',

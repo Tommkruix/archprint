@@ -252,3 +252,21 @@ describe('loadCodebase: workspace packages', () => {
     );
   });
 });
+
+describe('loadCodebase: package.json imports', () => {
+  let root: string;
+  beforeAll(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'archprint-declared-imports-'));
+    writeTree(root, {
+      'package.json': JSON.stringify({ name: 'site', imports: { '#lib/*': './lib/*.ts' } }),
+      'lib/db.ts': 'export const db = 1;\n',
+      'app/page.ts': "import { db } from '#lib/db';\n",
+    });
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it('resolves a "#" import through a package.json above the directory measured', () => {
+    const codebase = loadCodebase(root, path.join(root, 'app'));
+    expect(codebase.targetOf(codebase.files[0]!, '#lib/db')).toBe('lib/db.ts');
+  });
+});
