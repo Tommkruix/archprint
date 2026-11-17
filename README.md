@@ -166,7 +166,9 @@ matches no code), or guidance only. Archprint never calls a model: the agent onl
 every number in the report is computed from your code. Adopt the ones you approve with
 `archprint generate <app> --declare mapping.json` (add `--baseline` for those the code breaks today): each becomes
 an ESLint rule whose error is your team's sentence, with its line in CLAUDE.md, and `archprint check` enforces it in
-pull requests. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report) for
+pull requests. As the files change, `archprint check` marks each new sentence that reads like a rule and that no
+adopted rule enforces yet, on its line in the pull request, so a rule written down later does not stay guidance
+unnoticed. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report) for
 the templates.
 
 **See it catch something.** After step 4, break a rule on purpose: for example, make a route file import your
@@ -357,6 +359,12 @@ your team adopted with `init` or `generate`. The existing backlog never shows up
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
 and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
+
+When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
+`.github/copilot-instructions.md`, in the app, below it or in a folder above it), `check` also lists the sentences
+it adds that no adopted rule enforces, and marks the ones that read like rules on their line. It warns when a change
+removes the sentence behind a rule adopted from such a file. These notes never fail the check: a new rule sentence
+stays guidance until your team maps it with the gap report and adopts it.
 
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
 [GitHub Marketplace](https://github.com/marketplace/actions/archprint-check)):
@@ -557,8 +565,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
-  with `--base <branch or commit>`, and how many recorded exceptions are left and which the change fixed. Warning
-  only unless `--fail-on new`. `--format text|json|github`,
+  with `--base <branch or commit>`, and how many recorded exceptions are left and which the change fixed; also the
+  sentences the change adds to your context files that no adopted rule enforces yet. Warning only unless
+  `--fail-on new`. `--format text|json|github`,
   `--out <dir>`. See [Use in CI](#use-in-ci).
 - **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule (by id or ESLint name) being broken
   in one file, with a reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
