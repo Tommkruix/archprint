@@ -260,19 +260,25 @@ function reexportBindingsOf(statement: ts.ExportDeclaration): ValueBinding[] {
     }));
 }
 
-const fastParseCache = new Map<string, { mtimeMs: number; size: number; raw: RawImport[] }>();
+interface FastParse {
+  raw: RawImport[];
+  loaders: ModuleLoader[];
+}
+
+const fastParseCache = new Map<string, { mtimeMs: number; size: number; parse: FastParse }>();
 const FAST_PARSE_CACHE_CAP = 50000;
 
-function parseFastImports(absoluteFilePath: string): RawImport[] {
+function fastParse(absoluteFilePath: string): FastParse {
   const stat = statSync(absoluteFilePath);
   const cached = fastParseCache.get(absoluteFilePath);
   if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-    return cached.raw;
+    return cached.parse;
   }
   const sourceFile = parseSourceFile(absoluteFilePath);
   const lineOf = (node: ts.Node): number =>
     sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
   const raw: RawImport[] = [];
+  const loaders: ModuleLoader[] = [];
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       raw.push({
@@ -303,6 +309,8 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
     }
   }
   const visit = (node: ts.Node): void => {
+    const loader = loaderCall(node);
+    if (loader !== null) loaders.push(loader);
     if (
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
@@ -340,9 +348,12 @@ function parseFastImports(absoluteFilePath: string): RawImport[] {
   };
   visit(sourceFile);
   if (fastParseCache.size >= FAST_PARSE_CACHE_CAP) fastParseCache.clear();
-  fastParseCache.set(absoluteFilePath, { mtimeMs: stat.mtimeMs, size: stat.size, raw });
-  return raw;
+  const parse = { raw, loaders };
+  fastParseCache.set(absoluteFilePath, { mtimeMs: stat.mtimeMs, size: stat.size, parse });
+  return parse;
 }
+
+const parseFastImports = (absoluteFilePath: string): RawImport[] => fastParse(absoluteFilePath).raw;
 
 export interface ImportLocation {
   specifier: string;
@@ -388,6 +399,87 @@ export function importLocations(absoluteFilePath: string): ImportLocation[] {
 export function moduleReferences(absoluteFilePath: string): string[] {
   return parseFastImports(absoluteFilePath).map((imp) => imp.specifier);
 }
+
+/** Files a bundler loads by pattern: `import.meta.glob` (Vite) patterns, or a `require.context` (webpack) folder. */
+export type ModuleLoader =
+  | { kind: 'glob'; patterns: string[]; base: string | null }
+  | { kind: 'context'; directory: string; recursive: boolean; filter: RegExp | null };
+
+const literalText = (node: ts.Node | undefined): string | null =>
+  node !== undefined && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    ? node.text
+    : null;
+
+function globPatterns(argument: ts.Node | undefined): string[] | null {
+  const single = literalText(argument);
+  if (single !== null) return [single];
+  if (argument === undefined || !ts.isArrayLiteralExpression(argument)) return null;
+  const patterns = argument.elements.map(literalText);
+  return patterns.every((pattern) => pattern !== null) ? (patterns as string[]) : null;
+}
+
+/** A glob call's `base` option: null when absent, undefined when it is not a literal. */
+function globBase(options: ts.Node | undefined): string | null | undefined {
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) return null;
+  const property = options.properties.find(
+    (entry) =>
+      entry.name !== undefined && ts.isIdentifier(entry.name) && entry.name.text === 'base',
+  );
+  if (property === undefined) return null;
+  return ts.isPropertyAssignment(property)
+    ? (literalText(property.initializer) ?? undefined)
+    : undefined;
+}
+
+const isImportMeta = (node: ts.Node): boolean =>
+  ts.isMetaProperty(node) &&
+  node.keywordToken === ts.SyntaxKind.ImportKeyword &&
+  node.name.text === 'meta';
+
+function regexLiteral(node: ts.RegularExpressionLiteral): RegExp | null {
+  const match = /^\/(.*)\/([a-z]*)$/s.exec(node.text);
+  try {
+    return match === null ? null : new RegExp(match[1]!, match[2]!.replace(/[gy]/g, ''));
+  } catch {
+    return null;
+  }
+}
+
+function contextLoader(args: ts.NodeArray<ts.Expression>): ModuleLoader | null {
+  const directory = literalText(args[0]);
+  if (directory === null) return null;
+  const flag = args[1];
+  const filter = args[2];
+  return {
+    kind: 'context',
+    directory,
+    recursive: flag?.kind !== ts.SyntaxKind.FalseKeyword,
+    filter:
+      filter !== undefined && ts.isRegularExpressionLiteral(filter) ? regexLiteral(filter) : null,
+  };
+}
+
+function loaderCall(node: ts.Node): ModuleLoader | null {
+  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return null;
+  const { expression: owner, name } = node.expression;
+  if (isImportMeta(owner) && (name.text === 'glob' || name.text === 'globEager')) {
+    const patterns = globPatterns(node.arguments[0]);
+    const base = globBase(node.arguments[1]);
+    return patterns === null || base === undefined ? null : { kind: 'glob', patterns, base };
+  }
+  if (ts.isIdentifier(owner) && owner.text === 'require' && name.text === 'context') {
+    return contextLoader(node.arguments);
+  }
+  return null;
+}
+
+/**
+ * The `import.meta.glob(...)` and `require.context(...)` calls in a file whose patterns, `base` option or folder are
+ * literals. A `require.context` filter or recursion flag that is not a literal is read as matching everything under
+ * the folder.
+ */
+export const moduleLoaders = (absoluteFilePath: string): ModuleLoader[] =>
+  fastParse(absoluteFilePath).loaders;
 
 /** The string literals in a file, such as the setup files a tool's config names. */
 export function stringLiterals(absoluteFilePath: string): string[] {

@@ -110,8 +110,9 @@ export interface OrphanAnalysis {
 
 /**
  * Files nothing in the repository references, and files only tests reference. A reference is any import, type-only
- * included, an `export ... from` or `import()`, a `require()`, or a tool config naming the file
- * (`setupFiles: ['./vitest.setup.ts']`), from any file of the app's workspace, each resolved through its own tsconfig.
+ * included, an `export ... from` or `import()`, a `require()`, a literal `import.meta.glob` or `require.context`, or a
+ * tool config naming the file (`setupFiles: ['./vitest.setup.ts']`), from any file of the app's workspace, each
+ * resolved through its own tsconfig.
  */
 export function detectOrphans(
   appDir: string,
