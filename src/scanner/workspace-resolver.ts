@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
+import { matchingAliases } from '../detector/layer-paths.js';
+import type { AliasEntry } from './resolve-import.js';
 import { isSourceFileName } from './source-paths.js';
 import { svelteKitAliases } from './sveltekit.js';
 
@@ -114,56 +116,73 @@ export function hasProjectConfig(dir: string): boolean {
 
 /**
  * A `paths` key whose `*` follows its prefix directly (`"@*": ["./src/*"]`, so `@components/x` is `src/components/x`):
- * one alias per folder and source file of the target, the way `baseUrl` folders become aliases, and the prefix itself,
- * since TypeScript also matches `@/components/x` (the `*` taking the slash).
+ * one alias per folder of `folder` (the target before its `*`, which `rest` follows) and, for a final `*`, per source
+ * file, the way `baseUrl` folders become aliases, and then the prefix itself, since TypeScript also matches
+ * `@/components/x` (the `*` taking the slash).
  */
-function gluedPatternAliases(prefix: string, targetDir: string): Record<string, string> {
-  const map: Record<string, string> = prefix === '' ? {} : { [prefix]: targetDir };
+function gluedPatternAliases(prefix: string, folder: string, rest: string): AliasEntry[] {
+  const aliases: AliasEntry[] = prefix === '' || rest !== '' ? [] : [{ prefix, dir: folder }];
   let entries;
   try {
-    entries = readdirSync(targetDir, { withFileTypes: true }).sort((a, b) =>
+    entries = readdirSync(folder, { withFileTypes: true }).sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
     );
   } catch {
-    return map;
+    return aliases;
   }
   for (const entry of entries) {
     if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
     if (entry.isDirectory()) {
-      map[prefix + entry.name] = path.resolve(targetDir, entry.name);
-    } else if (entry.isFile() && isSourceFileName(entry.name)) {
+      aliases.push({ prefix: prefix + entry.name, dir: path.resolve(folder, entry.name + rest) });
+    } else if (rest === '' && entry.isFile() && isSourceFileName(entry.name)) {
       const stem = entry.name.replace(/\.[^.]+$/, '');
-      map[prefix + stem] = path.resolve(targetDir, stem);
+      aliases.push({ prefix: prefix + stem, dir: path.resolve(folder, stem) });
     }
   }
-  return map;
+  return aliases;
 }
 
-function configAliases({ configPath, config }: TsProject): Record<string, string> {
+/** Whether a `paths` target's `*` is a whole path segment (a final `*`, or one followed by a slash). */
+const isSegmentStar = (target: string, star: number): boolean =>
+  star > 0 && target[star - 1] === '/' && (star === target.length - 1 || target[star + 1] === '/');
+
+/**
+ * A config's aliases, each `paths` target in order (a key with several targets repeats its prefix, for TypeScript
+ * tries them in turn), a target keeping a `*` that is not its last segment; a `*` key's targets come before those of
+ * an exact key of the same prefix (`"@ui/*"` and `"@ui"`), since TypeScript uses the exact key only for the bare
+ * name; then its `baseUrl` folders.
+ */
+function configAliases({ configPath, config }: TsProject): AliasEntry[] {
   const options = config.options;
   const paths = options.paths ?? {};
 
   const pathsBasePath = (options as { pathsBasePath?: string }).pathsBasePath;
   const base = options.baseUrl ?? pathsBasePath ?? path.dirname(configPath);
 
-  const map: Record<string, string> = {};
+  const patterns: AliasEntry[] = [];
+  const exact: AliasEntry[] = [];
+  const glued: AliasEntry[] = [];
   for (const [alias, targets] of Object.entries(paths)) {
-    const firstTarget = targets?.[0];
-    if (firstTarget === undefined) {
-      continue;
+    for (const target of targets ?? []) {
+      const star = target.indexOf('*');
+      if (alias.endsWith('*') && !alias.endsWith('/*') && isSegmentStar(target, star)) {
+        glued.push(
+          ...gluedPatternAliases(
+            alias.slice(0, -1),
+            path.resolve(base, target.slice(0, star)),
+            target.slice(star + 1),
+          ),
+        );
+        continue;
+      }
+      (alias.includes('*') ? patterns : exact).push({
+        prefix: alias.replace(/\/\*$/, ''),
+        dir: path.resolve(base, target.replace(/\/\*$/, '')),
+      });
     }
-    if (alias.endsWith('*') && !alias.endsWith('/*') && firstTarget.endsWith('/*')) {
-      const glued = gluedPatternAliases(
-        alias.slice(0, -1),
-        path.resolve(base, firstTarget.slice(0, -2)),
-      );
-      for (const [key, dir] of Object.entries(glued)) map[key] ??= dir;
-      continue;
-    }
-    const cleanAlias = alias.replace(/\/\*$/, '');
-    const cleanTarget = firstTarget.replace(/\/\*$/, '');
-    map[cleanAlias] = path.resolve(base, cleanTarget);
   }
+  const explicit = [...patterns, ...exact];
+  const aliases = [...explicit, ...glued.filter(({ prefix }) => !hasPrefix(explicit, prefix))];
 
   if (options.baseUrl !== undefined) {
     try {
@@ -174,49 +193,81 @@ function configAliases({ configPath, config }: TsProject): Record<string, string
         if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') {
           continue;
         }
-        if (map[entry.name] === undefined)
-          map[entry.name] = path.resolve(options.baseUrl, entry.name);
+        if (!hasPrefix(aliases, entry.name)) {
+          aliases.push({ prefix: entry.name, dir: path.resolve(options.baseUrl, entry.name) });
+        }
       }
     } catch {
       /* v8 ignore next -- unreadable baseUrl dir contributes no first-party prefixes */
     }
   }
 
-  return map;
+  return aliases;
+}
+
+const hasPrefix = (aliases: readonly AliasEntry[], prefix: string): boolean =>
+  aliases.some((alias) => alias.prefix === prefix);
+
+/** Each prefix's targets, in order. */
+function targetsByPrefix(aliases: readonly AliasEntry[]): Map<string, string[]> {
+  const targets = new Map<string, string[]>();
+  for (const { prefix, dir } of aliases) targets.set(prefix, [...(targets.get(prefix) ?? []), dir]);
+  return targets;
 }
 
 /** The aliases the peers add: those the root does not map, unless two peers map them differently. */
 function peerAliases(
   peers: readonly TsProject[],
-  rootAliases: Record<string, string>,
-): Record<string, string> {
-  const added: Record<string, string> = {};
+  rootAliases: readonly AliasEntry[],
+): AliasEntry[] {
+  const added = new Map<string, string[]>();
   const ambiguous = new Set<string>();
   for (const peer of peers) {
-    for (const [alias, target] of Object.entries(configAliases(peer))) {
-      if (Object.hasOwn(rootAliases, alias)) continue;
-      if (Object.hasOwn(added, alias) && added[alias] !== target) ambiguous.add(alias);
-      added[alias] ??= target;
+    for (const [prefix, targets] of targetsByPrefix(configAliases(peer))) {
+      if (hasPrefix(rootAliases, prefix)) continue;
+      const known = added.get(prefix);
+      if (known === undefined) added.set(prefix, targets);
+      else if (known.join('\0') !== targets.join('\0')) ambiguous.add(prefix);
     }
   }
-  for (const alias of ambiguous) delete added[alias];
-  return added;
+  return [...added]
+    .filter(([prefix]) => !ambiguous.has(prefix))
+    .flatMap(([prefix, targets]) => targets.map((dir) => ({ prefix, dir })));
 }
 
-export function buildWorkspaceMap(rootDir: string): Record<string, string> {
+/**
+ * The import aliases of a folder, as absolute targets in the order TypeScript tries them: its tsconfig `paths` (a
+ * prefix repeats for each fallback target) and `baseUrl` folders, the peers' additions, SvelteKit aliases, and the
+ * package's own name unless a key already matches it, since TypeScript reads `paths` first.
+ */
+export function workspaceAliases(rootDir: string): AliasEntry[] {
   const projects = owningProjects(rootDir);
   if (projects === null) {
-    return {};
+    return [];
   }
 
-  const rootAliases = projects.root === null ? {} : configAliases(projects.root);
-  const map = { ...rootAliases, ...peerAliases(projects.peers, rootAliases) };
+  const rootAliases = projects.root === null ? [] : configAliases(projects.root);
+  const aliases = [...rootAliases, ...peerAliases(projects.peers, rootAliases)];
 
-  for (const [alias, dir] of Object.entries(svelteKitAliases(rootDir))) map[alias] ??= dir;
+  for (const [prefix, dir] of Object.entries(svelteKitAliases(rootDir))) {
+    if (!hasPrefix(aliases, prefix)) aliases.push({ prefix, dir });
+  }
 
   const self = ownPackageName(rootDir);
-  if (self !== null && map[self] === undefined) map[self] = path.resolve(rootDir);
+  if (self !== null && matchingAliases(self, aliases).length === 0) {
+    aliases.push({ prefix: self, dir: path.resolve(rootDir) });
+  }
 
+  return aliases.map(({ prefix, dir }) => ({
+    prefix: prefix.replace(/\/?\*$/, ''),
+    dir: dir.replace(/\/?\*$/, ''),
+  }));
+}
+
+/** Each alias prefix of a folder with its first target (see `workspaceAliases`). */
+export function buildWorkspaceMap(rootDir: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const { prefix, dir } of workspaceAliases(rootDir)) map[prefix] ??= dir;
   return map;
 }
 

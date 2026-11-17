@@ -9,7 +9,7 @@ import {
   hasUseServerDirective,
   type RoleClassification,
 } from './role-classifier.js';
-import { buildWorkspaceMap, owningConfigPath } from './workspace-resolver.js';
+import { buildWorkspaceMap, owningConfigPath, workspaceAliases } from './workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from './workspace-packages.js';
 import { createIgnoreFilter } from './ignore-filter.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
@@ -600,10 +600,7 @@ export function createImportAnalyzer(
     }
     return project;
   };
-  const aliasDirs = Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
-    prefix: key.replace(/\/?\*$/, ''),
-    dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
-  }));
+  const aliasDirs = workspaceAliases(appDir);
   const resolveDynamicFile = (specifier: string, containingFile: string): string | undefined =>
     resolveFirstPartyImport(specifier, containingFile, aliasDirs) ?? undefined;
 

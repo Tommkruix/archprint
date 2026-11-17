@@ -1,8 +1,10 @@
 import * as path from 'node:path';
 import type { LayerBoundary } from '../detector/layer-detector.js';
 import {
+  aliasPath,
   type LayerAlias,
   layerRootOf,
+  matchingAliases,
   resolveImportPath,
   resolveImportTarget,
 } from '../detector/layer-paths.js';
@@ -223,9 +225,13 @@ const PACKAGE_RUNTIME = `const APP_ALIAS_PREFIXES = APP.aliases.map((alias) => a
 const BUILTINS = new Set([...builtinModules, ...APP.virtualModules]);`;
 
 const TARGET_RUNTIME = `function firstPartyTarget(file, specifier) {
-  const base = resolveImportPath(file, specifier, APP.aliases);
-  if (base === null) return null;
-  return firstPartyCandidates(base).find((candidate) => existsSync(join(APP_DIR, candidate))) ?? null;
+  const choices = specifier.startsWith('.') ? [APP.aliases] : matchingAliases(specifier, APP.aliases).map((alias) => [alias]);
+  for (const aliases of choices) {
+    const base = resolveImportPath(file, specifier, aliases);
+    const found = base === null ? undefined : firstPartyCandidates(base).find((candidate) => existsSync(join(APP_DIR, candidate)));
+    if (found !== undefined) return found;
+  }
+  return null;
 }`;
 
 const INTERNALS_RUNTIME = `function makeInternalsRule(spec) {
@@ -335,6 +341,8 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     'const APP_TESTS = APP.tests.map((source) => new RegExp(source));',
     isSkippedFolder.toString(),
     isSourceFileName.toString(),
+    matchingAliases.toString(),
+    aliasPath.toString(),
     resolveImportPath.toString(),
     APP_RUNTIME,
     ...(layers.length === 0 ? [] : [layerRootOf.toString(), LAYER_RUNTIME]),
