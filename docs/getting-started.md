@@ -75,7 +75,8 @@ Requires Node >= 20. Point Archprint at a directory that has a `tsconfig.json` (
 as `apps/web`; a monorepo root works too, Archprint discovers the app directories and skips whatever git ignores,
 including nested `.gitignore` files and `.git/info/exclude`). A solution-style `tsconfig.json` that only lists
 `references`, as create-vite generates, works too: Archprint reads the aliases of the referenced project that
-compiles the app's files.
+compiles the app's files. So does a directory whose only configs are named variants, such as `tsconfig.oss.json` and
+`tsconfig.saas.json` that a setup script copies to `tsconfig.json`: Archprint reads the aliases they agree on.
 
 ## The 60-second path
 
