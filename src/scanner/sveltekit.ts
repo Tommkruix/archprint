@@ -1,6 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
+import {
+  asObject,
+  asString,
+  objectProperty,
+  parseScript,
+  propertyName,
+} from './config-literals.js';
 import { declaredPackages } from './package-name.js';
 import { findWorkspaceRoot } from './workspace-packages.js';
 
@@ -15,9 +22,6 @@ const VITE_CONFIG_NAMES = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'].map(
 );
 const KIT_VITE_PLUGIN = '@sveltejs/kit/vite';
 const DEFAULT_LIB = 'src/lib';
-
-const parse = (file: string): ts.SourceFile =>
-  ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, false);
 
 function declaresKit(dir: string): boolean {
   try {
@@ -47,7 +51,7 @@ function loadsKitVitePlugin(dir: string): boolean {
   return (
     configPath !== undefined &&
     declaresKitFor(dir) &&
-    parse(configPath).statements.some(
+    parseScript(configPath).statements.some(
       (statement) =>
         ts.isImportDeclaration(statement) &&
         ts.isStringLiteral(statement.moduleSpecifier) &&
@@ -55,28 +59,6 @@ function loadsKitVitePlugin(dir: string): boolean {
     )
   );
 }
-
-const propertyName = (property: ts.ObjectLiteralElementLike): string | undefined =>
-  ts.isPropertyAssignment(property) &&
-  (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-    ? property.name.text
-    : undefined;
-
-function objectProperty(
-  object: ts.ObjectLiteralExpression | undefined,
-  name: string,
-): ts.Expression | undefined {
-  const found = object?.properties.find((property) => propertyName(property) === name);
-  return found !== undefined && ts.isPropertyAssignment(found) ? found.initializer : undefined;
-}
-
-const asObject = (node: ts.Expression | undefined): ts.ObjectLiteralExpression | undefined =>
-  node !== undefined && ts.isObjectLiteralExpression(node) ? node : undefined;
-
-const asString = (node: ts.Expression | undefined): string | undefined =>
-  node !== undefined && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    ? node.text
-    : undefined;
 
 /** The `kit: { ... }` object literal of a svelte.config, wherever the config object is written. */
 function kitObject(source: ts.SourceFile): ts.ObjectLiteralExpression | undefined {
@@ -113,7 +95,7 @@ export function svelteKitAliases(dir: string): Record<string, string> {
   if (configPath === undefined) {
     return loadsKitVitePlugin(dir) ? { $lib: path.resolve(dir, DEFAULT_LIB) } : {};
   }
-  const kit = kitObject(parse(configPath));
+  const kit = kitObject(parseScript(configPath));
   const lib = libFolder(kit);
   const aliases: Record<string, string> = lib === undefined ? {} : { $lib: path.resolve(dir, lib) };
   for (const property of asObject(objectProperty(kit, 'alias'))?.properties ?? []) {

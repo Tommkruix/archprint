@@ -209,7 +209,17 @@ SvelteKit project (a folder whose package.json or workspace root declares `@svel
 `+page.server`, `+layout`, `+layout.server`, `+error` and `+server` files under `src/routes/` (layout resets such as
 `+page@.svelte` included), `src/hooks`, `src/hooks.server` and `src/hooks.client`, the param matchers
 (`src/params/*` in SvelteKit 2, `src/params` in SvelteKit 3), `src/service-worker` and `src/instrumentation.server`;
-other files in a route folder are checked. Nor is a
+other files in a route folder are checked. In a package that declares `expo-router`, every file of `src/app/` (or
+of `app/` when there is no `src/app/`) is an Expo Router route. In a React Router app (a `react-router.config` or
+`@react-router/dev`), the app folder's `root`, `entry.client`, `entry.server` and `routes` modules are entries, as are
+the module paths `routes.ts` passes to `route()`, `index()` and `layout()` and, when it calls `flatRoutes()` from
+`@react-router/fs-routes`, each file directly in `routes/` and each folder's `route` module (else its `index`), minus
+its `ignoredRouteFiles`; the app folder is the config's `appDirectory`,
+`app` by default. In a TanStack Router project (one declaring `@tanstack/router-plugin`, `@tanstack/router-cli` or
+TanStack Start), every file under `routesDirectory` (`src/routes` by default) is a route, except names starting with
+`-`. These settings are read when written as text in the config (`tsr.config.json` or a root config such as
+`vite.config.ts` for TanStack Router); a project that computes them is not modeled. Remix, Routify and Nuxt are not
+modeled yet. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
 `*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
 `out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
@@ -220,7 +230,7 @@ listed. A dedicated dead-code tool such as knip covers more of these cases.
 
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
 November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
-a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3, and Expo Router),
+a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3; Expo Router routes, entries since 0.19.0),
 pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob` before
 archprint followed it, a code generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
 31 were imported only by tests. Treat the list as candidates to check before deleting anything, not as dead code.
