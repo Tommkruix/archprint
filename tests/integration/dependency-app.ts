@@ -9,8 +9,9 @@ export function dependencyApp(): Record<string, string> {
       dependencies: { react: '19.0.0', next: '16.0.0', 'server-only': '0.0.1' },
     }),
     'tsconfig.json': JSON.stringify({
-      compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
+      compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*', './generated/*'] } },
     }),
+    'generated/server/token.ts': "import 'server-only';\nexport const token = 'secret';\n",
     'src/lib/db.ts': "import 'server-only';\nexport const db = { query: () => 1 };\n",
     'src/lib/note.ts':
       "// clients may import this; it is not 'server-only'\nexport const note = 1;\n",

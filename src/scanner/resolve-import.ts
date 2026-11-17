@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
+import { aliasPath, matchingAliases } from '../detector/layer-paths.js';
 
 export interface AliasEntry {
   prefix: string;
@@ -29,31 +30,21 @@ export function firstPartyCandidates(base: string): string[] {
   return candidates.filter((candidate) => /\.(ts|tsx|vue|svelte)$/.test(candidate));
 }
 
-function specifierBase(
-  specifier: string,
-  fromAbsPath: string,
-  aliases: readonly AliasEntry[],
-): string | null {
-  if (specifier.startsWith('.')) {
-    return path.resolve(path.dirname(fromAbsPath), specifier);
-  }
-  for (const { prefix, dir } of aliases) {
-    if (specifier === prefix || specifier.startsWith(`${prefix}/`)) {
-      return path.resolve(dir, specifier.slice(prefix.length).replace(/^\//, ''));
-    }
-  }
-  return null;
-}
-
+/** The source file an import names: a relative path, else the first alias target with a file, as TypeScript tries them. */
 export function resolveFirstPartyImport(
   specifier: string,
   fromAbsPath: string,
   aliases: readonly AliasEntry[],
 ): string | null {
-  const base = specifierBase(specifier, fromAbsPath, aliases);
-  if (base === null) return null;
-  for (const candidate of firstPartyCandidates(base)) {
-    if (existsSync(candidate)) return candidate;
+  const bases = specifier.startsWith('.')
+    ? [path.resolve(path.dirname(fromAbsPath), specifier)]
+    : matchingAliases(specifier, aliases).flatMap((alias) => {
+        const target = aliasPath(alias, specifier);
+        return target === null ? [] : [path.resolve(target)];
+      });
+  for (const base of bases) {
+    const file = firstPartyCandidates(base).find((candidate) => existsSync(candidate));
+    if (file !== undefined) return file;
   }
   return null;
 }

@@ -27,27 +27,48 @@ export function layerRootOf(relativePath: string): LayerRoot | null {
     : { layer: segments[index]!, dir: segments.slice(0, index + 1).join('/') };
 }
 
+/**
+ * The aliases TypeScript tries for a bare specifier, in order: each target of the longest prefix it matches, the first
+ * declared on a tie.
+ */
+export function matchingAliases<Alias extends LayerAlias>(
+  specifier: string,
+  aliases: readonly Alias[],
+): Alias[] {
+  let best: string | null = null;
+  for (const { prefix } of aliases) {
+    const matches = specifier === prefix || specifier.startsWith(`${prefix}/`);
+    if (matches && (best === null || prefix.length > best.length)) best = prefix;
+  }
+  return aliases.filter(({ prefix }) => prefix === best);
+}
+
+/**
+ * The path an alias maps a specifier it matches to: the rest of the specifier in place of the target's `*`, else
+ * appended to the target; null when a `*` would match nothing.
+ */
+export function aliasPath(alias: LayerAlias, specifier: string): string | null {
+  const rest = specifier.slice(alias.prefix.length);
+  if (!alias.dir.includes('*')) return alias.dir + rest;
+  return rest === '' ? null : alias.dir.replace('*', () => rest.slice(1));
+}
+
 /** The app-relative path an import points at, or null for a package or a path outside the app. */
 export function resolveImportPath(
   fileRelativePath: string,
   specifier: string,
   aliases: readonly LayerAlias[],
 ): string | null {
-  let base: string;
-  let rest: string;
+  let written: string | null;
   if (specifier.startsWith('.')) {
-    base = fileRelativePath.split('/').slice(0, -1).join('/');
-    rest = specifier;
+    written = `${fileRelativePath.split('/').slice(0, -1).join('/')}/${specifier}`;
   } else {
-    const alias = aliases.find(
-      ({ prefix }) => specifier === prefix || specifier.startsWith(`${prefix}/`),
-    );
-    if (alias === undefined) return null;
-    base = alias.dir;
-    rest = specifier.slice(alias.prefix.length);
+    const alias = matchingAliases(specifier, aliases)[0];
+    written = alias === undefined ? null : aliasPath(alias, specifier);
   }
+  if (written === null) return null;
   const segments: string[] = [];
-  for (const segment of `${base}/${rest}`.split('/')) {
+  for (const segment of written.split('/')) {
     if (segment === '' || segment === '.') continue;
     if (segment !== '..') segments.push(segment);
     else if (segments.pop() === undefined) return null;
@@ -100,8 +121,9 @@ export interface PackageScope {
 }
 
 /**
- * The repo-relative module an import names, first hop, as written: a relative or tsconfig-alias path (aliases win
- * over `imports`, as in TypeScript), a `#` import (the first target of the key it matches in the nearest package.json's `imports` that names a source file, else
+ * The repo-relative module an import names, first hop, as written: a relative path, or the first target of its
+ * tsconfig alias that names a source file (aliases win over `imports` and packages, as in TypeScript, which falls
+ * through to them only when no target does; the first target's path when nothing does), a `#` import (the first target of the key it matches in the nearest package.json's `imports` that names a source file, else
  * null), or a workspace package (its entry for the root import; its directory with a trailing `/` when the entry is
  * unknown; for a subpath, the first target of the `exports` key it matches that names a source file, else the path
  * under the package directory). `scopes` come deepest first. `fileFor` picks the source file a path names, if any
@@ -131,20 +153,28 @@ export function resolveImportTarget(
     }
     return null;
   };
-  let base = resolveImportPath(fromPath, specifier, aliases);
-  if (base === null && specifier.startsWith('#')) {
+  const paths = (
+    specifier.startsWith('.')
+      ? [resolveImportPath(fromPath, specifier, aliases)]
+      : matchingAliases(specifier, aliases).map((alias) =>
+          resolveImportPath(fromPath, specifier, [alias]),
+        )
+  ).filter((candidate) => candidate !== null);
+  for (const candidate of paths) {
+    const file = fileFor(candidate);
+    if (file !== null) return file;
+  }
+  const written = paths[0] ?? null;
+  if (specifier.startsWith('.')) return written;
+  if (specifier.startsWith('#')) {
     const scope = scopes.find(({ dir }) => dir === '' || fromPath.startsWith(`${dir}/`));
-    return scope === undefined ? null : subpathFile(scope.imports, specifier);
+    return (scope === undefined ? null : subpathFile(scope.imports, specifier)) ?? written;
   }
-  if (base === null) {
-    const owner = packages.find(
-      ({ name }) => specifier === name || specifier.startsWith(`${name}/`),
-    );
-    if (owner === undefined) return null;
-    if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
-    const exported = subpathFile(owner.subpaths, `.${specifier.slice(owner.name.length)}`);
-    if (exported !== null) return exported;
-    base = `${owner.dir}${specifier.slice(owner.name.length)}`;
-  }
-  return fileFor(base) ?? base;
+  const owner = packages.find(({ name }) => specifier === name || specifier.startsWith(`${name}/`));
+  if (owner === undefined) return written;
+  if (specifier === owner.name) return owner.entry ?? `${owner.dir}/`;
+  const exported = subpathFile(owner.subpaths, `.${specifier.slice(owner.name.length)}`);
+  if (exported !== null) return exported;
+  const base = `${owner.dir}${specifier.slice(owner.name.length)}`;
+  return fileFor(base) ?? written ?? base;
 }

@@ -145,9 +145,9 @@ describe('generated ESLint dependency rules (end to end)', () => {
     }
   });
 
-  it('reports a client module importing a server-only module, by alias, relative path or .js extension', async () => {
+  it('reports a client module importing a server-only module, by alias (any of its targets), relative path or .js extension', async () => {
     const file = at('src', 'components', 'new.tsx');
-    for (const specifier of ['@/lib/db', '../lib/db', '@/lib/db.js']) {
+    for (const specifier of ['@/lib/db', '../lib/db', '@/lib/db.js', '@/server/token']) {
       const source = `'use client';\nimport { db } from '${specifier}';\nexport const X = db;\n`;
       expect(await ruleHits(eslint, SERVER_CLIENT, source, file)).toBe(1);
     }
