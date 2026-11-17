@@ -112,7 +112,8 @@ Setup for Claude Desktop, Claude Code, Cursor and other clients is in [MCP setup
 
 ## Quick start
 
-Requires Node 20 or newer. Run these in a folder with a `tsconfig.json`. In a monorepo, `scan` and `recommend`
+Requires Node 20 or newer. Run these in a folder with a `tsconfig.json`, or with only named variants such as
+`tsconfig.web.json`. In a monorepo, `scan` and `recommend`
 also accept the root and cover every app, while `init` and `generate` work on one app at a time (for example
 `apps/web`); at a root with several apps they stop, list the apps, and ask you to rerun with one.
 
@@ -643,7 +644,9 @@ and erase the barrel-versus-deep signal).
 **Path aliases.** archprint reads `paths` and `baseUrl` from the app's `tsconfig.json` and its `extends` chain.
 When that file only lists other projects under `references` (the solution-style layout create-vite, Angular and Nx
 generate), archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`,
-as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it. A key
+as TypeScript does. A folder with no `tsconfig.json` or `tsconfig.base.json` whose configs are named variants, such
+as `tsconfig.web.json` and `tsconfig.native.json`, is read the same way, keeping the aliases the variants agree on.
+Deep mode resolves each file with the compiler options of the project that includes it. A key
 whose `*` follows its prefix directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target
 (`@components/button` is `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that
 declares `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from

@@ -63,7 +63,12 @@ Both modes read `paths` and `baseUrl` from the app's `tsconfig.json` and its `ex
 lists other projects under `references` (the solution-style layout create-vite, Angular and Nx generate),
 archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`, as
 TypeScript does. An alias in the `tsconfig.json` itself takes precedence, and an alias two referenced projects map
-to different folders stays unresolved in the fast pass rather than guessed. A key whose `*` follows its prefix
+to different folders stays unresolved in the fast pass rather than guessed. A folder with neither a `tsconfig.json`
+nor a `tsconfig.base.json`, whose configs are named variants such as `tsconfig.web.json` (the files a build passes to
+`tsc -p`, or a setup script copies to `tsconfig.json`), is read the same way: archprint keeps the aliases the
+variants agree on, and resolves each file in deep mode with the first variant, by name, that includes it. Such a
+folder counts as an app unless a folder with a `tsconfig.json` or `tsconfig.base.json` sits above it, since
+TypeScript would use that config instead. A key whose `*` follows its prefix
 directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target (`@components/button` is
 `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that declares
 `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
