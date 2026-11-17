@@ -1,13 +1,20 @@
 import { existsSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
-import { listSourceFiles, moduleReferences, stringLiterals } from '../scanner/file-walker.js';
+import {
+  listSourceFiles,
+  type ModuleLoader,
+  moduleLoaders,
+  moduleReferences,
+  stringLiterals,
+} from '../scanner/file-walker.js';
 import { classifyFile } from '../scanner/role-classifier.js';
 import { isSourceFileName } from '../scanner/source-paths.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { type ConfigAliases, aliasesFor, importResolution } from './declared-rules.js';
 import { sourceFileFor } from './import-target.js';
 import { resolveImportTarget } from './layer-paths.js';
+import { createViteRoots, loadedFiles } from './module-loaders.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
@@ -16,7 +23,10 @@ export interface ReferenceGraph {
   root: string;
   /** Whether each file is a test, judged on its path from the root or inside its app. */
   tests: ReadonlySet<string>;
-  /** Imports of any kind (type-only included), re-exports, `import()` and `require()` calls, and tool configs. */
+  /**
+   * Imports of any kind (type-only included), re-exports, `import()` and `require()` calls, `import.meta.glob` and
+   * `require.context` loaders, and tool configs.
+   */
   referrers: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
@@ -47,6 +57,15 @@ const readSafely = (read: () => string[]): string[] => {
     return read();
   } catch {
     /* v8 ignore next -- defensive: an unreadable or malformed file references nothing */
+    return [];
+  }
+};
+
+const readLoaders = (file: string): ModuleLoader[] => {
+  try {
+    return moduleLoaders(file);
+  } catch {
+    /* v8 ignore next -- defensive: an unreadable or malformed file loads nothing */
     return [];
   }
 };
@@ -113,7 +132,23 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
       refer(file.relativePath, resolve(file.relativePath, specifier));
     }
   }
-  for (const config of toolConfigs(absoluteRoot, configs, [...referrers.keys()])) {
+  const sources = [...referrers.keys()];
+  const viteRootOf = createViteRoots(absoluteRoot);
+  for (const file of walked) {
+    for (const loader of readLoaders(file.absolutePath)) {
+      const aliases = aliasesFor(file.relativePath, configs);
+      for (const target of loadedFiles(
+        loader,
+        file.relativePath,
+        sources,
+        aliases,
+        viteRootOf(file.relativePath),
+      )) {
+        refer(file.relativePath, target);
+      }
+    }
+  }
+  for (const config of toolConfigs(absoluteRoot, configs, sources)) {
     for (const literal of readSafely(() => stringLiterals(path.join(absoluteRoot, config)))) {
       const specifier = literal.replace(/^<rootDir>\//, './');
       refer(config, resolve(config, specifier.startsWith('.') ? specifier : `./${specifier}`));

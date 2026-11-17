@@ -187,8 +187,12 @@ heuristic. **When not to use:** rarely; low volume.
 
 Production files nothing in the workspace references, listed after the files only tests import (dead code the
 tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
-from` through a barrel, an `import()` or `require()` call, or a tool config naming the file, such as Vitest's
-`setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
+from` through a barrel, an `import()` or `require()` call, an `import.meta.glob` (Vite) or `require.context`
+(webpack) call whose patterns or folder are written out (every file it matches; `!` patterns excluded; relative
+patterns start at a literal `base` option when there is one; a pattern starting with `/` starts at the nearest folder
+with a Vite config, else with a package.json, not at a `root` set inside the Vite config; a `require.context` filter
+that is not written out counts every file in its folder), or a tool config naming
+the file, such as Vitest's `setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
 through its own nearest tsconfig, so another package's import or a nested app's alias counts. JavaScript files
 (`.js`, `.jsx`, `.mjs`, `.cjs`), `.mts` and `.cts` files, and Astro components (their frontmatter and `<script>`
 blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
@@ -215,8 +219,8 @@ listed. A dedicated dead-code tool such as knip covers more of these cases.
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
 November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
 a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3, and Expo Router),
-pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob`, a code
-generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
+pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob` before
+archprint followed it, a code generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
 31 were imported only by tests. Treat the list as candidates to check before deleting anything, not as dead code.
 
 ### Reachability (Report)
