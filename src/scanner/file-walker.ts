@@ -12,6 +12,7 @@ import {
 import { buildWorkspaceMap, owningConfigPath, workspaceAliases } from './workspace-resolver.js';
 import { buildWorkspacePackageMap, findWorkspaceRoot } from './workspace-packages.js';
 import { createIgnoreFilter } from './ignore-filter.js';
+import { computedPath } from './computed-paths.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
 import { isSkippedFolder, isSourceFileName } from './source-paths.js';
 
@@ -311,11 +312,13 @@ function fastParse(absoluteFilePath: string): FastParse {
   const visit = (node: ts.Node): void => {
     const loader = loaderCall(node);
     if (loader !== null) loaders.push(loader);
+    const parts = computedPath(node, sourceFile);
+    if (parts !== null) loaders.push({ kind: 'path', parts });
     if (
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
       node.arguments.length > 0 &&
-      ts.isStringLiteral(node.arguments[0]!)
+      ts.isStringLiteralLike(node.arguments[0]!)
     ) {
       raw.push({
         specifier: node.arguments[0].text,
@@ -332,7 +335,7 @@ function fastParse(absoluteFilePath: string): FastParse {
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'require' &&
       node.arguments.length > 0 &&
-      ts.isStringLiteral(node.arguments[0]!)
+      ts.isStringLiteralLike(node.arguments[0]!)
     ) {
       raw.push({
         specifier: node.arguments[0].text,
@@ -400,10 +403,14 @@ export function moduleReferences(absoluteFilePath: string): string[] {
   return parseFastImports(absoluteFilePath).map((imp) => imp.specifier);
 }
 
-/** Files a bundler loads by pattern: `import.meta.glob` (Vite) patterns, or a `require.context` (webpack) folder. */
+/**
+ * Files a bundler or runtime loads by pattern: `import.meta.glob` (Vite) patterns, a `require.context` (webpack)
+ * folder, or a path computed at runtime, as the written parts around each hole (`./tasks/`, `.ts`).
+ */
 export type ModuleLoader =
   | { kind: 'glob'; patterns: string[]; base: string | null }
-  | { kind: 'context'; directory: string; recursive: boolean; filter: RegExp | null };
+  | { kind: 'context'; directory: string; recursive: boolean; filter: RegExp | null }
+  | { kind: 'path'; parts: string[] };
 
 const literalText = (node: ts.Node | undefined): string | null =>
   node !== undefined && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
@@ -475,8 +482,8 @@ function loaderCall(node: ts.Node): ModuleLoader | null {
 
 /**
  * The `import.meta.glob(...)` and `require.context(...)` calls in a file whose patterns, `base` option or folder are
- * literals. A `require.context` filter or recursion flag that is not a literal is read as matching everything under
- * the folder.
+ * literals (a `require.context` filter or recursion flag that is not a literal is read as matching everything under
+ * the folder), and the paths it loads by computing them (see `computedPath`).
  */
 export const moduleLoaders = (absoluteFilePath: string): ModuleLoader[] =>
   fastParse(absoluteFilePath).loaders;

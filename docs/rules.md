@@ -191,7 +191,15 @@ from` through a barrel, an `import()` or `require()` call, an `import.meta.glob`
 (webpack) call whose patterns or folder are written out (every file it matches; `!` patterns excluded; relative
 patterns start at a literal `base` option when there is one; a pattern starting with `/` starts at the nearest folder
 with a Vite config, else with a package.json, not at a `root` set inside the Vite config; a `require.context` filter
-that is not written out counts every file in its folder), or a tool config naming the file, such as Vitest's
+that is not written out counts every file in its folder), a path computed at runtime (an `import()` or `require()`
+of a template such as `` `./pages/${name}.tsx` ``, of `path.join` or `path.resolve` from `__dirname` or
+`import.meta.dirname` (also through a `const` or `pathToFileURL(...).href`), or `new URL('./worker.ts',
+import.meta.url)`; each part not written out matches within one folder in a Vite project, which expands such a path
+only when it ends with a file extension and is not `` `./${name}.ext` `` in the file's own folder, and across folders
+elsewhere, so every file the pattern matches counts, whether or not a runtime value names it; a path that is nothing
+but such a part in the file's folder or a folder above it, like `` `./${name}` `` or `` `../${name}` ``, counts no
+file), or a
+tool config naming the file, such as Vitest's
 `setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
 through its own nearest tsconfig, so another package's import or a nested app's alias counts. A `#` import such as
 `#hooks/useBudget` resolves through the `imports` field of the nearest package.json, as Node.js does for `./`
