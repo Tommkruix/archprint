@@ -146,6 +146,12 @@ function gluedPatternAliases(prefix: string, folder: string, rest: string): Alia
 const isSegmentStar = (target: string, star: number): boolean =>
   star > 0 && target[star - 1] === '/' && (star === target.length - 1 || target[star + 1] === '/');
 
+/** A `paths` key's substitutions TypeScript accepts: an array (error 5063 otherwise) of strings (error 5064). */
+const validTargets = (targets: unknown): string[] =>
+  Array.isArray(targets)
+    ? targets.filter((target): target is string => typeof target === 'string')
+    : [];
+
 /**
  * A config's aliases, each `paths` target in order (a key with several targets repeats its prefix, for TypeScript
  * tries them in turn), a target keeping a `*` that is not its last segment; a `*` key's targets come before those of
@@ -163,7 +169,7 @@ function configAliases({ configPath, config }: TsProject): AliasEntry[] {
   const exact: AliasEntry[] = [];
   const glued: AliasEntry[] = [];
   for (const [alias, targets] of Object.entries(paths)) {
-    for (const target of targets ?? []) {
+    for (const target of validTargets(targets)) {
       const star = target.indexOf('*');
       if (alias.endsWith('*') && !alias.endsWith('/*') && isSegmentStar(target, star)) {
         glued.push(
