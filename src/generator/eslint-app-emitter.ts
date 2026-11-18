@@ -24,6 +24,7 @@ import { LINTED_FILES } from './eslint-plugin-emitter.js';
 import { layerRuleName } from './layer-emitters.js';
 import { aliasesFor } from '../detector/declared-rules.js';
 import { DECLARED_RUNTIME, type DeclaredEslintRules } from './declared-emitters.js';
+import { exactAppFiles } from './depcruise-exempt.js';
 import { DEPENDENCY_INTERNALS_RULE } from './dependency-internals-emitters.js';
 import { ENTRY_PURITY_RULE } from './entry-purity-emitters.js';
 import { PHANTOM_DEPENDENCY_RULE } from './phantom-dependency-emitters.js';
@@ -64,6 +65,8 @@ export interface AppScope {
   /** Modules the app's framework supplies, which no package provides, such as SvelteKit's `$app`. */
   virtualModules: string[];
   ignored: string[];
+  /** Files a test runner config names to run around the tests, which the rules skip like any test file. */
+  testSetupFiles: string[];
 }
 
 export interface EslintAppRules extends AppScope {
@@ -318,7 +321,10 @@ export function renderEslintAppRules(rules: EslintAppRules, outDir: string): Ren
     aliases: rules.aliases,
     virtualModules: rules.virtualModules,
     ignored: rules.ignored,
-    tests: (ROLE_PATTERNS.get('TEST') ?? []).map((pattern) => pattern.source),
+    tests: [
+      ...(ROLE_PATTERNS.get('TEST') ?? []).map((pattern) => pattern.source),
+      ...(rules.testSetupFiles.length === 0 ? [] : [exactAppFiles(rules.testSetupFiles, '.')]),
+    ],
   };
   const { layers, phantom, serverClient, internals, entry, declared } = rules;
   const json = (value: unknown): string => JSON.stringify(value, null, 2);

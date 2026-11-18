@@ -63,6 +63,10 @@ const REPO: Record<string, string> = {
     "export { db } from '../lib/db';\nexport * from '@/lib/db';\n",
   'apps/web/src/components/lazy.ts': "export const load = () => import('@/lib/db');\n",
   'apps/web/src/components/subpath.ts': "import { db } from '#data/db';\nexport const s = db;\n",
+  'apps/web/vitest.config.ts':
+    "export default { test: { setupFiles: ['./src/components/setup.ts'] } };\n",
+  'apps/web/src/components/setup.ts':
+    "import { db } from '@/lib/db';\nexport const t = [db, fetch('/t'), process.env.T];\n",
   'apps/web/src/components/card.test.tsx':
     "import { db } from '@/lib/db';\nexport const t = [db, fetch('/t')];\n",
   'apps/web/src/cache/cache.ts':

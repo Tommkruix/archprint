@@ -29,6 +29,12 @@ export const literalGlob = (file: string): string =>
     .replace(/[{}]/g, '\\$&')
     .replace(/^!/, '\\!');
 
+/** Test files as globs: the test paths, and each file a test runner config names to run around the tests. */
+export const testGlobs = (setupFiles: readonly string[]): string[] => [
+  ...TEST_GLOBS,
+  ...setupFiles.map(literalGlob),
+];
+
 /**
  * The globs that exempt one app file for a config at the repository root and for a config inside the app.
  * A file glob (from literalGlob) is prefixed with the escaped app path; a ** glob passes through.

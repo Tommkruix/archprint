@@ -1,4 +1,4 @@
-import { walkSourceTree } from '../scanner/file-walker.js';
+import { runnerSetupFiles, walkSourceTree } from '../scanner/file-walker.js';
 import { buildWorkspaceMap, hasProjectConfig } from '../scanner/workspace-resolver.js';
 import { svelteKitModules } from '../scanner/sveltekit.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
@@ -90,6 +90,8 @@ export interface ScanResult {
   layerAliases: LayerAlias[];
   virtualModules: string[];
   gitignoredPaths: string[];
+  /** Files a test runner config names to run around the tests, which count as test files though no test path names them. */
+  testSetupFiles: string[];
   cycles: CycleAnalysis;
   orphans: OrphanAnalysis;
   reachability: ReachabilityAnalysis;
@@ -176,6 +178,7 @@ export function scanRepo(
     layerAliases: layerAliases(appDir),
     virtualModules: svelteKitModules(appDir),
     gitignoredPaths: sourceTree.ignored,
+    testSetupFiles: runnerSetupFiles(appDir),
     cycles,
     orphans,
     reachability,

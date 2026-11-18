@@ -39,6 +39,12 @@ const toleratedAppFiles = (files: readonly string[], appPath: string): string =>
   return `^${prefix === '' ? '' : `(?:${prefix})?`}(?:${files.map(escapeRegExp).join('|')})$`;
 };
 
+/** Test files as dependency-cruiser paths: the test paths, and exactly the files a test runner config names. */
+export const testPaths = (setupFiles: readonly string[], appPath: string): string[] =>
+  setupFiles.length === 0
+    ? [TEST_ROLE_REGEX]
+    : [TEST_ROLE_REGEX, toleratedAppFiles(setupFiles, appPath)];
+
 /** The base patterns, plus one regex for exactly the tolerated app files. */
 export function exemptDepcruiseFrom(
   base: string | readonly string[],

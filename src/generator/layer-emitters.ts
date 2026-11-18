@@ -1,6 +1,6 @@
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import type { LayerBoundary } from '../detector/layer-detector.js';
-import { appPathPrefix, exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
+import { appPathPrefix, exemptDepcruiseFrom, testPaths } from './depcruise-exempt.js';
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -35,6 +35,7 @@ export function toDependencyCruiser(
   include: readonly GenerationStatus[] = ['AUTO'],
   appPath = '.',
   allowedFor: (ruleId: string) => readonly string[] = () => [],
+  setupFiles: readonly string[] = [],
 ): DependencyCruiserConfig {
   const forbidden = selected(boundaries, include).map((boundary) => ({
     name: layerRuleName(boundary),
@@ -43,7 +44,7 @@ export function toDependencyCruiser(
     from: {
       path: layerPath(boundary.fromDirs, appPath),
       pathNot: exemptDepcruiseFrom(
-        TEST_ROLE_REGEX,
+        testPaths(setupFiles, appPath),
         [...boundary.violations, ...allowedFor(layerRuleName(boundary)).map((file) => ({ file }))],
         appPath,
       ),

@@ -1,6 +1,6 @@
 import { ENTRY_ROLES, type EntryPurityAnalysis } from '../detector/entry-purity-detector.js';
 import { ROLE_PATTERNS } from '../scanner/role-classifier.js';
-import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
+import { exemptDepcruiseFrom, testPaths } from './depcruise-exempt.js';
 
 export const ENTRY_PURITY_RULE = 'no-import-framework-entry';
 
@@ -28,6 +28,7 @@ export function toDependencyCruiserEntryPurity(
   analysis: EntryPurityAnalysis,
   allowedFor: (ruleId: string) => readonly string[],
   appPath = '.',
+  setupFiles: readonly string[] = [],
 ): EntryPurityConfig {
   if (analysis.entryCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
   const conform = analysis.entryCount - analysis.offenderCount;
@@ -43,7 +44,7 @@ export function toDependencyCruiserEntryPurity(
         severity: 'error',
         from: {
           pathNot: exemptDepcruiseFrom(
-            ['node_modules', TEST_ROLE_REGEX, entryPath()],
+            ['node_modules', ...testPaths(setupFiles, appPath), entryPath()],
             allowedFor(ENTRY_PURITY_RULE).map((file) => ({ file })),
             appPath,
           ),

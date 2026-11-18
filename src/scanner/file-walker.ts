@@ -15,6 +15,7 @@ import { createIgnoreFilter } from './ignore-filter.js';
 import { computedPath } from './computed-paths.js';
 import { resolveFirstPartyImport } from './resolve-import.js';
 import { isSkippedFolder, isSourceFileName } from './source-paths.js';
+import { namesTestSetup, testSetupFiles } from './test-setup-files.js';
 
 const SFC_SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 const isSingleFileComponent = (filePath: string): boolean =>
@@ -178,9 +179,34 @@ function readHead(file: string, bytes = 512): string {
   }
 }
 
+const TEST_RUNNER_SETUP = {
+  role: 'TEST',
+  confidence: 1,
+  matchedRule: 'test-runner-setup',
+} as const;
+
+const relativePathOf = (rootDir: string, absolutePath: string): string =>
+  path.relative(rootDir, absolutePath).split(path.sep).join('/');
+
+const setupFilesAmong = (rootDir: string, walked: readonly string[]): Set<string> =>
+  testSetupFiles(
+    rootDir,
+    walked
+      .filter((file) => namesTestSetup(path.basename(file)))
+      .map((file) => relativePathOf(rootDir, file)),
+  );
+
+/** The files a test runner config under `rootDir` names to run around the tests, from `rootDir`, sorted. */
+export const runnerSetupFiles = (rootDir: string): string[] =>
+  [...setupFilesAmong(rootDir, listSourceFiles(rootDir, namesTestSetup))].sort();
+
 export function walkRepo(rootDir: string): WalkedFile[] {
-  return listSourceFiles(rootDir).map((absolutePath) => {
-    const relativePath = path.relative(rootDir, absolutePath).split(path.sep).join('/');
+  const walked = listSourceFiles(rootDir, (name) => isSourceFileName(name) || namesTestSetup(name));
+  const setupFiles = setupFilesAmong(rootDir, walked);
+  const sources = walked.filter((file) => isSourceFileName(path.basename(file)));
+  return sources.map((absolutePath) => {
+    const relativePath = relativePathOf(rootDir, absolutePath);
+    if (setupFiles.has(relativePath)) return { absolutePath, relativePath, ...TEST_RUNNER_SETUP };
     const base = classifyFile(relativePath);
     if (base.role === 'UNKNOWN' && !relativePath.endsWith('.tsx')) {
       let head: string;

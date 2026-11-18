@@ -14,36 +14,50 @@ import { evaluateGate } from '../../src/detector/confidence-gate.js';
 const clean = (population: number) =>
   evaluateGate({ roleFileCount: population, violatingFileCount: 0, roleConfidence: 1 });
 
+const SETUP = ['src/vitest.setup.ts'];
+
 const families = [
-  toEslintTestIsolation({
-    appDir: '.',
-    productionFileCount: 60,
-    testFileCount: 5,
-    offenderCount: 0,
-    gate: clean(60),
-    violations: [],
-  }),
-  toEslintDeepRelative({
-    appDir: '.',
-    relativeImporterCount: 60,
-    offenderCount: 0,
-    gate: clean(60),
-    violations: [],
-  }),
-  toEslintConsoleIsolation({
-    appDir: '.',
-    libraryFileCount: 60,
-    offenderCount: 0,
-    gate: clean(60),
-    violations: [],
-  }),
-  toEslintEnvAccess({
-    appDir: '.',
-    subjectFileCount: 60,
-    offenderCount: 0,
-    gate: clean(60),
-    violations: [],
-  }),
+  toEslintTestIsolation(
+    {
+      appDir: '.',
+      productionFileCount: 60,
+      testFileCount: 5,
+      offenderCount: 0,
+      gate: clean(60),
+      violations: [],
+    },
+    SETUP,
+  ),
+  toEslintDeepRelative(
+    {
+      appDir: '.',
+      relativeImporterCount: 60,
+      offenderCount: 0,
+      gate: clean(60),
+      violations: [],
+    },
+    SETUP,
+  ),
+  toEslintConsoleIsolation(
+    {
+      appDir: '.',
+      libraryFileCount: 60,
+      offenderCount: 0,
+      gate: clean(60),
+      violations: [],
+    },
+    SETUP,
+  ),
+  toEslintEnvAccess(
+    {
+      appDir: '.',
+      subjectFileCount: 60,
+      offenderCount: 0,
+      gate: clean(60),
+      violations: [],
+    },
+    SETUP,
+  ),
 ].map((family) => family!);
 
 const REPO_CONFIG = `import tseslint from '${import.meta.resolve('typescript-eslint')}';
@@ -113,6 +127,18 @@ describe('archprint family rules in a repo that configures the same core rules (
       'archprint/env-access',
     ]);
     expect(await ruleIds('export const c = process.cwd();\n', 'src/x.ts')).toEqual([]);
+  });
+
+  it('exempts a file a test runner config names, as the scan does, and the same code anywhere else breaks every family', async () => {
+    const code =
+      "console.log(process.env.KEY);\nimport '../../../a';\nimport { a } from './a.test';\n";
+    expect(await ruleIds(code, 'src/vitest.setup.ts')).toEqual([]);
+    expect(await ruleIds(code, 'src/vitest.other.ts')).toEqual([
+      'archprint/console-isolation',
+      'archprint/env-access',
+      'archprint/import-style',
+      'archprint/test-isolation',
+    ]);
   });
 
   it('exempts the test files the scan left out', async () => {
