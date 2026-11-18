@@ -2,9 +2,13 @@ import * as path from 'node:path';
 import { type PropertyAccessExpression, Project, type SourceFile, SyntaxKind } from 'ts-morph';
 import { walkRepo, type WalkedFile } from './file-walker.js';
 
+export type UsageSubject = 'console' | 'process.env';
+
 export interface FileUsage {
   usesConsole: boolean;
   usesProcessEnv: boolean;
+  /** The line of each access, in source order. */
+  lines: Record<UsageSubject, number[]>;
 }
 
 export interface UsageScan {
@@ -12,8 +16,6 @@ export interface UsageScan {
   files: WalkedFile[];
   usage: Map<string, FileUsage>;
 }
-
-export type UsageSubject = 'console' | 'process.env';
 
 function subjectOf(access: PropertyAccessExpression): UsageSubject | null {
   const target = access.getExpression();
@@ -45,18 +47,19 @@ export function scanUsage(appDir: string): UsageScan {
   const usage = new Map<string, FileUsage>();
 
   for (const file of files) {
-    let usesConsole = false;
-    let usesProcessEnv = false;
+    let lines: Record<UsageSubject, number[]> = { console: [], 'process.env': [] };
     try {
       const sourceFile = project.addSourceFileAtPath(file.absolutePath);
-      const lines = accessLines(sourceFile);
-      usesConsole = lines.console.length > 0;
-      usesProcessEnv = lines['process.env'].length > 0;
+      lines = accessLines(sourceFile);
       project.removeSourceFile(sourceFile);
     } catch {
       /* v8 ignore next -- defensive: unreadable/malformed source contributes no usage */
     }
-    usage.set(file.relativePath, { usesConsole, usesProcessEnv });
+    usage.set(file.relativePath, {
+      usesConsole: lines.console.length > 0,
+      usesProcessEnv: lines['process.env'].length > 0,
+      lines,
+    });
   }
 
   return { root, files, usage };

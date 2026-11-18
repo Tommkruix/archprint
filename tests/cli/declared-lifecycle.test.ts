@@ -230,6 +230,35 @@ describe('declared rules: adopted with generate --declare, then kept by the ratc
     });
   });
 
+  it('refuses a usage the code has only as a JSX attribute, which the rule could never see', () => {
+    writeTree(repo, {
+      'CLAUDE.md': `${CLAUDE_MD}\n- Avoid dangerouslySetInnerHTML.`,
+      'tsconfig.json': JSON.stringify({ compilerOptions: { jsx: 'preserve' } }),
+      'src/components/preview.tsx':
+        'export const P = () => <div dangerouslySetInnerHTML={{ __html: "" }} />;\n',
+    });
+    const result = write({
+      declare: {
+        rules: [
+          {
+            template: 'forbid-usage',
+            source: quote('Avoid dangerouslySetInnerHTML.'),
+            name: 'no-dangerous-html',
+            files: ['src/**'],
+            usage: ['dangerouslySetInnerHTML'],
+          },
+        ],
+      },
+    });
+    expect(result.declared.adopted).toEqual([]);
+    expect(result.declared.refused).toEqual([
+      expect.objectContaining({
+        label: 'doc-no-dangerous-html',
+        reason: expect.stringContaining('but never reads it as a global'),
+      }),
+    ]);
+  });
+
   it('refuses a glob that matches no file, and a rule whose files are in another app', () => {
     const typo = write({ declare: { rules: [{ ...NO_FETCH, files: ['lib/**'] }] } });
     expect(typo.declared.refused).toEqual([

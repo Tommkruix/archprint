@@ -7,6 +7,15 @@ export interface GlobalReference {
   line: number;
 }
 
+export interface GlobalUsage {
+  references: GlobalReference[];
+  /**
+   * The usages whose name the file has in another form, not as a global read: a JSX attribute, a property or member
+   * name, a declaration, a local, or a type. A rule naming one of these may not name a global at all.
+   */
+  otherForms: string[];
+}
+
 interface Usage {
   usage: string;
   name: string;
@@ -107,14 +116,11 @@ function singleFileChecker(
  * and typescript-eslint's scope analysis resolve a reference; `declare global` declares the global itself. Reads in
  * type positions do not count; `typeof x` does.
  */
-export function globalReferences(
-  absoluteFilePath: string,
-  usages: readonly string[],
-): GlobalReference[] {
+export function globalUsage(absoluteFilePath: string, usages: readonly string[]): GlobalUsage {
   const wanted = usages.map(toUsage);
   const names = new Set(wanted.map((usage) => usage.name));
   const { source, scriptKind } = readSource(absoluteFilePath);
-  if (![...names].some((name) => source.includes(name))) return [];
+  if (![...names].some((name) => source.includes(name))) return { references: [], otherForms: [] };
   const { sourceFile, checker } = singleFileChecker(absoluteFilePath, source, scriptKind);
   const declaredInFile = (node: ts.Identifier): boolean =>
     checker
@@ -124,6 +130,7 @@ export function globalReferences(
       ) ?? false;
 
   const references: GlobalReference[] = [];
+  const otherForms = new Set<string>();
   const record = (node: ts.Identifier, parent: ts.Node): void => {
     const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
     const member = memberRead(node, parent);
@@ -135,15 +142,9 @@ export function globalReferences(
   };
 
   function visit(node: ts.Node, parent: ts.Node | undefined, inType: boolean): void {
-    if (
-      ts.isIdentifier(node) &&
-      parent !== undefined &&
-      !inType &&
-      names.has(node.text) &&
-      isVariableRead(node, parent) &&
-      !declaredInFile(node)
-    ) {
-      record(node, parent);
+    if (ts.isIdentifier(node) && parent !== undefined && names.has(node.text)) {
+      if (!inType && isVariableRead(node, parent) && !declaredInFile(node)) record(node, parent);
+      else for (const usage of wanted) if (usage.name === node.text) otherForms.add(usage.usage);
     }
     if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) return;
     if (ts.isTypeQueryNode(node)) {
@@ -168,5 +169,11 @@ export function globalReferences(
   }
 
   visit(sourceFile, undefined, false);
-  return references;
+  return { references, otherForms: [...otherForms].sort() };
 }
+
+/** The global reads of `usages` in a file; see globalUsage. */
+export const globalReferences = (
+  absoluteFilePath: string,
+  usages: readonly string[],
+): GlobalReference[] => globalUsage(absoluteFilePath, usages).references;

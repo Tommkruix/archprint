@@ -37,8 +37,9 @@ describe('evaluateRules', () => {
     );
   });
 
-  it('finds test-isolation and console findings by target and by file', () => {
-    const tests = scanRepo(fixture('test-isolation-auto'));
+  it('finds test-isolation findings by target and console findings by access', () => {
+    const tests = scanRepo(fixture('test-isolation'));
+    expect(tests.testIsolation.violations.length).toBeGreaterThan(0);
     expect(evaluateRules(tests.appDir, [testIsolationRule(tests)])).toEqual(
       tests.testIsolation.violations.map((violation) => ({
         ruleId: 'test-isolation',
@@ -47,14 +48,18 @@ describe('evaluateRules', () => {
         kind: 'target',
       })),
     );
-    const logs = scanRepo(fixture('console-isolation-auto'));
+    const logs = scanRepo(fixture('console-isolation'));
+    expect(logs.consoleIsolation.violations.length).toBeGreaterThan(0);
     expect(evaluateRules(logs.appDir, [consoleIsolationRule(logs)])).toEqual(
-      logs.consoleIsolation.violations.map((violation) => ({
-        ruleId: 'console-isolation',
-        file: violation.file,
-        subject: 'console',
-        kind: 'usage',
-      })),
+      logs.consoleIsolation.violations.flatMap((violation) =>
+        violation.lines.map((line) => ({
+          ruleId: 'console-isolation',
+          file: violation.file,
+          subject: 'console',
+          kind: 'usage',
+          line,
+        })),
+      ),
     );
   });
 
@@ -144,16 +149,19 @@ describe('evaluateRules', () => {
     }
   });
 
-  it('finds env-access findings by file and workspace-package findings by specifier', () => {
+  it('finds env-access findings by access and workspace-package findings by specifier', () => {
     const env = scanRepo(fixture('env-access'));
     expect(env.envAccess.violations.length).toBeGreaterThan(0);
     expect(evaluateRules(env.appDir, [envAccessRule(env)])).toEqual(
-      env.envAccess.violations.map((violation) => ({
-        ruleId: 'env-access',
-        file: violation.file,
-        subject: 'process.env',
-        kind: 'usage',
-      })),
+      env.envAccess.violations.flatMap((violation) =>
+        violation.lines.map((line) => ({
+          ruleId: 'env-access',
+          file: violation.file,
+          subject: 'process.env',
+          kind: 'usage',
+          line,
+        })),
+      ),
     );
     const wpkg = scanRepo(fixture('workspace-package'));
     expect(wpkg.workspacePackageApi.violations.length).toBeGreaterThan(0);
@@ -167,7 +175,7 @@ describe('evaluateRules', () => {
     );
   });
 
-  it('reports a story import against the importing file, and a UI import of the data layer', () => {
+  it('reports a story import against the importing file (one importer per story here), and a UI import of the data layer', () => {
     const stories = scanRepo(fixture('stories-isolation'));
     expect(stories.storiesIsolation.violations.length).toBeGreaterThan(0);
     expect(evaluateRules(stories.appDir, [storiesIsolationRule(stories)])).toEqual(
@@ -190,7 +198,7 @@ describe('evaluateRules', () => {
     );
   });
 
-  it('evaluates a role-layering rule against the boundary it names', () => {
+  it('evaluates a role-layering rule against the boundary it names: one break per file here, so the files the scan reports', () => {
     const scan = scanRepo(fixture('role-layering'));
     const boundary = scan.roleLayering.boundaries.find((b) => b.violations.length > 0)!;
     const findings = evaluateRules(scan.appDir, [roleLayeringRule(boundary)]);

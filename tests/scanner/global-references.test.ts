@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { globalReferences } from '../../src/scanner/global-references.js';
+import { globalReferences, globalUsage } from '../../src/scanner/global-references.js';
 import { writeTree } from '../integration/layer-app.js';
 
 describe('globalReferences', () => {
@@ -43,6 +43,26 @@ describe('globalReferences', () => {
       "export { fetch } from './other';",
     ].join('\n');
     expect(lines(source, ['fetch'])).toEqual([]);
+  });
+
+  it('names the usages the file has only in another form: a JSX attribute, a member, a local or a type', () => {
+    const otherForms = (source: string, usages: string[]): string[] => {
+      writeTree(root, { 'a.tsx': source });
+      return globalUsage(path.join(root, 'a.tsx'), usages).otherForms;
+    };
+    expect(
+      otherForms('export const P = () => <div dangerouslySetInnerHTML={{ __html: "" }} />;\n', [
+        'dangerouslySetInnerHTML',
+        'fetch',
+      ]),
+    ).toEqual(['dangerouslySetInnerHTML']);
+    expect(otherForms("window.localStorage.getItem('x');\n", ['localStorage'])).toEqual([
+      'localStorage',
+    ]);
+    expect(otherForms("const fetch = make();\nfetch('/x');\n", ['fetch'])).toEqual(['fetch']);
+    expect(otherForms('let r: Response;\n', ['Response'])).toEqual(['Response']);
+    expect(otherForms("fetch('/x');\n", ['fetch'])).toEqual([]);
+    expect(otherForms('process.argv;\n', ['process.env'])).toEqual([]);
   });
 
   it('leaves out a read that resolves to an import or declaration of the same name', () => {

@@ -1051,7 +1051,7 @@ describe('cli generate', () => {
   });
 
   it('scopes the env-access exemptions to the app for a config at the repository root', () => {
-    const env = { ...fakeEnv(60, 1), violations: [{ file: 'app/[id]/env.ts' }] };
+    const env = { ...fakeEnv(60, 1), violations: [{ file: 'app/[id]/env.ts', lines: [1] }] };
     const collected = collectEnforcement(emptyScan({ envAccess: env }), {
       enforcers: ESLINT,
       structural: true,

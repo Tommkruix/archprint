@@ -161,8 +161,8 @@ the CLI the mapping file your agent wrote:
 ```
 
 Each sentence comes back as enforce now (nothing breaks it today), enforce with a baseline (broken today, with the
-files and lines), already an archprint rule, check the mapping (the quote is not in the file, or the mapping
-matches no code), or guidance only. Archprint never calls a model: the agent only maps prose to a template, and
+files and lines), already an archprint rule, check the mapping (the quote is not in the file, the mapping
+matches no code, or it names something the code never uses as a global), or guidance only. Archprint never calls a model: the agent only maps prose to a template, and
 every number in the report is computed from your code. Adopt the ones you approve with
 `archprint generate <app> --declare mapping.json` (add `--baseline` for those the code breaks today): each becomes
 an ESLint rule whose error is your team's sentence, with its line in CLAUDE.md, and `archprint check` enforces it in
@@ -357,7 +357,9 @@ this layout and rewires your configs in place.
 `archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
-and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
+and now breaks it more often is reported, a recorded exception included. A new import is listed on its own; when
+the file has more of the same break (another `console` call), every one of them is listed, since which one is new
+cannot be told. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,

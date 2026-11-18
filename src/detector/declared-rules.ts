@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { findTsconfigDirs } from '../scanner/app-dirs.js';
 import { directoriesUnder } from '../scanner/directory-walk.js';
 import { valueModuleImports, walkRepo } from '../scanner/file-walker.js';
-import { globalReferences, type GlobalReference } from '../scanner/global-references.js';
+import { globalUsage, type GlobalUsage } from '../scanner/global-references.js';
 import { matchesAnyGlob, matchesGlob } from '../scanner/globs.js';
 import { buildWorkspacePackageMap, findWorkspaceRoots } from '../scanner/workspace-packages.js';
 import {
@@ -70,6 +70,11 @@ export interface DeclaredMeasure {
   elsewhere: string[];
   /** The `targets` globs no source file matches. */
   unmatchedTargets: string[];
+  /**
+   * The forbid-usage names the code never reads as a global but has in another form (a JSX attribute, a member, a
+   * local), with how many source files have them: the rule cannot see what the code does with them.
+   */
+  notGlobal: { usage: string; files: number }[];
 }
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
@@ -234,22 +239,24 @@ function importViolations(
     .map((imp) => ({ file: file.local, line: imp.line, subject: imp.specifier }));
 }
 
+const NO_USAGE: GlobalUsage = { references: [], otherForms: [] };
+
 function usageReferences(
   files: readonly CodebaseFile[],
   rules: readonly DeclaredDefinition[],
-): Map<string, GlobalReference[]> {
+): Map<string, GlobalUsage> {
   const usages = [
     ...new Set(rules.flatMap((rule) => (rule.template === 'forbid-usage' ? rule.usage : []))),
   ];
-  const references = new Map<string, GlobalReference[]>();
+  const references = new Map<string, GlobalUsage>();
   if (usages.length === 0) return references;
   for (const file of files) {
     if (file.test) continue;
     try {
-      references.set(file.path, globalReferences(file.absolutePath, usages));
+      references.set(file.path, globalUsage(file.absolutePath, usages));
     } catch {
       /* v8 ignore next -- defensive: an unreadable file reads no globals */
-      references.set(file.path, []);
+      references.set(file.path, NO_USAGE);
     }
   }
   return references;
@@ -258,7 +265,7 @@ function usageReferences(
 function measureOne(
   codebase: DeclaredCodebase,
   rule: DeclaredDefinition,
-  references: Map<string, GlobalReference[]>,
+  references: Map<string, GlobalUsage>,
 ): DeclaredMeasure {
   if (rule.template === 'forbid-file') {
     const scope = codebase.files.filter((file) => inScope(file, rule)).map((file) => file.local);
@@ -267,12 +274,13 @@ function measureOne(
       violations: scope.map((file) => ({ file, line: 1, subject: file })),
       elsewhere: [],
       unmatchedTargets: [],
+      notGlobal: [],
     };
   }
   const violationsIn = (file: CodebaseFile): DeclaredViolation[] =>
     rule.template === 'forbid-import'
       ? importViolations(codebase, file, rule)
-      : (references.get(file.path) ?? [])
+      : (references.get(file.path) ?? NO_USAGE).references
           .filter((reference) => rule.usage.includes(reference.usage))
           .map((reference) => ({
             file: file.local,
@@ -284,10 +292,20 @@ function measureOne(
     violations: [],
     elsewhere: [],
     unmatchedTargets: [],
+    notGlobal: [],
   };
+  const read = new Set<string>();
+  const otherFormFiles = new Map<string, number>();
   for (const file of codebase.files) {
     if (file.test) continue;
+    if (rule.template === 'forbid-usage') {
+      for (const usage of (references.get(file.path) ?? NO_USAGE).otherForms) {
+        if (rule.usage.includes(usage))
+          otherFormFiles.set(usage, (otherFormFiles.get(usage) ?? 0) + 1);
+      }
+    }
     const found = violationsIn(file);
+    for (const violation of found) read.add(violation.subject);
     if (inScope(file, rule)) {
       measure.scope.push(file.local);
       measure.violations.push(...found);
@@ -295,6 +313,10 @@ function measureOne(
       measure.elsewhere.push(file.local);
     }
   }
+  measure.notGlobal = [...otherFormFiles]
+    .filter(([usage]) => !read.has(usage))
+    .map(([usage, files]) => ({ usage, files }))
+    .sort((a, b) => a.usage.localeCompare(b.usage));
   if (rule.template === 'forbid-import') {
     measure.unmatchedTargets = rule.targets.filter(
       (glob) => !codebase.files.some((file) => matchesGlob(file.path, glob)),
