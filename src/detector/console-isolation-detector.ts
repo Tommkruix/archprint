@@ -5,6 +5,8 @@ const CLI_PATH = /(^|\/)(cli|scripts|bin|tools)(\/|\.tsx?$)/;
 
 export interface ConsoleUsageViolation {
   file: string;
+  /** The line of each access, in source order. */
+  lines: number[];
 }
 
 export interface ConsoleIsolationAnalysis {
@@ -27,7 +29,10 @@ export function detectConsoleIsolation(
   const library = files.filter((file) => !CLI_PATH.test(file.relativePath));
   const violations = library
     .filter((file) => usage.get(file.relativePath)?.usesConsole === true)
-    .map((file) => ({ file: file.relativePath }))
+    .map((file) => ({
+      file: file.relativePath,
+      lines: usage.get(file.relativePath)!.lines.console,
+    }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
   return {

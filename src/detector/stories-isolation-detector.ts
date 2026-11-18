@@ -21,22 +21,38 @@ export interface StoriesIsolationOptions {
   resolve?: boolean;
 }
 
+const storiesOf = (graph: ImportGraph): Set<string> =>
+  new Set(
+    graph.files.filter((file) => STORY.test(file.relativePath)).map((file) => file.relativePath),
+  );
+
+/** Every import of a story by a file that is not one, in graph order. */
+function storyEdges(graph: ImportGraph, stories: ReadonlySet<string>): StoryImportViolation[] {
+  const edges: StoryImportViolation[] = [];
+  for (const [file, targets] of graph.adjacency) {
+    if (STORY.test(file)) continue;
+    for (const target of targets) {
+      if (stories.has(target)) edges.push({ file: target, importer: file });
+    }
+  }
+  return edges;
+}
+
+/** Every import of a story, the way the stories rule enforces: one entry per importing file and story. */
+export function storyImports(appDir: string): StoryImportViolation[] {
+  const graph = buildImportGraph(appDir, { resolve: false });
+  return storyEdges(graph, storiesOf(graph));
+}
+
 export function detectStoriesIsolation(
   appDir: string,
   options: StoriesIsolationOptions = {},
 ): StoriesIsolationAnalysis {
-  const { root, files, adjacency } =
-    options.graph ?? buildImportGraph(appDir, { resolve: options.resolve ?? false });
-
-  const stories = new Set(
-    files.filter((file) => STORY.test(file.relativePath)).map((file) => file.relativePath),
-  );
+  const graph = options.graph ?? buildImportGraph(appDir, { resolve: options.resolve ?? false });
+  const stories = storiesOf(graph);
   const importerOf = new Map<string, string>();
-  for (const [file, targets] of adjacency) {
-    if (STORY.test(file)) continue;
-    for (const target of targets) {
-      if (stories.has(target) && !importerOf.has(target)) importerOf.set(target, file);
-    }
+  for (const { file, importer } of storyEdges(graph, stories)) {
+    if (!importerOf.has(file)) importerOf.set(file, importer);
   }
 
   const violations: StoryImportViolation[] = [...importerOf.entries()]
@@ -44,7 +60,7 @@ export function detectStoriesIsolation(
     .sort((a, b) => a.file.localeCompare(b.file));
 
   return {
-    appDir: root,
+    appDir: graph.root,
     storyCount: stories.size,
     offenderCount: violations.length,
     gate: evaluateGate({

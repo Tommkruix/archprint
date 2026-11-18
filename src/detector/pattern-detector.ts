@@ -128,18 +128,26 @@ function buildPattern(
   };
 }
 
-export function detectForbiddenImports(
+interface ForbiddenScan {
+  config: PatternConfig;
+  /** Every import of a role file that reaches a forbidden target, in file and source order. */
+  occurrences: Violation[];
+  roleFileCount: number;
+  confidenceSum: number;
+}
+
+function scanForbiddenImports(
   appDir: string,
   configs: readonly PatternConfig[],
-  options: { resolve?: boolean } = {},
-): DetectedPattern[] {
+  options: { resolve?: boolean },
+): ForbiddenScan[] {
   const roleUnion = new Set(configs.flatMap((config) => [...config.roles]));
   const roleFiles = walkRepo(appDir).filter((file) => roleUnion.has(file.role));
   const analyze = createImportAnalyzer(appDir, { resolve: options.resolve ?? true });
 
-  const accumulators = configs.map((config) => ({
+  const scans: ForbiddenScan[] = configs.map((config) => ({
     config,
-    violations: [] as Violation[],
+    occurrences: [],
     roleFileCount: 0,
     confidenceSum: 0,
   }));
@@ -151,27 +159,53 @@ export function detectForbiddenImports(
       /* v8 ignore next -- defensive: a file that fails to parse contributes no imports */
       imports = [];
     }
-    for (const accumulator of accumulators) {
-      if (!accumulator.config.roles.includes(file.role)) continue;
-      accumulator.roleFileCount += 1;
-      accumulator.confidenceSum += file.confidence;
+    for (const scan of scans) {
+      if (!scan.config.roles.includes(file.role)) continue;
+      scan.roleFileCount += 1;
+      scan.confidenceSum += file.confidence;
       for (const imp of imports) {
-        const leaf = forbiddenTargetReachedByValue(imp, accumulator.config.forbidden);
+        const leaf = forbiddenTargetReachedByValue(imp, scan.config.forbidden);
         if (leaf !== null) {
-          accumulator.violations.push({ file: file.relativePath, specifier: imp.specifier, leaf });
-          break;
+          scan.occurrences.push({ file: file.relativePath, specifier: imp.specifier, leaf });
         }
       }
     }
   }
-  return accumulators.map((accumulator) =>
+  return scans;
+}
+
+/** The first forbidden import of each file: the evidence a pattern reports. */
+const firstPerFile = (occurrences: readonly Violation[]): Violation[] => {
+  const seen = new Set<string>();
+  return occurrences.filter((violation) => {
+    if (seen.has(violation.file)) return false;
+    seen.add(violation.file);
+    return true;
+  });
+};
+
+export function detectForbiddenImports(
+  appDir: string,
+  configs: readonly PatternConfig[],
+  options: { resolve?: boolean } = {},
+): DetectedPattern[] {
+  return scanForbiddenImports(appDir, configs, options).map((scan) =>
     buildPattern(
-      accumulator.config,
-      accumulator.violations,
-      accumulator.roleFileCount,
-      accumulator.confidenceSum,
+      scan.config,
+      firstPerFile(scan.occurrences),
+      scan.roleFileCount,
+      scan.confidenceSum,
     ),
   );
+}
+
+/** Every forbidden import of each config's role files, the way the rules enforce: one entry per import. */
+export function forbiddenImportOccurrences(
+  appDir: string,
+  configs: readonly PatternConfig[],
+  options: { resolve?: boolean } = {},
+): Violation[][] {
+  return scanForbiddenImports(appDir, configs, options).map((scan) => scan.occurrences);
 }
 
 export function detectUiLayerInServerEntry(

@@ -357,7 +357,9 @@ this layout and rewires your configs in place.
 `archprint check` reports only the violations a change **introduces**, compared with a base branch, for the rules
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
-and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
+and now breaks it more often is reported, a recorded exception included. A new import is listed on its own; when
+the file has more of the same break (another `console` call), every one of them is listed, since which one is new
+cannot be told. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
