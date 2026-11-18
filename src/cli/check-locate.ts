@@ -1,14 +1,14 @@
 import * as path from 'node:path';
 import { importLocations } from '../scanner/file-walker.js';
-import { buildAliasEntries } from '../scanner/import-graph.js';
 import { resolveFirstPartyImport } from '../scanner/resolve-import.js';
 import { type UsageSubject, usageLines } from '../scanner/usage-scanner.js';
+import { workspaceAliases } from '../scanner/workspace-resolver.js';
 import type { Finding } from './check-evaluate.js';
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
 export function createLineLocator(appDir: string): (finding: Finding) => number | null {
-  const aliases = buildAliasEntries(appDir);
+  const aliases = workspaceAliases(appDir);
   return (finding) => {
     if (finding.line !== undefined) return finding.line;
     const absolute = path.join(appDir, finding.file);

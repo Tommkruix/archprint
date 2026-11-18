@@ -75,7 +75,8 @@ Requires Node >= 20. Point Archprint at a directory that has a `tsconfig.json` (
 as `apps/web`; a monorepo root works too, Archprint discovers the app directories and skips whatever git ignores,
 including nested `.gitignore` files and `.git/info/exclude`). A solution-style `tsconfig.json` that only lists
 `references`, as create-vite generates, works too: Archprint reads the aliases of the referenced project that
-compiles the app's files.
+compiles the app's files. So does a directory whose only configs are named variants, such as `tsconfig.oss.json` and
+`tsconfig.saas.json` that a setup script copies to `tsconfig.json`: Archprint reads the aliases they agree on.
 
 ## The 60-second path
 
@@ -190,6 +191,12 @@ your team adopted with `init` or `generate`. The existing backlog never shows up
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
 and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
+
+When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
+`.github/copilot-instructions.md`, in the app, below it or in a folder above it), `check` also lists the sentences
+it adds that no adopted rule enforces, and marks the ones that read like rules on their line. It warns when a change
+removes the sentence behind a rule adopted from such a file. These notes never fail the check: a new rule sentence
+stays guidance until your team maps it with the gap report and adopts it.
 
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
 [GitHub Marketplace](https://github.com/marketplace/actions/archprint-check)):

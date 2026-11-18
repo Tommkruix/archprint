@@ -112,7 +112,8 @@ Setup for Claude Desktop, Claude Code, Cursor and other clients is in [MCP setup
 
 ## Quick start
 
-Requires Node 20 or newer. Run these in a folder with a `tsconfig.json`. In a monorepo, `scan` and `recommend`
+Requires Node 20 or newer. Run these in a folder with a `tsconfig.json`, or with only named variants such as
+`tsconfig.web.json`. In a monorepo, `scan` and `recommend`
 also accept the root and cover every app, while `init` and `generate` work on one app at a time (for example
 `apps/web`); at a root with several apps they stop, list the apps, and ask you to rerun with one.
 
@@ -165,7 +166,9 @@ matches no code), or guidance only. Archprint never calls a model: the agent onl
 every number in the report is computed from your code. Adopt the ones you approve with
 `archprint generate <app> --declare mapping.json` (add `--baseline` for those the code breaks today): each becomes
 an ESLint rule whose error is your team's sentence, with its line in CLAUDE.md, and `archprint check` enforces it in
-pull requests. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report) for
+pull requests. As the files change, `archprint check` marks each new sentence that reads like a rule and that no
+adopted rule enforces yet, on its line in the pull request, so a rule written down later does not stay guidance
+unnoticed. See [the gap report](https://tommkruix.github.io/archprint/concepts#written-rules-the-gap-report) for
 the templates.
 
 **See it catch something.** After step 4, break a rule on purpose: for example, make a route file import your
@@ -356,6 +359,12 @@ your team adopted with `init` or `generate`. The existing backlog never shows up
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
 and now breaks it more often is reported, with every break of that rule in the file. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
+
+When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
+`.github/copilot-instructions.md`, in the app, below it or in a folder above it), `check` also lists the sentences
+it adds that no adopted rule enforces, and marks the ones that read like rules on their line. It warns when a change
+removes the sentence behind a rule adopted from such a file. These notes never fail the check: a new rule sentence
+stays guidance until your team maps it with the gap report and adopts it.
 
 On GitHub, use the [archprint check Action](https://github.com/Tommkruix/archprint-action) (on the
 [GitHub Marketplace](https://github.com/marketplace/actions/archprint-check)):
@@ -556,8 +565,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
-  with `--base <branch or commit>`, and how many recorded exceptions are left and which the change fixed. Warning
-  only unless `--fail-on new`. `--format text|json|github`,
+  with `--base <branch or commit>`, and how many recorded exceptions are left and which the change fixed; also the
+  sentences the change adds to your context files that no adopted rule enforces yet. Warning only unless
+  `--fail-on new`. `--format text|json|github`,
   `--out <dir>`. See [Use in CI](#use-in-ci).
 - **`archprint allow <rule> <file> --reason "..."`**: accepts one adopted rule (by id or ESLint name) being broken
   in one file, with a reason, recorded in `.archprint/config.json`. `check` stops counting it and lists it in the pull request;
@@ -643,9 +653,16 @@ and erase the barrel-versus-deep signal).
 **Path aliases.** archprint reads `paths` and `baseUrl` from the app's `tsconfig.json` and its `extends` chain.
 When that file only lists other projects under `references` (the solution-style layout create-vite, Angular and Nx
 generate), archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`,
-as TypeScript does. Deep mode resolves each file with the compiler options of the project that includes it. A key
+as TypeScript does. A folder with no `tsconfig.json` or `tsconfig.base.json` whose configs are named variants, such
+as `tsconfig.web.json` and `tsconfig.native.json`, is read the same way, keeping the aliases the variants agree on.
+Deep mode resolves each file with the compiler options of the project that includes it. A key
 whose `*` follows its prefix directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target
-(`@components/button` is `src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that
+(`@components/button` is `src/components/button`), the way `baseUrl` folders do. As in TypeScript, an import takes the key with the longest matching prefix, the text the `*` matched replaces the
+`*` wherever it sits in a target (`"@vue/*": ["./packages/*/src"]` makes `@vue/shared` `packages/shared/src`), and
+the key's targets are tried in order, the first that names a source file winning; when none does, the import
+resolves as a workspace package of that name would. A key with text after its `*`, such as `"x/*.vue"`, is not read
+yet, and a key without a `*` also matches paths below it. Layer boundaries, which read imports as written without
+looking for files, use a key's first target. In a SvelteKit project (one that
 declares `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
 `svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
 fresh checkout does not have; an alias the tsconfig maps itself wins. A SvelteKit project without a `svelte.config`, such as
@@ -657,7 +674,8 @@ with a `pnpm-lock.yaml` or `packageManager: pnpm@...`), as pnpm does, and from `
 each falling back to the other when it lists no packages.
 For your written rules (`gap-report`, and the `doc-` rules `check` and ESLint enforce), a package subpath import such
 as `@acme/ui/button` follows the package's `exports` as Node.js matches it, and the JavaScript workspaces nested below
-the folder you pass count too.
+the folder you pass count too. For those rules and for orphans, a `#` import such as `#hooks/useBudget` follows the
+`imports` field of the nearest package.json; a tsconfig alias of the same name wins, as in TypeScript.
 
 **Determinism.** The same repo at the same version produces the same output. Analysis is pure and sorted; there is
 no randomness, and the analysis engine is pinned to an exact version.

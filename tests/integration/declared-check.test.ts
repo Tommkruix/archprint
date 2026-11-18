@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +36,8 @@ describe('archprint check and explain with a declared rule', { timeout: 120_000 
     cwd = process.cwd();
     repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-declared-check-')));
     writeTree(repo, {
-      'CLAUDE.md': '# Rules\n- Components never call fetch directly.\n',
+      'CLAUDE.md':
+        '# Rules\n- Components never call fetch directly.\n\nThe web app is a Next.js app.\n',
       'mapping.json': JSON.stringify({ rules: [RULE] }),
       'apps/web/tsconfig.json': '{}\n',
       'apps/web/src/components/card.tsx': FETCH,
@@ -104,6 +105,110 @@ describe('archprint check and explain with a declared rule', { timeout: 120_000 
         '  Enforced by the generated ESLint rule and archprint check; dependency-cruiser does not enforce declared rules.',
       ].join('\n'),
     );
+  });
+
+  const write = (file: string, source: string): void => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), source);
+  };
+  const checked = () => {
+    const result = runCheck({ cwd: repo, out: '.archprint', base: 'main' });
+    if (result.status !== 'checked') throw new Error(`check did not run: ${result.status}`);
+    return result;
+  };
+
+  it('lists the rule-like sentence a change adds to CLAUDE.md, counting the others', () => {
+    write(
+      'CLAUDE.md',
+      '# Rules\n- Components never call fetch directly.\n- Never import the database client in a page.\n\nThe web app is a Next.js app. Pages live in app/.\n',
+    );
+    expect(checked().context).toEqual({
+      files: [
+        {
+          file: 'CLAUDE.md',
+          unchecked: 2,
+          ruleLike: [{ line: 3, text: 'Never import the database client in a page.' }],
+        },
+      ],
+      stale: [],
+    });
+  });
+
+  it("reads the changed context files that apply to the app, in path order, and not a sibling app's or one over 1 MB", () => {
+    write('apps/web/AGENTS.md', 'Use the design system for buttons.\n');
+    write('apps/admin/AGENTS.md', 'Never call fetch in the admin app.\n');
+    write('.cursor/rules/react.mdc', '---\nglobs: apps/**\n---\n\nPrefer server components.\n');
+    write(
+      'CLAUDE.md',
+      '# Rules\n- Components never call fetch directly.\n\nThe web app is a Next.js app.\n\nPages are thin.\n',
+    );
+    write('AGENTS.md', `${'x'.repeat(1_000_001)}\n`);
+    expect(checked().context.files).toEqual([
+      {
+        file: '.cursor/rules/react.mdc',
+        unchecked: 1,
+        ruleLike: [{ line: 5, text: 'Prefer server components.' }],
+      },
+      { file: 'CLAUDE.md', unchecked: 1, ruleLike: [] },
+      {
+        file: 'apps/web/AGENTS.md',
+        unchecked: 1,
+        ruleLike: [{ line: 1, text: 'Use the design system for buttons.' }],
+      },
+    ]);
+  });
+
+  it('skips a symlinked context file, whose target is read under its own path', () => {
+    symlinkSync('../../CLAUDE.md', path.join(repo, 'apps', 'web', 'CLAUDE.md'));
+    expect(checked().context.files).toEqual([]);
+  });
+
+  it('counts a new sentence that states an adopted rule as checked', () => {
+    write(
+      'CLAUDE.md',
+      '# Rules\n- Components never call fetch directly.\n\nThe web app is a Next.js app.\n\nRemember: Components never call fetch directly.\n',
+    );
+    expect(checked().context.files).toEqual([]);
+  });
+
+  it('compares a renamed context file with its old content, and finds the rule sentence gone from the old name', () => {
+    git('mv', 'CLAUDE.md', 'AGENTS.md');
+    write(
+      'AGENTS.md',
+      '# Rules\n- Components never call fetch directly.\n- Keep pages thin.\n\nThe web app is a Next.js app.\n',
+    );
+    const { context } = checked();
+    expect(context.files).toEqual([
+      { file: 'AGENTS.md', unchecked: 1, ruleLike: [{ line: 3, text: 'Keep pages thin.' }] },
+    ]);
+    expect(context.stale.map(({ rule, file }) => [rule.id, file])).toEqual([
+      ['doc-no-fetch-in-components', 'CLAUDE.md'],
+    ]);
+  });
+
+  it('warns on the pull request when the sentence behind an adopted rule is removed, and notes a new rule sentence', async () => {
+    write('CLAUDE.md', '# Rules\n- Never import the database client in a page.\n');
+    await run(['check', '--base', 'main', '--format', 'github']);
+    const lines = output().split('\n');
+    expect(lines).toContain(
+      '::warning file=CLAUDE.md,line=2,title=archprint%3A doc-no-fetch-in-components sentence missing::The sentence behind doc-no-fetch-in-components is no longer in CLAUDE.md; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --reset.',
+    );
+    expect(lines).toContain(
+      '::notice file=CLAUDE.md,line=2,title=archprint%3A not enforced yet::This reads like a rule, and no archprint rule checks it yet. To enforce it, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.',
+    );
+  });
+
+  it('returns the context report through MCP', () => {
+    write('CLAUDE.md', '# Rules\n- Components never call fetch directly.\n- Keep pages thin.\n');
+    const response = callTool('archprint_check', { path: repo, base: 'main' });
+    expect(JSON.parse(response.content[0]!.text)).toMatchObject({
+      context: {
+        files: [
+          { file: 'CLAUDE.md', unchecked: 1, ruleLike: [{ line: 3, text: 'Keep pages thin.' }] },
+        ],
+        stale: [],
+      },
+    });
   });
 
   it('explains it through MCP, and names a declared rule that is not adopted', async () => {

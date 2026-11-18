@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "paths": {
+      "@app/*": ["./src/*"],
+      "#dynamic/*": ["./server/private/*"]
+    }
+  },
+  "include": ["src", "server"]
+}

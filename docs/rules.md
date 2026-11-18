@@ -187,14 +187,40 @@ heuristic. **When not to use:** rarely; low volume.
 
 Production files nothing in the workspace references, listed after the files only tests import (dead code the
 tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
-from` through a barrel, an `import()` or `require()` call, or a tool config naming the file, such as Vitest's
+from` through a barrel, an `import()` or `require()` call, an `import.meta.glob` (Vite) or `require.context`
+(webpack) call whose patterns or folder are written out (every file it matches; `!` patterns excluded; relative
+patterns start at a literal `base` option when there is one; a pattern starting with `/` starts at the nearest folder
+with a Vite config, else with a package.json, not at a `root` set inside the Vite config; a `require.context` filter
+that is not written out counts every file in its folder), a path computed at runtime (an `import()` or `require()`
+of a template such as `` `./pages/${name}.tsx` ``, of `path.join` or `path.resolve` from `__dirname` or
+`import.meta.dirname` (also through a `const` or `pathToFileURL(...).href`), or `new URL('./worker.ts',
+import.meta.url)`; each part not written out matches within one folder in a Vite project, which expands such a path
+only when it ends with a file extension and is not `` `./${name}.ext` `` in the file's own folder, and across folders
+elsewhere, so every file the pattern matches counts, whether or not a runtime value names it; a path that is nothing
+but such a part in the file's folder or a folder above it, like `` `./${name}` `` or `` `../${name}` ``, counts no
+file), or a
+tool config naming the file, such as Vitest's
 `setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
-through its own nearest tsconfig, so another package's import or a nested app's alias counts. JavaScript files
+through its own nearest tsconfig, so another package's import or a nested app's alias counts. A `#` import such as
+`#hooks/useBudget` resolves through the `imports` field of the nearest package.json, as Node.js does for `./`
+targets (see [concepts](./concepts.md)). In a React Native project (the nearest package.json declares `react-native` or
+`expo`), an import of `./button` also counts for the file Metro picks on each platform the project builds:
+`button.ios` and `button.android`, plus `button.web`, `.windows`, `.macos` or `.tvos` when the project or its
+workspace root declares `react-native-web`, `react-native-windows`, `react-native-macos` or `react-native-tvos`; a
+platform without its own file takes `button.native` (except web), then `button`, in Metro's default extension order.
+A platform file nothing picks, such as `button.web.tsx` in a project without `react-native-web`, is still listed.
+JavaScript files
 (`.js`, `.jsx`, `.mjs`, `.cjs`), `.mts` and `.cts` files, and Astro components (their frontmatter and `<script>`
 blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
 Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
 `opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
-`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. A pages-router page is
+`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. In a folder with a Vite
+config, the files its pages load as modules are entries: those of `index.html` in the Vite root (the config's folder,
+or its `root` when written as a path, such as `'web'`, `__dirname` or `resolve(__dirname, 'web')`) and of each HTML
+file in `build.rollupOptions.input` or `build.rolldownOptions.input`, meaning a `<script type="module">` tag's `src`
+and the `/`, `./` and `../` imports of an inline module script. A `src` starting with `/` is read from the Vite root
+unless `publicDir` holds that file; classic scripts, scripts marked `vite-ignore`, URLs, and other HTML files (which
+only the dev server serves) are not counted. A pages-router page is
 any file under `pages/` or `src/pages/` of a project that declares `next` (in its package.json or its workspace
 root's) or has a `next.config.*`; a `pages/` folder in an app without Next.js is checked like any other. In a
 SvelteKit project (a folder whose package.json or workspace root declares `@sveltejs/kit` and that holds a
@@ -203,7 +229,17 @@ SvelteKit project (a folder whose package.json or workspace root declares `@svel
 `+page.server`, `+layout`, `+layout.server`, `+error` and `+server` files under `src/routes/` (layout resets such as
 `+page@.svelte` included), `src/hooks`, `src/hooks.server` and `src/hooks.client`, the param matchers
 (`src/params/*` in SvelteKit 2, `src/params` in SvelteKit 3), `src/service-worker` and `src/instrumentation.server`;
-other files in a route folder are checked. Nor is a
+other files in a route folder are checked. In a package that declares `expo-router`, every file of `src/app/` (or
+of `app/` when there is no `src/app/`) is an Expo Router route. In a React Router app (a `react-router.config` or
+`@react-router/dev`), the app folder's `root`, `entry.client`, `entry.server` and `routes` modules are entries, as are
+the module paths `routes.ts` passes to `route()`, `index()` and `layout()` and, when it calls `flatRoutes()` from
+`@react-router/fs-routes`, each file directly in `routes/` and each folder's `route` module (else its `index`), minus
+its `ignoredRouteFiles`; the app folder is the config's `appDirectory`,
+`app` by default. In a TanStack Router project (one declaring `@tanstack/router-plugin`, `@tanstack/router-cli` or
+TanStack Start), every file under `routesDirectory` (`src/routes` by default) is a route, except names starting with
+`-`. These settings are read when written as text in the config (`tsr.config.json` or a root config such as
+`vite.config.ts` for TanStack Router); a project that computes them is not modeled. Remix, Routify and Nuxt are not
+modeled yet. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
 `*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
 `out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
@@ -214,9 +250,9 @@ listed. A dedicated dead-code tool such as knip covers more of these cases.
 
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
 November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
-a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3, and Expo Router),
-pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob`, a code
-generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
+a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3; Expo Router routes, entries since 0.19.0),
+pages started by a Vite or Parcel HTML entry (Vite pages are entries since 0.19.0), files a folder loader picks up (migrations, `import.meta.glob` before
+archprint followed it, a code generator's glob), project templates a tool copies, and computed `import()` paths (followed since 0.19.0). Of 35 files listed as test-only,
 31 were imported only by tests. Treat the list as candidates to check before deleting anything, not as dead code.
 
 ### Reachability (Report)

@@ -5,14 +5,8 @@ import {
   walkRepo,
   type WalkedFile,
 } from './file-walker.js';
-import { buildWorkspaceMap } from './workspace-resolver.js';
-import { type AliasEntry, resolveFirstPartyImport } from './resolve-import.js';
-
-export const buildAliasEntries = (appDir: string): AliasEntry[] =>
-  Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
-    prefix: key.replace(/\/?\*$/, ''),
-    dir: path.resolve(appDir, String(value).replace(/\/?\*$/, '')),
-  }));
+import { workspaceAliases } from './workspace-resolver.js';
+import { resolveFirstPartyImport } from './resolve-import.js';
 
 export interface ImportGraph {
   root: string;
@@ -34,7 +28,7 @@ export function buildImportGraph(appDir: string, options: ImportGraphOptions = {
   const relByAbs = new Map<string, string>(
     files.map((file) => [file.absolutePath, file.relativePath]),
   );
-  const aliases = buildAliasEntries(root);
+  const aliases = workspaceAliases(root);
   const analyze = createImportAnalyzer(root, { resolve });
 
   const adjacency = new Map<string, string[]>();

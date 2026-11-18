@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { packageEntry, packageSubpaths, sourceFileFor } from '../../src/detector/import-target.js';
-import { resolveImportTarget, type WorkspacePackage } from '../../src/detector/layer-paths.js';
+import {
+  packageEntry,
+  packageImports,
+  packageSubpaths,
+  sourceFileFor,
+} from '../../src/detector/import-target.js';
+import {
+  type PackageScope,
+  resolveImportTarget,
+  type WorkspacePackage,
+} from '../../src/detector/layer-paths.js';
 
 const known =
   (...files: string[]) =>
@@ -111,7 +120,7 @@ describe('resolveImportTarget through subpath exports', () => {
     subpaths: packageSubpaths({ exports: exportsField }, 'packages/kit'),
   });
   const resolve = (pkg: WorkspacePackage, specifier: string, ...files: string[]): string | null =>
-    resolveImportTarget('apps/web/a.ts', specifier, [], [pkg], sourceFileFor(known(...files)));
+    resolveImportTarget('apps/web/a.ts', specifier, [], [pkg], [], sourceFileFor(known(...files)));
 
   it('takes the first target that names a source file, whatever its condition', () => {
     const pkg = kit({
@@ -204,7 +213,7 @@ describe('resolveImportTarget', () => {
     'apps/web/src/app.ts',
   );
   const target = (from: string, specifier: string): string | null =>
-    resolveImportTarget(from, specifier, aliases, packages, sourceFileFor(isFile));
+    resolveImportTarget(from, specifier, aliases, packages, [], sourceFileFor(isFile));
 
   it('resolves relative paths across apps and alias paths to the source file', () => {
     expect(target('packages/mcds/a.ts', '../../apps/web/src/app')).toBe('apps/web/src/app.ts');
@@ -225,5 +234,93 @@ describe('resolveImportTarget', () => {
   it('is null for a package outside the repo and a path that climbs above the root', () => {
     expect(target('apps/web/src/a.ts', 'react')).toBeNull();
     expect(target('a.ts', '../outside')).toBeNull();
+  });
+});
+
+describe('resolveImportTarget through package.json imports', () => {
+  const scope = (dir: string, imports: unknown): PackageScope => ({
+    dir,
+    imports: packageImports({ imports }, dir),
+  });
+  const scopes = [
+    scope('packages/cli/plugins/legacy', undefined),
+    scope('packages/cli', {
+      '#connection': './src/connection.ts',
+      '#commands/*': './src/commands/*.ts',
+      '#is-dev': { development: './src/true.ts', default: './src/false.ts' },
+    }),
+    scope('', { '#*': './*', '#': './src/index.ts' }),
+  ];
+  const isFile = known(
+    'packages/cli/src/connection.ts',
+    'packages/cli/src/commands/accounts.ts',
+    'packages/cli/src/false.ts',
+    'shared/log.ts',
+    'src/index.ts',
+  );
+  const target = (from: string, specifier: string): string | null =>
+    resolveImportTarget(from, specifier, [], [], scopes, sourceFileFor(isFile));
+
+  it('resolves an exact key and a pattern through the nearest package.json', () => {
+    expect(target('packages/cli/src/commands/accounts.ts', '#connection')).toBe(
+      'packages/cli/src/connection.ts',
+    );
+    expect(target('packages/cli/src/main.ts', '#commands/accounts')).toBe(
+      'packages/cli/src/commands/accounts.ts',
+    );
+  });
+
+  it('takes the first condition target that names a source file', () => {
+    expect(target('packages/cli/src/main.ts', '#is-dev')).toBe('packages/cli/src/false.ts');
+  });
+
+  it('stops at the nearest package.json, even one without imports', () => {
+    expect(target('packages/cli/src/main.ts', '#shared/log')).toBeNull();
+    expect(target('packages/cli/plugins/legacy/a.ts', '#connection')).toBeNull();
+    expect(target('apps/web/a.ts', '#shared/log')).toBe('shared/log.ts');
+  });
+
+  it('lets a tsconfig alias win over package.json imports, as TypeScript does', () => {
+    expect(
+      resolveImportTarget(
+        'docs/a.ts',
+        '#/adapter',
+        [{ prefix: '#', dir: 'docs/src/_env' }],
+        [],
+        [scope('docs', { '#/*': { node: './src/_env/node/*', default: './src/_env/*' } })],
+        sourceFileFor(known('docs/src/_env/adapter.ts', 'docs/src/_env/node/adapter.ts')),
+      ),
+    ).toBe('docs/src/_env/adapter.ts');
+  });
+
+  it('resolves a "#/" key, which Node.js accepts since nodejs/node#60864', () => {
+    expect(
+      resolveImportTarget(
+        'apps/admin/src/main.ts',
+        '#/views/home',
+        [],
+        [],
+        [scope('apps/admin', { '#/*': './src/*' })],
+        sourceFileFor(known('apps/admin/src/views/home.ts')),
+      ),
+    ).toBe('apps/admin/src/views/home.ts');
+  });
+
+  it('is null for a key no package.json declares or whose targets name no source file, and never matches the bare "#" key', () => {
+    expect(target('packages/cli/src/main.ts', '#missing')).toBeNull();
+    expect(target('packages/cli/src/main.ts', '#commands/absent')).toBeNull();
+    expect(target('apps/web/a.ts', '#')).toBeNull();
+  });
+});
+
+describe('packageImports', () => {
+  it('keeps "#" keys in Node order and ignores exports-style keys', () => {
+    expect(
+      packageImports(
+        { imports: { '#a/*': './a/*', '#a/b/*': './b/*', '#x': './x.ts', './y': './y.ts' } },
+        'pkg',
+      ).map(({ key }) => key),
+    ).toEqual(['#x', '#a/b/*', '#a/*']);
+    expect(packageImports({ exports: { '#x': './x.ts' } }, 'pkg')).toEqual([]);
   });
 });

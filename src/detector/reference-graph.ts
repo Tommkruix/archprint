@@ -1,13 +1,21 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
-import { listSourceFiles, moduleReferences, stringLiterals } from '../scanner/file-walker.js';
+import {
+  listSourceFiles,
+  type ModuleLoader,
+  moduleLoaders,
+  moduleReferences,
+  stringLiterals,
+} from '../scanner/file-walker.js';
 import { classifyFile } from '../scanner/role-classifier.js';
 import { isSourceFileName } from '../scanner/source-paths.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { type ConfigAliases, aliasesFor, importResolution } from './declared-rules.js';
 import { sourceFileFor } from './import-target.js';
 import { resolveImportTarget } from './layer-paths.js';
+import { type MetroPlatform, metroFileFor, metroPlatformsUnder } from './metro-platforms.js';
+import { createViteProjects, createViteRoots, loadedFiles } from './module-loaders.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
@@ -16,7 +24,10 @@ export interface ReferenceGraph {
   root: string;
   /** Whether each file is a test, judged on its path from the root or inside its app. */
   tests: ReadonlySet<string>;
-  /** Imports of any kind (type-only included), re-exports, `import()` and `require()` calls, and tool configs. */
+  /**
+   * Imports of any kind (type-only included), re-exports, `import()` and `require()` calls, `import.meta.glob` and
+   * `require.context` loaders, and tool configs.
+   */
   referrers: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
@@ -47,6 +58,15 @@ const readSafely = (read: () => string[]): string[] => {
     return read();
   } catch {
     /* v8 ignore next -- defensive: an unreadable or malformed file references nothing */
+    return [];
+  }
+};
+
+const readLoaders = (file: string): ModuleLoader[] => {
+  try {
+    return moduleLoaders(file);
+  } catch {
+    /* v8 ignore next -- defensive: an unreadable or malformed file loads nothing */
     return [];
   }
 };
@@ -89,14 +109,49 @@ function graphFiles(root: string): GraphFile[] {
 
 /**
  * Every source file under `root` with the files that reference it, imports resolved first hop the way the scan and
- * the generated rules resolve them: through the importing file's deepest tsconfig aliases and the workspace packages.
+ * the generated rules resolve them: through the importing file's deepest tsconfig aliases, its package.json `imports`
+ * and the workspace packages.
  */
 export function buildReferenceGraph(root: string): ReferenceGraph {
   const absoluteRoot = path.resolve(root);
-  const { configs, packages } = importResolution(absoluteRoot);
+  const { configs, packages, scopes } = importResolution(absoluteRoot);
   const fileFor = sourceFileFor((candidate) => existsSync(path.join(absoluteRoot, candidate)));
   const resolve = (from: string, specifier: string): string | null =>
-    resolveImportTarget(from, specifier, aliasesFor(from, configs), packages, fileFor);
+    resolveImportTarget(from, specifier, aliasesFor(from, configs), packages, scopes, fileFor);
+  const files = new Map<string, boolean>();
+  const isFile = (candidate: string): boolean => {
+    let known = files.get(candidate);
+    if (known === undefined) {
+      known =
+        statSync(path.join(absoluteRoot, candidate), { throwIfNoEntry: false })?.isFile() === true;
+      files.set(candidate, known);
+    }
+    return known;
+  };
+  const platformsOf = metroPlatformsUnder(absoluteRoot);
+  const platformFileFor = new Map<MetroPlatform, (base: string) => string | null>();
+  const fileOnPlatform = (platform: MetroPlatform): ((base: string) => string | null) => {
+    let found = platformFileFor.get(platform);
+    if (found === undefined) {
+      found = metroFileFor(isFile, platform);
+      platformFileFor.set(platform, found);
+    }
+    return found;
+  };
+  /** What an import resolves to as TypeScript reads it, and, in a React Native project, on each platform Metro builds. */
+  const targets = (from: string, specifier: string): (string | null)[] => [
+    resolve(from, specifier),
+    ...platformsOf(from).map((platform) =>
+      resolveImportTarget(
+        from,
+        specifier,
+        aliasesFor(from, configs),
+        packages,
+        scopes,
+        fileOnPlatform(platform),
+      ),
+    ),
+  ];
 
   const walked = graphFiles(absoluteRoot);
   const tests = new Set<string>();
@@ -110,10 +165,28 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   };
   for (const file of walked) {
     for (const specifier of readSafely(() => moduleReferences(file.absolutePath))) {
-      refer(file.relativePath, resolve(file.relativePath, specifier));
+      for (const target of targets(file.relativePath, specifier)) refer(file.relativePath, target);
     }
   }
-  for (const config of toolConfigs(absoluteRoot, configs, [...referrers.keys()])) {
+  const sources = [...referrers.keys()];
+  const viteRootOf = createViteRoots(absoluteRoot);
+  const bundledByVite = createViteProjects(absoluteRoot);
+  for (const file of walked) {
+    for (const loader of readLoaders(file.absolutePath)) {
+      const aliases = aliasesFor(file.relativePath, configs);
+      for (const target of loadedFiles(
+        loader,
+        file.relativePath,
+        sources,
+        aliases,
+        viteRootOf(file.relativePath),
+        bundledByVite(file.relativePath),
+      )) {
+        refer(file.relativePath, target);
+      }
+    }
+  }
+  for (const config of toolConfigs(absoluteRoot, configs, sources)) {
     for (const literal of readSafely(() => stringLiterals(path.join(absoluteRoot, config)))) {
       const specifier = literal.replace(/^<rootDir>\//, './');
       refer(config, resolve(config, specifier.startsWith('.') ? specifier : `./${specifier}`));

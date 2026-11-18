@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AdoptedRule } from '../../src/cli/adopted-rules.js';
+import type { AdoptedRule, DeclaredAdoptedRule } from '../../src/cli/adopted-rules.js';
 import {
   checkExitCode,
   checkJson,
@@ -10,6 +10,7 @@ import {
   type CheckResult,
   type ReportedFinding,
 } from '../../src/cli/check.js';
+import type { ContextReport } from '../../src/cli/check-context.js';
 
 const rule: AdoptedRule = {
   id: 'AP-001',
@@ -46,6 +47,7 @@ const checked = (
   allowedInChange: [],
   unusedAllows: [],
   exceptions: { left: 0, fixedInChange: [], stillRecorded: [] },
+  context: { files: [], stale: [] },
   ...overrides,
 });
 
@@ -264,5 +266,91 @@ describe('allowed exceptions in the output', () => {
     expect(checkJson(result, '9.9.9')).toMatchObject({
       unusedAllows: [{ rule: 'AP-001', file: 'app/api/legacy/route.ts' }],
     });
+  });
+});
+
+describe('context files in the output', () => {
+  const declaredRule: DeclaredAdoptedRule = {
+    id: 'doc-no-fetch',
+    family: 'declared',
+    template: 'forbid-usage',
+    files: ['src/components/**'],
+    except: [],
+    usage: ['fetch'],
+    statement: 'Components never call fetch directly.',
+    mode: 'fast',
+    root: '..',
+    source: { file: 'CLAUDE.md', line: 4 },
+    evidence: { conforming: 3, total: 3, floor: 0.5 },
+  };
+  const sentences = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      line: index + 1,
+      text: `Keep rule ${index + 1}.`,
+    }));
+  const context: ContextReport = {
+    files: [
+      { file: 'AGENTS.md', unchecked: 14, ruleLike: sentences(12) },
+      { file: 'apps/web/CLAUDE.md', unchecked: 2, ruleLike: [] },
+    ],
+    stale: [{ rule: declaredRule, file: 'CLAUDE.md' }],
+  };
+
+  it('lists the rule-like sentences per file, ten at most, with the next step and the stale rule', () => {
+    const text = renderCheckText(checked({ context }));
+    expect(text).toContain(
+      'The sentence behind doc-no-fetch is no longer in CLAUDE.md; the rule stays in force.',
+    );
+    expect(text).toContain(
+      '  AGENTS.md: 14 new sentence(s) no adopted rule checks; 12 read(s) like a rule:',
+    );
+    expect(text).toContain('    AGENTS.md:10  Keep rule 10.');
+    expect(text).not.toContain('AGENTS.md:11');
+    expect(text).toContain('    and 2 more');
+    expect(text).toContain('  apps/web/CLAUDE.md: 2 new sentence(s) no adopted rule checks.');
+    expect(text).toContain(
+      'To enforce one, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.',
+    );
+    const summary = githubSummary(checked({ context }));
+    expect(summary).toContain(
+      '- `AGENTS.md`: 14 new sentence(s) no adopted rule checks; 12 read(s) like a rule:',
+    );
+    expect(summary).toContain('  - line 10: Keep rule 10.');
+    expect(summary).not.toContain('line 11:');
+    expect(summary).toContain('  - and 2 more');
+  });
+
+  it('notes ten rule-like sentences at most, after the violations, and never fails the check for them', () => {
+    const annotations = githubAnnotations(checked({ context }), 'new');
+    expect(annotations.map((line) => line.split(' ')[0])).toEqual([
+      '::error',
+      '::warning',
+      ...Array<string>(10).fill('::notice'),
+    ]);
+    expect(annotations[2]).toMatch(
+      /^::notice file=AGENTS\.md,line=1,title=archprint%3A not enforced yet::/,
+    );
+    expect(checkExitCode(checked({ introduced: [], context }), 'new')).toBe(0);
+  });
+
+  it('reports the files and stale rules in JSON', () => {
+    expect(checkJson(checked({ context }), '9.9.9')).toMatchObject({
+      context: {
+        files: context.files,
+        stale: [
+          {
+            rule: 'doc-no-fetch',
+            file: 'CLAUDE.md',
+            line: 4,
+            statement: 'Components never call fetch directly.',
+          },
+        ],
+      },
+    });
+  });
+
+  it('says nothing about context files when the change touches none', () => {
+    expect(renderCheckText(checked())).not.toContain('Context files');
+    expect(githubSummary(checked())).not.toContain('Context files');
   });
 });

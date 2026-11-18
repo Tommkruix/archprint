@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { frameworkFilesUnder } from '../../src/detector/orphan-detector.js';
+import { frameworkFilesUnder } from '../../src/detector/file-routes.js';
 import { detectOrphans } from '../../src/index.js';
 import { writeTree } from '../integration/layer-app.js';
 

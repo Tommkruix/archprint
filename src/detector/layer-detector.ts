@@ -5,7 +5,7 @@ import {
   walkRepo,
   type WalkedFile,
 } from '../scanner/file-walker.js';
-import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { workspaceAliases } from '../scanner/workspace-resolver.js';
 import { type LayerAlias, layerRootOf, resolveImportPath } from './layer-paths.js';
 import {
   evaluateGate,
@@ -18,14 +18,11 @@ export function layerOfPath(relativePath: string): string | null {
   return layerRootOf(relativePath)?.layer ?? null;
 }
 
-/** The tsconfig path aliases and baseUrl folders, each as an app-relative directory. */
+/** The tsconfig path aliases and baseUrl folders, each target as an app-relative directory, in resolution order. */
 export const layerAliases = (appDir: string): LayerAlias[] =>
-  Object.entries(buildWorkspaceMap(appDir)).map(([key, value]) => ({
-    prefix: key.replace(/\/?\*$/, ''),
-    dir: path
-      .relative(appDir, path.resolve(appDir, String(value).replace(/\/?\*$/, '')))
-      .split(path.sep)
-      .join('/'),
+  workspaceAliases(appDir).map(({ prefix, dir }) => ({
+    prefix,
+    dir: path.relative(appDir, dir).split(path.sep).join('/'),
   }));
 
 function targetLayers(

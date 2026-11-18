@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
+import { matchingAliases } from '../detector/layer-paths.js';
+import type { AliasEntry } from './resolve-import.js';
 import { isSourceFileName } from './source-paths.js';
 import { svelteKitAliases } from './sveltekit.js';
 
@@ -41,9 +43,10 @@ interface TsProject {
 }
 
 interface OwningProjects {
-  root: TsProject;
-  /** The direct references that compile files of the directory, in the order the config lists them. */
-  references: TsProject[];
+  /** The directory's tsconfig.json; null when variants configure it instead. */
+  root: TsProject | null;
+  /** The configs beside it that compile files of the directory: the root's direct references, or the variants. */
+  peers: TsProject[];
 }
 
 function readProject(configPath: string): TsProject | null {
@@ -51,76 +54,141 @@ function readProject(configPath: string): TsProject | null {
   return config === null ? null : { configPath, config };
 }
 
+const BASE_CONFIG = 'tsconfig.base.json';
+
+const isVariantConfig = (name: string): boolean =>
+  /^tsconfig\..+\.json$/.test(name) && name !== BASE_CONFIG;
+
+/**
+ * The tsconfig files that configure `dir`: its tsconfig.json; in a folder with neither tsconfig.json nor
+ * tsconfig.base.json, the `tsconfig.*.json` files beside it by name, the configs its builds name
+ * (`tsc -p tsconfig.web.json`, or a setup script that copies one to tsconfig.json).
+ */
+export function projectConfigPaths(dir: string): string[] {
+  const own = path.join(dir, 'tsconfig.json');
+  if (ts.sys.fileExists(own)) return [own];
+  if (ts.sys.fileExists(path.join(dir, BASE_CONFIG))) return [];
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter(isVariantConfig)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((name) => path.join(dir, name));
+}
+
 /**
  * The projects TypeScript compiles a directory's files with: its tsconfig.json, and each project it references that
  * includes a file whose nearest tsconfig.json is that one (a solution-style config such as create-vite's owns no
- * files itself). Direct references only, as oxc-resolver does.
+ * files itself), direct references only, as oxc-resolver does; without a tsconfig.json, each variant that includes
+ * such a file.
  */
 function owningProjects(appDir: string): OwningProjects | null {
   const dir = path.resolve(appDir);
-  const root = readProject(path.join(dir, 'tsconfig.json'));
+  const compilesDir = (project: TsProject): boolean =>
+    project.config.fileNames.some((file) => isNearestConfigDir(dir, path.resolve(file)));
+  const readAll = (configPaths: string[]): TsProject[] =>
+    configPaths
+      .map(readProject)
+      .filter((project): project is TsProject => project !== null)
+      .filter(compilesDir);
+  const [first, ...others] = projectConfigPaths(dir);
+  if (first === undefined) return null;
+  if (path.basename(first) !== 'tsconfig.json') {
+    const peers = readAll([first, ...others]);
+    return peers.length === 0 ? null : { root: null, peers };
+  }
+  const root = readProject(first);
   if (root === null) return null;
-  const references = (root.config.projectReferences ?? [])
-    .map((reference) => readProject(ts.resolveProjectReferencePath(reference)))
-    .filter((reference): reference is TsProject => reference !== null)
-    .filter((reference) =>
-      reference.config.fileNames.some((file) => isNearestConfigDir(dir, path.resolve(file))),
-    );
-  return { root, references };
+  const references = (root.config.projectReferences ?? []).map(ts.resolveProjectReferencePath);
+  return { root, peers: readAll(references) };
+}
+
+/** Whether `dir` has a project of its own: a tsconfig.json, or a `tsconfig.*.json` variant that compiles its files. */
+export function hasProjectConfig(dir: string): boolean {
+  const [first] = projectConfigPaths(dir);
+  if (first === undefined) return false;
+  return path.basename(first) === 'tsconfig.json' || owningProjects(dir) !== null;
 }
 
 /**
  * A `paths` key whose `*` follows its prefix directly (`"@*": ["./src/*"]`, so `@components/x` is `src/components/x`):
- * one alias per folder and source file of the target, the way `baseUrl` folders become aliases, and the prefix itself,
- * since TypeScript also matches `@/components/x` (the `*` taking the slash).
+ * one alias per folder of `folder` (the target before its `*`, which `rest` follows) and, for a final `*`, per source
+ * file, the way `baseUrl` folders become aliases, and then the prefix itself, since TypeScript also matches
+ * `@/components/x` (the `*` taking the slash).
  */
-function gluedPatternAliases(prefix: string, targetDir: string): Record<string, string> {
-  const map: Record<string, string> = prefix === '' ? {} : { [prefix]: targetDir };
+function gluedPatternAliases(prefix: string, folder: string, rest: string): AliasEntry[] {
+  const aliases: AliasEntry[] = prefix === '' || rest !== '' ? [] : [{ prefix, dir: folder }];
   let entries;
   try {
-    entries = readdirSync(targetDir, { withFileTypes: true }).sort((a, b) =>
+    entries = readdirSync(folder, { withFileTypes: true }).sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
     );
   } catch {
-    return map;
+    return aliases;
   }
   for (const entry of entries) {
     if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
     if (entry.isDirectory()) {
-      map[prefix + entry.name] = path.resolve(targetDir, entry.name);
-    } else if (entry.isFile() && isSourceFileName(entry.name)) {
+      aliases.push({ prefix: prefix + entry.name, dir: path.resolve(folder, entry.name + rest) });
+    } else if (rest === '' && entry.isFile() && isSourceFileName(entry.name)) {
       const stem = entry.name.replace(/\.[^.]+$/, '');
-      map[prefix + stem] = path.resolve(targetDir, stem);
+      aliases.push({ prefix: prefix + stem, dir: path.resolve(folder, stem) });
     }
   }
-  return map;
+  return aliases;
 }
 
-function configAliases({ configPath, config }: TsProject): Record<string, string> {
+/** Whether a `paths` target's `*` is a whole path segment (a final `*`, or one followed by a slash). */
+const isSegmentStar = (target: string, star: number): boolean =>
+  star > 0 && target[star - 1] === '/' && (star === target.length - 1 || target[star + 1] === '/');
+
+/** A `paths` key's substitutions TypeScript accepts: an array (error 5063 otherwise) of strings (error 5064). */
+const validTargets = (targets: unknown): string[] =>
+  Array.isArray(targets)
+    ? targets.filter((target): target is string => typeof target === 'string')
+    : [];
+
+/**
+ * A config's aliases, each `paths` target in order (a key with several targets repeats its prefix, for TypeScript
+ * tries them in turn), a target keeping a `*` that is not its last segment; a `*` key's targets come before those of
+ * an exact key of the same prefix (`"@ui/*"` and `"@ui"`), since TypeScript uses the exact key only for the bare
+ * name; then its `baseUrl` folders.
+ */
+function configAliases({ configPath, config }: TsProject): AliasEntry[] {
   const options = config.options;
   const paths = options.paths ?? {};
 
   const pathsBasePath = (options as { pathsBasePath?: string }).pathsBasePath;
   const base = options.baseUrl ?? pathsBasePath ?? path.dirname(configPath);
 
-  const map: Record<string, string> = {};
+  const patterns: AliasEntry[] = [];
+  const exact: AliasEntry[] = [];
+  const glued: AliasEntry[] = [];
   for (const [alias, targets] of Object.entries(paths)) {
-    const firstTarget = targets?.[0];
-    if (firstTarget === undefined) {
-      continue;
+    for (const target of validTargets(targets)) {
+      const star = target.indexOf('*');
+      if (alias.endsWith('*') && !alias.endsWith('/*') && isSegmentStar(target, star)) {
+        glued.push(
+          ...gluedPatternAliases(
+            alias.slice(0, -1),
+            path.resolve(base, target.slice(0, star)),
+            target.slice(star + 1),
+          ),
+        );
+        continue;
+      }
+      (alias.includes('*') ? patterns : exact).push({
+        prefix: alias.replace(/\/\*$/, ''),
+        dir: path.resolve(base, target.replace(/\/\*$/, '')),
+      });
     }
-    if (alias.endsWith('*') && !alias.endsWith('/*') && firstTarget.endsWith('/*')) {
-      const glued = gluedPatternAliases(
-        alias.slice(0, -1),
-        path.resolve(base, firstTarget.slice(0, -2)),
-      );
-      for (const [key, dir] of Object.entries(glued)) map[key] ??= dir;
-      continue;
-    }
-    const cleanAlias = alias.replace(/\/\*$/, '');
-    const cleanTarget = firstTarget.replace(/\/\*$/, '');
-    map[cleanAlias] = path.resolve(base, cleanTarget);
   }
+  const explicit = [...patterns, ...exact];
+  const aliases = [...explicit, ...glued.filter(({ prefix }) => !hasPrefix(explicit, prefix))];
 
   if (options.baseUrl !== undefined) {
     try {
@@ -131,66 +199,102 @@ function configAliases({ configPath, config }: TsProject): Record<string, string
         if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') {
           continue;
         }
-        if (map[entry.name] === undefined)
-          map[entry.name] = path.resolve(options.baseUrl, entry.name);
+        if (!hasPrefix(aliases, entry.name)) {
+          aliases.push({ prefix: entry.name, dir: path.resolve(options.baseUrl, entry.name) });
+        }
       }
     } catch {
       /* v8 ignore next -- unreadable baseUrl dir contributes no first-party prefixes */
     }
   }
 
-  return map;
+  return aliases;
 }
 
-/** The aliases the references add: those the root does not map, unless two references map them differently. */
-function referencedAliases(
-  references: readonly TsProject[],
-  rootAliases: Record<string, string>,
-): Record<string, string> {
-  const added: Record<string, string> = {};
+const hasPrefix = (aliases: readonly AliasEntry[], prefix: string): boolean =>
+  aliases.some((alias) => alias.prefix === prefix);
+
+/** Each prefix's targets, in order. */
+function targetsByPrefix(aliases: readonly AliasEntry[]): Map<string, string[]> {
+  const targets = new Map<string, string[]>();
+  for (const { prefix, dir } of aliases) targets.set(prefix, [...(targets.get(prefix) ?? []), dir]);
+  return targets;
+}
+
+/** The aliases the peers add: those the root does not map, unless two peers map them differently. */
+function peerAliases(
+  peers: readonly TsProject[],
+  rootAliases: readonly AliasEntry[],
+): AliasEntry[] {
+  const added = new Map<string, string[]>();
   const ambiguous = new Set<string>();
-  for (const reference of references) {
-    for (const [alias, target] of Object.entries(configAliases(reference))) {
-      if (Object.hasOwn(rootAliases, alias)) continue;
-      if (Object.hasOwn(added, alias) && added[alias] !== target) ambiguous.add(alias);
-      added[alias] ??= target;
+  for (const peer of peers) {
+    for (const [prefix, targets] of targetsByPrefix(configAliases(peer))) {
+      if (hasPrefix(rootAliases, prefix)) continue;
+      const known = added.get(prefix);
+      if (known === undefined) added.set(prefix, targets);
+      else if (known.join('\0') !== targets.join('\0')) ambiguous.add(prefix);
     }
   }
-  for (const alias of ambiguous) delete added[alias];
-  return added;
+  return [...added]
+    .filter(([prefix]) => !ambiguous.has(prefix))
+    .flatMap(([prefix, targets]) => targets.map((dir) => ({ prefix, dir })));
 }
 
-export function buildWorkspaceMap(rootDir: string): Record<string, string> {
+/**
+ * The import aliases of a folder, as absolute targets in the order TypeScript tries them: its tsconfig `paths` (a
+ * prefix repeats for each fallback target) and `baseUrl` folders, the peers' additions, SvelteKit aliases, and the
+ * package's own name unless a key already matches it, since TypeScript reads `paths` first.
+ */
+export function workspaceAliases(rootDir: string): AliasEntry[] {
   const projects = owningProjects(rootDir);
   if (projects === null) {
-    return {};
+    return [];
   }
 
-  const rootAliases = configAliases(projects.root);
-  const map = { ...rootAliases, ...referencedAliases(projects.references, rootAliases) };
+  const rootAliases = projects.root === null ? [] : configAliases(projects.root);
+  const aliases = [...rootAliases, ...peerAliases(projects.peers, rootAliases)];
 
-  for (const [alias, dir] of Object.entries(svelteKitAliases(rootDir))) map[alias] ??= dir;
+  for (const [prefix, dir] of Object.entries(svelteKitAliases(rootDir))) {
+    if (!hasPrefix(aliases, prefix)) aliases.push({ prefix, dir });
+  }
 
   const self = ownPackageName(rootDir);
-  if (self !== null && map[self] === undefined) map[self] = path.resolve(rootDir);
+  if (self !== null && matchingAliases(self, aliases).length === 0) {
+    aliases.push({ prefix: self, dir: path.resolve(rootDir) });
+  }
 
+  return aliases.map(({ prefix, dir }) => ({
+    prefix: prefix.replace(/\/?\*$/, ''),
+    dir: dir.replace(/\/?\*$/, ''),
+  }));
+}
+
+/** Each alias prefix of a folder with its first target (see `workspaceAliases`). */
+export function buildWorkspaceMap(rootDir: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const { prefix, dir } of workspaceAliases(rootDir)) map[prefix] ??= dir;
   return map;
 }
 
 /**
- * The tsconfig TypeScript compiles a file of `appDir` with: the first of its tsconfig.json and the references that
- * include the file, else its tsconfig.json.
+ * The tsconfig TypeScript compiles a file of `appDir` with: the first of its tsconfig.json and the peers that include
+ * the file, else the first of them.
  */
 export function owningConfigPath(appDir: string): (file: string) => string {
-  const rootConfig = path.join(path.resolve(appDir), 'tsconfig.json');
   const projects = owningProjects(appDir);
-  if (projects === null || projects.references.length === 0) return () => rootConfig;
-  const owners = [projects.root, ...projects.references].map(({ configPath, config }) => ({
+  const owners =
+    projects === null
+      ? []
+      : [...(projects.root === null ? [] : [projects.root]), ...projects.peers];
+  const fallback = owners[0]?.configPath ?? path.join(path.resolve(appDir), 'tsconfig.json');
+  if (owners.length <= 1) return () => fallback;
+  const files = owners.map(({ configPath, config }) => ({
     configPath,
     files: new Set(config.fileNames.map((file) => path.resolve(file))),
   }));
   return (file) => {
     const absolute = path.resolve(file);
-    return owners.find(({ files }) => files.has(absolute))?.configPath ?? rootConfig;
+    return files.find((owner) => owner.files.has(absolute))?.configPath ?? fallback;
   };
 }

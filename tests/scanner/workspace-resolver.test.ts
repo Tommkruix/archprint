@@ -49,6 +49,25 @@ describe('buildWorkspaceMap', () => {
   it('returns an empty map when no tsconfig exists', () => {
     expect(buildWorkspaceMap(fixture('does-not-exist'))).toEqual({});
   });
+
+  it('skips the paths entries TypeScript rejects: substitutions that are not an array, or not strings', () => {
+    const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-invalid-paths-')));
+    try {
+      writeTree(dir, {
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            paths: { '': 'string', d: 55, '@lib/*': [7, './lib/*'], '@app': ['./src'] },
+          },
+        }),
+      });
+      expect(buildWorkspaceMap(dir)).toEqual({
+        '@lib': path.join(dir, 'lib'),
+        '@app': path.join(dir, 'src'),
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('buildWorkspaceMap: a paths key whose * follows its prefix directly', () => {

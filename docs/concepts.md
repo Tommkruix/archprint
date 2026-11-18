@@ -63,9 +63,19 @@ Both modes read `paths` and `baseUrl` from the app's `tsconfig.json` and its `ex
 lists other projects under `references` (the solution-style layout create-vite, Angular and Nx generate),
 archprint also reads the referenced project that compiles the app's files, such as `tsconfig.app.json`, as
 TypeScript does. An alias in the `tsconfig.json` itself takes precedence, and an alias two referenced projects map
-to different folders stays unresolved in the fast pass rather than guessed. A key whose `*` follows its prefix
+to different targets stays unresolved in the fast pass rather than guessed. A folder with neither a `tsconfig.json`
+nor a `tsconfig.base.json`, whose configs are named variants such as `tsconfig.web.json` (the files a build passes to
+`tsc -p`, or a setup script copies to `tsconfig.json`), is read the same way: archprint keeps the aliases the
+variants agree on, and resolves each file in deep mode with the first variant, by name, that includes it. Such a
+folder counts as an app unless a folder with a `tsconfig.json` or `tsconfig.base.json` sits above it, since
+TypeScript would use that config instead. A key whose `*` follows its prefix
 directly, such as `"@*": ["./src/*"]`, maps each folder and source file of the target (`@components/button` is
-`src/components/button`), the way `baseUrl` folders do. In a SvelteKit project (one that declares
+`src/components/button`), the way `baseUrl` folders do. As in TypeScript, an import takes the key with the longest matching prefix, the text the `*` matched replaces the
+`*` wherever it sits in a target (`"@vue/*": ["./packages/*/src"]` makes `@vue/shared` `packages/shared/src`), and
+the key's targets are tried in order, the first that names a source file winning; when none does, the import
+resolves as a workspace package of that name would. A key with text after its `*`, such as `"x/*.vue"`, is not read
+yet, and a key without a `*` also matches paths below it. Layer boundaries, which read imports as written without
+looking for files, use a key's first target. In a SvelteKit project (one that declares
 `@sveltejs/kit`), archprint also reads `$lib` (`kit.files.lib`, `src/lib` by default) and `kit.alias` from
 `svelte.config` without running it, because SvelteKit writes them into a generated `.svelte-kit/tsconfig.json` a
 fresh checkout does not have; an alias the tsconfig maps itself wins. A SvelteKit project without a `svelte.config`, such as
@@ -202,15 +212,19 @@ risk is a wrong mapping, not a coincidence. Some details:
 
 - Imports are matched on what they name, not on what a barrel re-exports. Type-only imports never count. Neither do
   test files, except for `forbid-file`. `export ... from` counts as an import.
-- A `targets` glob is matched on the file an import resolves to: a relative path, a tsconfig `paths` alias, or a
-  workspace package by name. A package subpath such as `@acme/ui/button` follows the package's `exports` the way
+- A `targets` glob is matched on the file an import resolves to: a relative path, a tsconfig `paths` alias, a `#`
+  import, or a workspace package by name. A package subpath such as `@acme/ui/button` follows the package's `exports` the way
   Node.js matches it (an exact key first, then the most specific `*` pattern) and takes the first of that key's
   targets that is a source file in the repository (`.ts`, `.tsx`, `.vue` or `.svelte`; a `.js` target counts as its
   `.ts` source). Declaration files (`.d.ts`) are tried last, for the root import too, so where a package lists both
   its built types and its source, the source is used whether or not the package has been built. When no target is
   such a file, the import stays the path under the package folder; a looser pattern is not tried. Workspaces nested
   below the folder you pass count too, such as a JavaScript workspace in `web/` of a repository whose root is not
-  one; if two workspaces have a package of the same name, the shallower workspace's package is used.
+  one; if two workspaces have a package of the same name, the shallower workspace's package is used. A `#` import
+  such as `#hooks/useBudget` follows the `imports` field of the package.json nearest to the importing file, matched
+  the same way and resolved to the first of the key's targets that is a source file; a nearer package.json without
+  `imports` ends the lookup, as in Node.js. A tsconfig `paths` alias of the same name wins, as in TypeScript. Only
+  `./` targets are followed, not a package name.
 - With `imports` names, a namespace import (`import * as cache`) and `export * from` count, as in ESLint's
   `no-restricted-imports`; an `import()` call and a bare `import 'x'` do not, since the names they take are unknown.
   A default import counts as the name `default`.
@@ -241,8 +255,23 @@ baseline: a recorded file that breaks the rule more times than it did on the bas
 rule in that file is listed. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
 a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
 take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
-if the sentence is gone, `generate` says so and the rule stays until `--reset`. dependency-cruiser does not
-enforce declared rules.
+if the sentence is gone, `generate` says so (and so does `archprint check`, on each pull request) and the rule
+stays until `--reset`. dependency-cruiser does not enforce declared rules.
+
+**Keeping up as the files change.** When a change edits a context file, `archprint check` compares it with the
+base branch and lists, per file, the sentences the change adds that no adopted rule quotes. A file counts when it
+applies to the checked app: CLAUDE.md, AGENTS.md, GEMINI.md, `.cursorrules` or `.windsurfrules` in the app, below
+it or in a folder above it, and `.cursor/rules/`, `.github/copilot-instructions.md` and
+`.github/instructions/*.instructions.md` beside such a folder. Prose counts (paragraphs, list items, quotes, table
+rows); headings, code blocks, HTML and front matter do not.
+
+Archprint does not decide which sentences are rules: your agent does, in the gap report. `check` only marks the
+new sentences that read like instructions, a sentence with an obligation word (must, should, never, always, do
+not, avoid, prefer, ...) or one that opens with a command ("Use ...", "When adding a column, use ..."), on their
+line in the pull request, ten at most. On a hand-labelled sample of 160 sentences that real commits added to AGENTS.md and
+CLAUDE.md files, about 7 in 10 marked sentences were instructions, and about 7 in 10 instructions were marked; the count per
+file includes the rest, so an instruction that is not marked still shows up there. These notes never fail
+`check`.
 
 ## Use from an AI agent (MCP)
 

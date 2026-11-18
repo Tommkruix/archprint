@@ -1,7 +1,5 @@
-import { existsSync } from 'node:fs';
-import * as path from 'node:path';
 import { walkSourceTree } from '../scanner/file-walker.js';
-import { buildWorkspaceMap } from '../scanner/workspace-resolver.js';
+import { buildWorkspaceMap, hasProjectConfig } from '../scanner/workspace-resolver.js';
 import { svelteKitModules } from '../scanner/sveltekit.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
 import { type CycleAnalysis, detectCycles } from '../detector/cycle-detector.js';
@@ -113,7 +111,7 @@ export interface ScanResult {
 }
 
 export function hasTsConfig(appDir: string): boolean {
-  return existsSync(path.join(appDir, 'tsconfig.json'));
+  return hasProjectConfig(appDir);
 }
 
 export function scanRepo(
