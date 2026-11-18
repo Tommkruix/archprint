@@ -3,7 +3,7 @@ import { exemptDepcruiseFrom, testPaths } from './depcruise-exempt.js';
 
 export const DEPENDENCY_INTERNALS_RULE = 'no-dependency-internals';
 
-const INTERNAL_PATH = 'node_modules/(?:@[^/]+/)?[^/]+/(?:src|internal|internals)/';
+const INTERNAL_PATH = 'node_modules/(?:@[^/]+/[^/]+|[^/]+)/(?:src|internal|internals)/';
 
 export interface NoInternalsRule {
   name: string;

@@ -132,7 +132,7 @@ const ROLE_RULES: readonly RoleRule[] = [
   {
     role: 'ROUTE_ENTRY',
     id: 'next-app-router-entry',
-    test: /(^|\/)app\/(.*\/)?(page|layout|template|loading|error|not-found|default|global-error)\.tsx?$/,
+    test: /(^|\/)app\/(.*\/|)(page|layout|template|loading|error|not-found|default|global-error)\.tsx?$/,
     confidence: 0.9,
   },
   { role: 'COMPONENT', id: 'tsx-component', test: /\.tsx$/, confidence: 0.5 },
