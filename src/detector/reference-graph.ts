@@ -15,7 +15,7 @@ import { type ConfigAliases, aliasesFor, importResolution } from './declared-rul
 import { sourceFileFor } from './import-target.js';
 import { resolveImportTarget } from './layer-paths.js';
 import { type MetroPlatform, metroFileFor, metroPlatformsUnder } from './metro-platforms.js';
-import { createViteRoots, loadedFiles } from './module-loaders.js';
+import { createViteProjects, createViteRoots, loadedFiles } from './module-loaders.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
@@ -170,6 +170,7 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   }
   const sources = [...referrers.keys()];
   const viteRootOf = createViteRoots(absoluteRoot);
+  const bundledByVite = createViteProjects(absoluteRoot);
   for (const file of walked) {
     for (const loader of readLoaders(file.absolutePath)) {
       const aliases = aliasesFor(file.relativePath, configs);
@@ -179,6 +180,7 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
         sources,
         aliases,
         viteRootOf(file.relativePath),
+        bundledByVite(file.relativePath),
       )) {
         refer(file.relativePath, target);
       }
