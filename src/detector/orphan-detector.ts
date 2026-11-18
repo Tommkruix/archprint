@@ -5,6 +5,7 @@ import { packageEntriesUnder } from './package-entries.js';
 import { REQUEST_ENTRY_ROLES } from './pattern-detector.js';
 import { CONFIG_FILE, type ReferenceGraphs, referenceGraphs } from './reference-graph.js';
 import { STORY } from './stories-isolation-detector.js';
+import { viteEntriesUnder } from './vite-entries.js';
 
 const ENTRY_FILENAME =
   /(^|\/)(page|layout|loading|error|not-found|template|default|route|middleware|instrumentation|global-error|_app|_document|index)\.(ts|tsx)$/;
@@ -49,6 +50,7 @@ export function detectOrphans(
     root,
     files.map((file) => file.relativePath),
   );
+  const viteEntries = viteEntriesUnder(root);
   const graph = (options.references ?? referenceGraphs())(root);
   const prefix = path.relative(graph.root, root).split(path.sep).join('/');
   const inGraph = (file: string): string => (prefix === '' ? file : `${prefix}/${file}`);
@@ -60,7 +62,8 @@ export function detectOrphans(
     if (
       isEntry(file) ||
       frameworkFile(file.relativePath) ||
-      packageEntries.has(file.relativePath)
+      packageEntries.has(file.relativePath) ||
+      viteEntries.has(file.relativePath)
     ) {
       continue;
     }

@@ -214,7 +214,13 @@ JavaScript files
 blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
 Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,
 `opengraph-image`, `twitter-image`, `icon`, `apple-icon`) and root files (`middleware`, `proxy`,
-`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. A pages-router page is
+`instrumentation`, `instrumentation-client`), Storybook stories, and `*.config.*` files. In a folder with a Vite
+config, the files its pages load as modules are entries: those of `index.html` in the Vite root (the config's folder,
+or its `root` when written as a path, such as `'web'`, `__dirname` or `resolve(__dirname, 'web')`) and of each HTML
+file in `build.rollupOptions.input` or `build.rolldownOptions.input`, meaning a `<script type="module">` tag's `src`
+and the `/`, `./` and `../` imports of an inline module script. A `src` starting with `/` is read from the Vite root
+unless `publicDir` holds that file; classic scripts, scripts marked `vite-ignore`, URLs, and other HTML files (which
+only the dev server serves) are not counted. A pages-router page is
 any file under `pages/` or `src/pages/` of a project that declares `next` (in its package.json or its workspace
 root's) or has a `next.config.*`; a `pages/` folder in an app without Next.js is checked like any other. In a
 SvelteKit project (a folder whose package.json or workspace root declares `@sveltejs/kit` and that holds a
@@ -245,8 +251,8 @@ listed. A dedicated dead-code tool such as knip covers more of these cases.
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
 November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
 a file-based router archprint did not model then (SvelteKit `+page` files, entries since 0.18.3; Expo Router routes, entries since 0.19.0),
-pages started by a Vite or Parcel HTML entry, files a folder loader picks up (migrations, `import.meta.glob` before
-archprint followed it, a code generator's glob), project templates a tool copies, and computed `import()` paths. Of 35 files listed as test-only,
+pages started by a Vite or Parcel HTML entry (Vite pages are entries since 0.19.0), files a folder loader picks up (migrations, `import.meta.glob` before
+archprint followed it, a code generator's glob), project templates a tool copies, and computed `import()` paths (followed since 0.19.0). Of 35 files listed as test-only,
 31 were imported only by tests. Treat the list as candidates to check before deleting anything, not as dead code.
 
 ### Reachability (Report)

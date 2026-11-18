@@ -2,11 +2,8 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import type { ModuleLoader } from '../scanner/file-walker.js';
 import { matchesGlob } from '../scanner/globs.js';
+import { VITE_CONFIG_NAMES } from '../scanner/vite-config.js';
 import { type LayerAlias, resolveImportPath } from './layer-paths.js';
-
-const VITE_CONFIG_NAMES = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'].map(
-  (ext) => `vite.config.${ext}`,
-);
 
 /** The nearest folder at or above `dir` (a path from `root`) holding one of `names`; null when none does. */
 function nearestHolding(root: string, dir: string, names: readonly string[]): string | null {
