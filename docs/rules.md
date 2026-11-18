@@ -195,7 +195,13 @@ that is not written out counts every file in its folder), or a tool config namin
 `setupFiles`, from any file of the app's workspace (the app itself outside a workspace), each import resolved
 through its own nearest tsconfig, so another package's import or a nested app's alias counts. A `#` import such as
 `#hooks/useBudget` resolves through the `imports` field of the nearest package.json, as Node.js does for `./`
-targets (see [concepts](./concepts.md)). JavaScript files
+targets (see [concepts](./concepts.md)). In a React Native project (the nearest package.json declares `react-native` or
+`expo`), an import of `./button` also counts for the file Metro picks on each platform the project builds:
+`button.ios` and `button.android`, plus `button.web`, `.windows`, `.macos` or `.tvos` when the project or its
+workspace root declares `react-native-web`, `react-native-windows`, `react-native-macos` or `react-native-tvos`; a
+platform without its own file takes `button.native` (except web), then `button`, in Metro's default extension order.
+A platform file nothing picks, such as `button.web.tsx` in a project without `react-native-web`, is still listed.
+JavaScript files
 (`.js`, `.jsx`, `.mjs`, `.cjs`), `.mts` and `.cts` files, and Astro components (their frontmatter and `<script>`
 blocks) count as referrers, but are never listed themselves. Framework and tool entries are never reported:
 Next.js pages, routes, metadata files (`robots`, `sitemap`, `manifest`,

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { discoverAppDirs } from '../scanner/app-dirs.js';
 import {
@@ -14,6 +14,7 @@ import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { type ConfigAliases, aliasesFor, importResolution } from './declared-rules.js';
 import { sourceFileFor } from './import-target.js';
 import { resolveImportTarget } from './layer-paths.js';
+import { type MetroPlatform, metroFileFor, metroPlatformsUnder } from './metro-platforms.js';
 import { createViteRoots, loadedFiles } from './module-loaders.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
@@ -117,6 +118,40 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   const fileFor = sourceFileFor((candidate) => existsSync(path.join(absoluteRoot, candidate)));
   const resolve = (from: string, specifier: string): string | null =>
     resolveImportTarget(from, specifier, aliasesFor(from, configs), packages, scopes, fileFor);
+  const files = new Map<string, boolean>();
+  const isFile = (candidate: string): boolean => {
+    let known = files.get(candidate);
+    if (known === undefined) {
+      known =
+        statSync(path.join(absoluteRoot, candidate), { throwIfNoEntry: false })?.isFile() === true;
+      files.set(candidate, known);
+    }
+    return known;
+  };
+  const platformsOf = metroPlatformsUnder(absoluteRoot);
+  const platformFileFor = new Map<MetroPlatform, (base: string) => string | null>();
+  const fileOnPlatform = (platform: MetroPlatform): ((base: string) => string | null) => {
+    let found = platformFileFor.get(platform);
+    if (found === undefined) {
+      found = metroFileFor(isFile, platform);
+      platformFileFor.set(platform, found);
+    }
+    return found;
+  };
+  /** What an import resolves to as TypeScript reads it, and, in a React Native project, on each platform Metro builds. */
+  const targets = (from: string, specifier: string): (string | null)[] => [
+    resolve(from, specifier),
+    ...platformsOf(from).map((platform) =>
+      resolveImportTarget(
+        from,
+        specifier,
+        aliasesFor(from, configs),
+        packages,
+        scopes,
+        fileOnPlatform(platform),
+      ),
+    ),
+  ];
 
   const walked = graphFiles(absoluteRoot);
   const tests = new Set<string>();
@@ -130,7 +165,7 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   };
   for (const file of walked) {
     for (const specifier of readSafely(() => moduleReferences(file.absolutePath))) {
-      refer(file.relativePath, resolve(file.relativePath, specifier));
+      for (const target of targets(file.relativePath, specifier)) refer(file.relativePath, target);
     }
   }
   const sources = [...referrers.keys()];
