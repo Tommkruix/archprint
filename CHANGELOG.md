@@ -1,5 +1,49 @@
 # archprint
 
+## 0.19.0
+
+### Minor Changes
+
+- `archprint check` now keeps up with your context files. When a pull request edits a CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules` file or `.github/copilot-instructions.md` that applies to the checked app, `check` lists the sentences it adds that no adopted rule enforces yet, and marks the ones that read like rules on their line (a notice on GitHub, ten at most), so a rule written down after your team ran the gap report does not stay guidance unnoticed. It also warns when a change removes the sentence behind a rule adopted with `generate --declare`; before, only `generate` said so. These notes never fail the check, and the JSON output and the MCP `archprint_check` tool return them under `context`.
+
+### Patch Changes
+
+- The dead-code lists now follow modules loaded by a path computed at runtime: an `import()` or `require()` of a
+  template such as `` `./pages/${name}.tsx` ``, a path built with `path.join` or `path.resolve` from `__dirname` or
+  `import.meta.dirname` (directly, through a `const`, or through `pathToFileURL(...).href`), and the file
+  `new URL('./worker.ts', import.meta.url)` names. A part known only at runtime matches within one folder in a Vite
+  project, as Vite expands it (only for a path ending with a file extension, and not `` `./${name}.ext` `` in the
+  importing file's own folder), and across folders elsewhere, as webpack and Node.js can load any of them. A path that
+  is only such a part in the importing file's folder
+  or a folder above it, like `` `./${name}` ``, is not followed, so it does not hide the files around it.
+  ``import(`./x`)`` with no
+  substitution now counts like `import('./x')`.
+- The dead-code lists no longer report routes that a file-based router loads by their location: every file of an Expo
+  Router `app/` folder, React Router's `root`, entry and `flatRoutes()` route modules (in the app folder its config
+  names) and the module paths its `routes.ts` passes to `route()`, `index()` and `layout()`, and the files under a TanStack Router `routesDirectory`. Other files in
+  those folders are still checked.
+- The orphan and test-only lists now follow files a bundler loads by pattern. A file matched by an `import.meta.glob` call (Vite), written as a literal pattern or a list of them, or found by a `require.context` call (webpack) with a literal folder, counts as referenced by the file that makes the call. Files a `!` pattern matches are excluded, relative patterns start at a literal `base` option when there is one, a `require.context` follows its recursion flag and filter, and a pattern starting with `/` starts at the nearest folder with a Vite config, else with a package.json. Before, such files were listed as orphans. A pattern built at run time is still not followed.
+- A tsconfig whose `paths` holds an entry TypeScript rejects (substitutions that are not an array of strings, such as
+  `"@x": "./src"`) no longer stops the scan; such entries are skipped, as TypeScript reports them as errors.
+- The dead-code lists no longer report React Native platform files that Metro picks for an import. In a project that
+  declares `react-native` or `expo`, an import of `./button` now also counts for `button.ios.tsx`, `button.android.tsx`,
+  `button.native.tsx` and, when the project declares `react-native-web` (or the Windows, macOS or tvOS packages),
+  `button.web.tsx` and the like, resolved in the order Metro tries them. A platform file no build picks is still listed.
+- Follow `#` imports (the `imports` field of package.json, such as `"#hooks/*": "./src/hooks/*.ts"`) when listing orphans and test-only files and when checking your written rules. Before, a file reached only through a `#` import was listed as an orphan, and a written rule that forbids importing it missed the import. A `#` import resolves through the package.json nearest to the importing file, as in Node.js, and a tsconfig alias of the same name still wins, as in TypeScript.
+- tsconfig `paths` now resolve the way TypeScript resolves them. A `*` in the middle of a target, as in the monorepo
+  mapping `"@vue/*": ["./packages/*/src"]`, takes the matched name; before, such an import resolved to a path that
+  does not exist, so the dead-code check, layer boundaries and declared rules missed it. A key's later targets are
+  tried when the first names no file, the key with the longest matching prefix wins, and an import whose targets all
+  miss resolves as the workspace package of that name.
+- Read a folder whose only TypeScript configs are named variants, such as `tsconfig.web.json` and `tsconfig.native.json`, or `tsconfig.oss.json` that a setup script copies to `tsconfig.json`. Before, archprint needed a `tsconfig.json`: `scan` and `init` stopped with "No tsconfig.json", and the orphan list, test-only list and your written rules saw none of the folder's path aliases, so a file reached only through one was listed as an orphan. archprint now keeps the aliases the variants agree on and leaves out one they map differently. A folder with a `tsconfig.json` or `tsconfig.base.json`, or one below such a folder, is read as before.
+- The orphan list no longer reports the files a Vite app starts from. In a folder with a Vite config, the module scripts
+  of `index.html` in the Vite root and of each HTML build input (`build.rollupOptions.input`,
+  `build.rolldownOptions.input`) are entries: a `<script type="module">` tag's `src` and the path imports of an inline
+  module script. A `/` path is read from the Vite root (`root` when written as a path) unless the file is in
+  `publicDir`; classic scripts, `vite-ignore` scripts and URLs are not counted. Paths in a config can now also be
+  written as `resolve(__dirname, ...)` with `resolve` imported by name, `__dirname` itself, or
+  `fileURLToPath(new URL('./x', import.meta.url))`, which computed `import()` paths follow too.
+
 ## 0.18.3
 
 ### Patch Changes
