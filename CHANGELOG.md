@@ -1,5 +1,31 @@
 # archprint
 
+## 0.19.1
+
+### Patch Changes
+
+- `archprint check` now catches a file that breaks a rule more times than it did on the base branch for every rule
+  family, a recorded exception included. Before, request-handler rules (AP-001, AP-002), layer and role boundaries,
+  console and `process.env` rules counted at most one break per file, so a second break in a file that already had one
+  went unreported, and a second file importing a story that another file already imported was never reported at all.
+  Console and `process.env` findings now show their line.
+- dependency-cruiser no longer refuses the generated config. When it contained the dependency internals rule
+  (`no-dependency-internals`) or the framework entry rule (`no-import-framework-entry`), dependency-cruiser stopped with
+  "has an unsafe regular expression. Bailing out" and checked nothing, because those two rules used a pattern its safety
+  check rejects. They now use equivalent patterns that match the same files. Run `archprint generate` again to update an
+  existing `.archprint/dependency-cruiser.json`.
+- The gap report sends a `forbid-usage` mapping back to be checked when the code has its name only as something other
+  than a global, such as the JSX attribute `dangerouslySetInnerHTML`, the member `window.localStorage` or a local
+  variable, naming the files that have it. Before, such a rule was listed to enforce now and `generate --declare`
+  adopted it, although it could never report anything.
+- A file a vitest, jest or playwright config names in `setupFiles`, `setupFilesAfterEnv`, `globalSetup` or
+  `globalTeardown` (the `jest` field of package.json included), such as `vitest.setup.ts` or `jest.setup.ts`, now counts
+  as a test file. Before, it counted as production code: test isolation recorded it as an exception for importing test
+  helpers, other rules counted its imports and `console` calls, and dead code could list it as unused. The generated
+  ESLint and dependency-cruiser rules skip it like any other test file, and a module only it imports, such as a mock
+  server, is listed as imported only by tests. Where a setup file was a recorded exception, `generate --check` reports
+  the change until you run `archprint generate` again.
+
 ## 0.19.0
 
 ### Minor Changes
