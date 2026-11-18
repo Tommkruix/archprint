@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cruise, type IFlattenedRuleSet } from 'dependency-cruiser';
 import { afterAll, describe, expect, it } from 'vitest';
 import { type DependencyCruiserRule, evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import { summarizeRules } from '../../src/cli/summary.js';
@@ -1057,6 +1058,62 @@ describe('cli generate', () => {
     ]);
     expect(exemptsTests).toHaveLength(7);
     expect(matches(rules.find((rule) => rule.name === 'not-to-test')!.to.path)).toBe(true);
+  });
+
+  it('emits only dependency-cruiser rules dependency-cruiser accepts, in every family', async () => {
+    const scan = emptyScan({
+      testSetupFiles: ['src/vitest.setup.ts'],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      roleLayering: { appDir: 'x', boundaries: [fakeRoleBoundary('REPOSITORY', 'SERVICE', 40)] },
+      publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
+      featureSlices: { appDir: 'x', groups: [fakeSliceGroup('src/features', 40, 0)] },
+      appIsolation: { appDir: 'x', groups: [fakeAppGroup('apps', 40, 0)] },
+      testIsolation: fakeTestIsolation(40, 0, 5),
+      dependencyInternals: fakeDependencyInternals(60, 0),
+      entryPurity: {
+        ...fakeEntryPurity(60, 0),
+        imports: [{ file: 'app/[slug]/page.tsx', importer: 'lib/links.ts' }],
+      },
+      phantomDependencies: fakePhantom(60, 0),
+      serverClient: fakeServerClient(60, 0),
+      storiesIsolation: fakeStories(60, 0),
+      uiDataIsolation: fakeUiData(60, 0),
+    });
+    const ruleNames = collect(scan, { appPath: 'apps/web' })
+      .depcruise.flatMap((family) => family.forbidden)
+      .map((rule) => rule.name);
+    const exceptions = ['app/[id]/page.tsx', 'app/(marketing)/about/page.tsx', 'lib/a+b.ts'];
+    const collected = collectEnforcement(scan, {
+      enforcers: DEPCRUISE,
+      structural: true,
+      appPath: 'apps/web',
+      allowed: new Map([...ruleNames, 'test-isolation'].map((name) => [name, exceptions])),
+    });
+    expect(collected.depcruise.map((family) => family.family).sort()).toEqual([
+      'app-isolation',
+      'dependency-internals',
+      'entry-purity',
+      'feature-slice',
+      'layer',
+      'phantom-deps',
+      'public-api',
+      'role-layering',
+      'server-client',
+      'stories-isolation',
+      'test-isolation',
+      'ui-data',
+    ]);
+
+    const empty = mkdtempSync(path.join(tmpdir(), 'archprint-depcruise-'));
+    const rejected: string[] = [];
+    for (const rule of collected.depcruise.flatMap((family) => family.forbidden)) {
+      const ruleSet = JSON.parse(JSON.stringify({ forbidden: [rule] })) as IFlattenedRuleSet;
+      await cruise([empty], { validate: true, ruleSet }).catch((error: Error) =>
+        rejected.push(`${rule.name}: ${error.message.split('\n')[0]}`),
+      );
+    }
+    rmSync(empty, { recursive: true, force: true });
+    expect(rejected).toEqual([]);
   });
 
   it('collects ts-arch boundary rules and expands the test file from AUTO boundaries', () => {
