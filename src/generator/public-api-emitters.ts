@@ -5,7 +5,7 @@ import {
   appPathPrefix,
   exemptDepcruiseFrom,
   noneAllowed,
-  TEST_ROLE_REGEX,
+  testPaths,
   toleratedFiles,
 } from './depcruise-exempt.js';
 
@@ -35,6 +35,7 @@ export function toDependencyCruiserPublicApi(
   include: readonly GenerationStatus[] = ['AUTO'],
   appPath = '.',
   allowedFor: AllowedFor = noneAllowed,
+  setupFiles: readonly string[] = [],
 ): DeepImportConfig {
   const forbidden = groups
     .filter((group) => include.includes(group.gate.status))
@@ -47,7 +48,7 @@ export function toDependencyCruiserPublicApi(
         severity: 'error' as const,
         from: {
           pathNot: exemptDepcruiseFrom(
-            [TEST_ROLE_REGEX, `^${dir}/`],
+            [...testPaths(setupFiles, appPath), `^${dir}/`],
             toleratedFiles(group.violations, allowedFor(name)),
             appPath,
           ),

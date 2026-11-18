@@ -39,6 +39,12 @@ does not adopt the rule. **When not to use:** rarely, cycles are a near-universa
 
 Detects production (non-test) code importing a test or spec file. Vacuous on a package with no tests (rejected).
 ESLint reports it as `archprint/test-isolation`; type-only imports are not counted, as in the scan.
+A test file, here and in every other rule, is one named `*.test.ts`, `*.spec.ts`, `*.e2e.ts` or `*.e2e-spec.ts`
+(or `.tsx`), one under a `__tests__`, `__mocks__`, `test`, `tests`, `e2e`, `cypress` or `playwright` folder, or one
+a vitest, jest or playwright config names in `setupFiles`, `setupFilesAfterEnv`, `globalSetup` or `globalTeardown`
+(the `jest` field of package.json included), such as `vitest.setup.ts`. The generated ESLint rule recognizes an
+imported test file only by a `.test` or `.spec` import path; dependency-cruiser and `archprint check` recognize every
+test file above.
 **When not to use:** if you keep shared setup helpers under a test directory and import them from production on
 purpose, add an ignore for those files.
 

@@ -31,6 +31,7 @@ import type {
 } from '../../src/index.js';
 import { excludeAllowed } from '../../src/cli/allowed-evidence.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
+import { TEST_ROLE_REGEX } from '../../src/generator/depcruise-exempt.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
   collectEnforcement,
@@ -342,6 +343,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     layerAliases: [],
     virtualModules: [],
     gitignoredPaths: [],
+    testSetupFiles: [],
     cycles: emptyCycles(),
     orphans: emptyOrphans(),
     reachability: emptyReachability(),
@@ -994,6 +996,67 @@ describe('cli generate', () => {
     expect(new RegExp(layer.from.path).test('apps/web/utils/a.ts')).toBe(true);
     const tsArch = c.tsArchRules.find((rule) => rule.name === 'no-utils-to-api')!;
     expect(new RegExp(tsArch.from.path).test('utils/a.ts')).toBe(true);
+  });
+
+  it('exempts a file a test runner config names in every rule that exempts test files', () => {
+    const setup = 'src/vitest.setup.ts';
+    const scan = emptyScan({
+      testSetupFiles: [setup],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
+      testIsolation: fakeTestIsolation(40, 0, 5),
+      dependencyInternals: fakeDependencyInternals(60, 0),
+      entryPurity: fakeEntryPurity(60, 0),
+      phantomDependencies: fakePhantom(60, 0),
+      serverClient: fakeServerClient(60, 0),
+      deepRelative: fakeDeepRelative(60, 0),
+      consoleIsolation: fakeConsole(60, 0),
+      envAccess: fakeEnv(60, 0),
+      workspacePackageApi: fakeWpkg(60, 0),
+    });
+    const families = collect(scan, { enforcers: ESLINT }).eslintFamilies.filter((family) =>
+      family.ignores.includes('**/__tests__/**'),
+    );
+    expect(
+      families
+        .filter((family) => family.ignores.includes(setup))
+        .map((family) => family.name)
+        .sort(),
+    ).toEqual([
+      'console-isolation',
+      'env-access',
+      'import-style',
+      'test-isolation',
+      'workspace-package',
+    ]);
+    expect(families).toHaveLength(5);
+
+    const matches = (patterns: string | string[] | undefined): boolean =>
+      [patterns ?? []].flat().some((pattern) => new RegExp(pattern).test(setup));
+    const rules = collect(scan).depcruise.flatMap((family) => family.forbidden) as unknown as {
+      name: string;
+      from: { pathNot?: string | string[] };
+      to: { path?: string | string[] };
+    }[];
+    const exemptsTests = rules.filter((rule) =>
+      [rule.from.pathNot ?? []].flat().includes(TEST_ROLE_REGEX),
+    );
+    expect(
+      exemptsTests
+        .filter((rule) => matches(rule.from.pathNot))
+        .map((rule) => rule.name)
+        .sort(),
+    ).toEqual([
+      'no-deep-import-features-auth',
+      'no-dependency-internals',
+      'no-import-framework-entry',
+      'no-phantom-dependencies',
+      'no-server-only-in-client',
+      'no-utils-to-api',
+      'not-to-test',
+    ]);
+    expect(exemptsTests).toHaveLength(7);
+    expect(matches(rules.find((rule) => rule.name === 'not-to-test')!.to.path)).toBe(true);
   });
 
   it('collects ts-arch boundary rules and expands the test file from AUTO boundaries', () => {
