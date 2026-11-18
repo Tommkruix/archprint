@@ -162,7 +162,7 @@ function makeDeclaredRule(spec) {
     create(context) {
       const file = appRelativePath(context.physicalFilename);
       if (file === null || !isScanned(file) || spec.ignore.includes(file)) return {};
-      if (spec.template !== 'forbid-file' && roleOf(file) === 'TEST') return {};
+      if (spec.template !== 'forbid-file' && isTestFile(file)) return {};
       const rootFile = relative(root, realPathOf(context.physicalFilename)).split(sep).join('/');
       if (!files.some((pattern) => pattern.test(rootFile)) || except.some((pattern) => pattern.test(rootFile))) {
         return {};

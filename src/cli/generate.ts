@@ -258,30 +258,30 @@ export function collectEnforcement(
   };
   adoptFamily(
     'console',
-    () => toEslintConsoleIsolation(scan.consoleIsolation),
+    () => toEslintConsoleIsolation(scan.consoleIsolation, scan.testSetupFiles),
     () => consoleIsolationRule(scan),
   );
   if (structural) {
     adoptFamily(
       'env-access',
-      () => toEslintEnvAccess(scan.envAccess),
+      () => toEslintEnvAccess(scan.envAccess, scan.testSetupFiles),
       () => envAccessRule(scan),
     );
   }
   adoptFamily(
     'import-style',
-    () => toEslintDeepRelative(scan.deepRelative),
+    () => toEslintDeepRelative(scan.deepRelative, scan.testSetupFiles),
     () => importStyleRule(scan),
   );
   adoptFamily(
     'test-isolation',
-    () => toEslintTestIsolation(scan.testIsolation),
+    () => toEslintTestIsolation(scan.testIsolation, scan.testSetupFiles),
     () => testIsolationRule(scan),
   );
   if (structural) {
     adoptFamily(
       'workspace-package',
-      () => toEslintWorkspacePackageApi(scan.workspacePackageApi),
+      () => toEslintWorkspacePackageApi(scan.workspacePackageApi, scan.testSetupFiles),
       () => workspacePackageRule(scan),
     );
   }
@@ -333,6 +333,7 @@ export function collectEnforcement(
     aliases: scan.layerAliases,
     virtualModules: scan.virtualModules,
     ignored: scan.gitignoredPaths,
+    testSetupFiles: scan.testSetupFiles,
     layers: layerRuleSpecs(layers, allowedFor),
     phantom:
       phantom === null
@@ -350,24 +351,33 @@ export function collectEnforcement(
   };
   const eslintApp = emitDepcruise || !hasAppRules(appRules) ? null : appRules;
   if (emitDepcruise) {
-    pushDc('layer', toDependencyCruiser(layers, ['AUTO'], appPath, allowedFor).forbidden);
+    pushDc(
+      'layer',
+      toDependencyCruiser(layers, ['AUTO'], appPath, allowedFor, scan.testSetupFiles).forbidden,
+    );
     if (phantom !== null)
       pushDc(
         'phantom-deps',
-        toDependencyCruiserPhantomDependencies(phantom, allowedFor, appPath).forbidden,
+        toDependencyCruiserPhantomDependencies(phantom, allowedFor, appPath, scan.testSetupFiles)
+          .forbidden,
       );
     if (serverClient !== null)
       pushDc(
         'server-client',
-        toDependencyCruiserServerClient(serverClient, appPath, allowedFor).forbidden,
+        toDependencyCruiserServerClient(serverClient, appPath, allowedFor, scan.testSetupFiles)
+          .forbidden,
       );
     if (internals !== null)
       pushDc(
         'dependency-internals',
-        toDependencyCruiserDependencyInternals(internals, allowedFor, appPath).forbidden,
+        toDependencyCruiserDependencyInternals(internals, allowedFor, appPath, scan.testSetupFiles)
+          .forbidden,
       );
     if (entry !== null)
-      pushDc('entry-purity', toDependencyCruiserEntryPurity(entry, allowedFor, appPath).forbidden);
+      pushDc(
+        'entry-purity',
+        toDependencyCruiserEntryPurity(entry, allowedFor, appPath, scan.testSetupFiles).forbidden,
+      );
   }
   adopted.push(...layers.map(layerRule));
   if (phantom !== null) adopted.push(phantomDependencyRule(scan));
@@ -393,6 +403,7 @@ export function collectEnforcement(
       ['AUTO'],
       appPath,
       allowedFor,
+      scan.testSetupFiles,
     ).forbidden;
     pushNamedDc('public-api', forbidden);
     adopted.push(...publicApiRules(scan).filter((rule) => selects(rule.id)));
@@ -422,6 +433,7 @@ export function collectEnforcement(
       scan.testIsolation,
       appPath,
       allowedFor,
+      scan.testSetupFiles,
     ).forbidden;
     if (forbidden.length > 0 && selects('test-isolation')) {
       pushDc('test-isolation', forbidden);
@@ -611,6 +623,7 @@ const emptyAppRules = (scan: ScanResult): EslintAppRules => ({
   aliases: scan.layerAliases,
   virtualModules: scan.virtualModules,
   ignored: scan.gitignoredPaths,
+  testSetupFiles: scan.testSetupFiles,
   layers: [],
   phantom: null,
   serverClient: null,

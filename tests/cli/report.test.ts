@@ -38,6 +38,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
   layerAliases: [],
   virtualModules: [],
   gitignoredPaths: [],
+  testSetupFiles: [],
   cycles: {
     appDir: '/app',
     fileCount: 10,

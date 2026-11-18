@@ -71,15 +71,15 @@ function placeFiles(root: string): LayerPlacement {
   return { files, fileLayer, layerFileCount, layerDirs };
 }
 
-/** For each `from>to` layer pair, the files importing across it and the first specifier that does. */
+/** For each `from>to` layer pair, the files importing across it and every specifier that does, in source order. */
 function collectEdges(
   root: string,
   { files, fileLayer }: LayerPlacement,
   resolve: boolean,
-): Map<string, Map<string, string>> {
+): Map<string, Map<string, string[]>> {
   const aliases = layerAliases(root);
   const analyze = createImportAnalyzer(root, { resolve });
-  const edges = new Map<string, Map<string, string>>();
+  const edges = new Map<string, Map<string, string[]>>();
   for (const file of files) {
     const from = fileLayer.get(file.relativePath);
     if (from === undefined) continue;
@@ -100,25 +100,34 @@ function collectEdges(
           sources = new Map();
           edges.set(key, sources);
         }
-        if (!sources.has(file.relativePath)) sources.set(file.relativePath, imp.specifier);
+        const specifiers = sources.get(file.relativePath);
+        if (specifiers === undefined) sources.set(file.relativePath, [imp.specifier]);
+        else specifiers.push(imp.specifier);
       }
     }
   }
   return edges;
 }
 
-const edgeList = (
-  sources: Map<string, string> | undefined,
+/** Each file importing across a boundary, with the first specifier that does: the evidence the scan reports. */
+const firstImports = (
+  sources: Map<string, string[]> | undefined,
 ): { file: string; specifier: string }[] =>
-  [...(sources?.entries() ?? [])].map(([file, specifier]) => ({ file, specifier }));
+  [...(sources?.entries() ?? [])].map(([file, specifiers]) => ({
+    file,
+    specifier: specifiers[0]!,
+  }));
 
 export type LayerImportLookup = (from: string, to: string) => { file: string; specifier: string }[];
 
-/** Which files in one layer import another, read as written (the way the layer rules enforce). */
+/** Every import from one layer into another, read as written (the way the layer rules enforce). */
 export function layerImports(appDir: string): LayerImportLookup {
   const root = path.resolve(appDir);
   const edges = collectEdges(root, placeFiles(root), false);
-  return (from, to) => edgeList(edges.get(`${from}>${to}`));
+  return (from, to) =>
+    [...(edges.get(`${from}>${to}`)?.entries() ?? [])].flatMap(([file, specifiers]) =>
+      specifiers.map((specifier) => ({ file, specifier })),
+    );
 }
 
 export interface LayerInfo {
@@ -195,7 +204,7 @@ export function detectLayerBoundaries(
         violatingFileCount: violating,
         roleConfidence: directionalConfidence,
       });
-      const violations = edgeList(edges.get(`${from}>${to}`));
+      const violations = firstImports(edges.get(`${from}>${to}`));
       boundaries.push({
         id: 'AP-LAYER',
         name: `no-import:${from}->${to}`,

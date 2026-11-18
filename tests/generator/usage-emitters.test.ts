@@ -12,7 +12,7 @@ const consoleAnalysis = (n: number, v: number, files: string[] = []): ConsoleIso
   libraryFileCount: n,
   offenderCount: v,
   gate: evaluateGate({ roleFileCount: n, violatingFileCount: v, roleConfidence: 1 }),
-  violations: files.map((file) => ({ file })),
+  violations: files.map((file) => ({ file, lines: [1] })),
 });
 
 const envAnalysis = (n: number, v: number, files: string[] = []): EnvAccessAnalysis => ({
@@ -20,7 +20,7 @@ const envAnalysis = (n: number, v: number, files: string[] = []): EnvAccessAnaly
   subjectFileCount: n,
   offenderCount: v,
   gate: evaluateGate({ roleFileCount: n, violatingFileCount: v, roleConfidence: 1 }),
-  violations: files.map((file) => ({ file })),
+  violations: files.map((file) => ({ file, lines: [1] })),
 });
 
 describe('toEslintConsoleIsolation', () => {

@@ -5,6 +5,8 @@ const CONFIG_PATH = /(^|\/)(config|env|environment)(\/|\.tsx?$)|\.config\.tsx?$/
 
 export interface EnvAccessViolation {
   file: string;
+  /** The line of each access, in source order. */
+  lines: number[];
 }
 
 export interface EnvAccessAnalysis {
@@ -24,7 +26,10 @@ export function detectEnvAccess(appDir: string, options: EnvAccessOptions = {}):
   const subject = files.filter((file) => !CONFIG_PATH.test(file.relativePath));
   const violations = subject
     .filter((file) => usage.get(file.relativePath)?.usesProcessEnv === true)
-    .map((file) => ({ file: file.relativePath }))
+    .map((file) => ({
+      file: file.relativePath,
+      lines: usage.get(file.relativePath)!.lines['process.env'],
+    }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
   const anyEnvReader = files.some((file) => usage.get(file.relativePath)?.usesProcessEnv === true);

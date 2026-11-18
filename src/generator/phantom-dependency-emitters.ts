@@ -1,5 +1,5 @@
 import type { PhantomDependencyAnalysis } from '../detector/phantom-dependency-detector.js';
-import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
+import { exemptDepcruiseFrom, testPaths } from './depcruise-exempt.js';
 
 export const PHANTOM_DEPENDENCY_RULE = 'no-phantom-dependencies';
 
@@ -19,6 +19,7 @@ export function toDependencyCruiserPhantomDependencies(
   analysis: PhantomDependencyAnalysis,
   allowedFor: (ruleId: string) => readonly string[] = () => [],
   appPath = '.',
+  setupFiles: readonly string[] = [],
 ): PhantomDependencyConfig {
   if (analysis.externalImporterCount === 0 || analysis.gate.status !== 'AUTO') {
     return { forbidden: [] };
@@ -33,7 +34,7 @@ export function toDependencyCruiserPhantomDependencies(
         severity: 'error',
         from: {
           pathNot: exemptDepcruiseFrom(
-            [TEST_ROLE_REGEX, 'node_modules'],
+            [...testPaths(setupFiles, appPath), 'node_modules'],
             [
               ...analysis.violations,
               ...allowedFor(PHANTOM_DEPENDENCY_RULE).map((file) => ({ file })),

@@ -198,8 +198,10 @@ Each sentence comes back in one group:
 - **Enforce now**: the code follows it. A `forbid-file` rule is always here, with the files it freezes.
 - **Enforce with a baseline**: some files break it today, listed with the line.
 - **Already an archprint rule**: the rule's own status and evidence.
-- **Check the mapping**: the quote is not in the file, the files or a target match no source file, or the entry is
-  not a valid mapping (the reason says which).
+- **Check the mapping**: the quote is not in the file, the files or a target match no source file, a `forbid-usage`
+  name is in the code only as something other than a global (a JSX attribute such as `dangerouslySetInnerHTML`, a
+  member such as `window.localStorage`, a local variable), so the rule could never see it, or the entry is not a
+  valid mapping (the reason says which).
 - **Guidance only**: no template fits.
 
 A declared rule is named `doc-<name>`, for example `doc-no-fetch-in-components`.
@@ -251,8 +253,9 @@ An adopted rule is enforced by an `archprint/doc-<name>` rule in `.archprint/esl
 your team's sentence and where it is written, for example `Components never call fetch directly. (CLAUDE.md:2)`,
 and by `archprint check`, which finds the same breaks, file for file and line for line, and in a pull request
 reports only the ones the change adds. `check` counts like ESLint's bulk suppressions, with the base branch as the
-baseline: a recorded file that breaks the rule more times than it did on the base fails, and every break of the
-rule in that file is listed. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
+baseline: a recorded file that breaks the rule more times than it did on the base fails. A break of a new kind (an
+import of another forbidden module) is listed on its own; more of the same kind (another `fetch` call) lists every
+one of them, since which one is new cannot be told. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
 a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
 take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
 if the sentence is gone, `generate` says so (and so does `archprint check`, on each pull request) and the rule

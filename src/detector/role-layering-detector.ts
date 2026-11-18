@@ -37,40 +37,68 @@ export interface RoleLayeringOptions {
   resolve?: boolean;
 }
 
-export function detectRoleLayering(
-  appDir: string,
-  options: RoleLayeringOptions = {},
-): RoleLayeringAnalysis {
-  const { root, files, adjacency } =
-    options.graph ?? buildImportGraph(appDir, { resolve: options.resolve ?? false });
-
-  const roleByFile = new Map<string, Role>();
-  const roleFileCount = new Map<Role, number>();
-  const confidenceSum = new Map<Role, number>();
-  for (const file of files) {
-    const { role, confidence } = classifyFile(file.relativePath);
-    if (!LAYER_ROLES.has(role)) continue;
-    roleByFile.set(file.relativePath, role);
-    roleFileCount.set(role, (roleFileCount.get(role) ?? 0) + 1);
-    confidenceSum.set(role, (confidenceSum.get(role) ?? 0) + confidence);
+/** The layer role of each file in the graph that has one. */
+function layerRoles(graph: ImportGraph): Map<string, Role> {
+  const roles = new Map<string, Role>();
+  for (const file of graph.files) {
+    const { role } = classifyFile(file.relativePath);
+    if (LAYER_ROLES.has(role)) roles.set(file.relativePath, role);
   }
+  return roles;
+}
 
-  const edgeFiles = new Map<string, Map<string, string>>();
-  for (const [file, targets] of adjacency) {
+/** For each `from>to` role pair, the files importing across it and every target they import there. */
+function roleEdges(graph: ImportGraph): Map<string, Map<string, string[]>> {
+  const roleByFile = layerRoles(graph);
+  const edges = new Map<string, Map<string, string[]>>();
+  for (const [file, targets] of graph.adjacency) {
     const from = roleByFile.get(file);
     if (from === undefined) continue;
     for (const target of targets) {
       const to = roleByFile.get(target);
       if (to === undefined || to === from) continue;
       const key = `${from}>${to}`;
-      let sources = edgeFiles.get(key);
+      let sources = edges.get(key);
       if (sources === undefined) {
         sources = new Map();
-        edgeFiles.set(key, sources);
+        edges.set(key, sources);
       }
-      if (!sources.has(file)) sources.set(file, target);
+      const imported = sources.get(file);
+      if (imported === undefined) sources.set(file, [target]);
+      else imported.push(target);
     }
   }
+  return edges;
+}
+
+export type RoleImportLookup = (from: Role, to: Role) => RoleBoundaryViolation[];
+
+/** Every import from one role layer into another, the way the role-layering rules enforce. */
+export function roleLayeringImports(appDir: string): RoleImportLookup {
+  const edges = roleEdges(buildImportGraph(appDir, { resolve: false }));
+  return (from, to) =>
+    [...(edges.get(`${from}>${to}`)?.entries() ?? [])].flatMap(([file, targets]) =>
+      targets.map((target) => ({ file, target })),
+    );
+}
+
+export function detectRoleLayering(
+  appDir: string,
+  options: RoleLayeringOptions = {},
+): RoleLayeringAnalysis {
+  const graph = options.graph ?? buildImportGraph(appDir, { resolve: options.resolve ?? false });
+  const { root, files } = graph;
+
+  const roleFileCount = new Map<Role, number>();
+  const confidenceSum = new Map<Role, number>();
+  for (const file of files) {
+    const { role, confidence } = classifyFile(file.relativePath);
+    if (!LAYER_ROLES.has(role)) continue;
+    roleFileCount.set(role, (roleFileCount.get(role) ?? 0) + 1);
+    confidenceSum.set(role, (confidenceSum.get(role) ?? 0) + confidence);
+  }
+
+  const edgeFiles = roleEdges(graph);
 
   const edgeSize = (from: Role, to: Role): number => edgeFiles.get(`${from}>${to}`)?.size ?? 0;
   const roles = [...roleFileCount.keys()].sort();
@@ -98,7 +126,7 @@ export function detectRoleLayering(
         roleConfidence,
         gate: evaluateGate({ roleFileCount: count, violatingFileCount: violating, roleConfidence }),
         violations: [...(edgeFiles.get(`${from}>${to}`)?.entries() ?? [])]
-          .map(([file, target]) => ({ file, target }))
+          .map(([file, targets]) => ({ file, target: targets[0]! }))
           .sort((x, y) => x.file.localeCompare(y.file)),
       });
     }

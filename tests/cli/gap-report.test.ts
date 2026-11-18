@@ -223,6 +223,93 @@ describe('buildGapReport', () => {
   });
 });
 
+describe('buildGapReport on a usage the code has only as something other than a global', () => {
+  let root: string;
+  beforeAll(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'archprint-gap-notglobal-'));
+    writeTree(root, {
+      'CLAUDE.md': [
+        '- Avoid `dangerouslySetInnerHTML`.',
+        '- Never call fetch or set dangerouslySetInnerHTML in a component.',
+        '- Never call eval in a component.',
+        '- Components never call fetch.',
+        '- No inline HTML or alt text in components.',
+      ].join('\n'),
+      'tsconfig.json': JSON.stringify({ compilerOptions: { jsx: 'preserve' } }),
+      'src/components/preview.tsx':
+        'export const P = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />;\n',
+      'src/components/email.tsx':
+        'export const E = ({ html }: { html: string }) => <p dangerouslySetInnerHTML={{ __html: html }} />;\n',
+      'src/components/card.tsx': 'export const Card = () => <div />;\n',
+      'src/lib/api.ts': "export const get = () => fetch('/x');\n",
+      'src/lib/local.ts': 'const fetch = () => 1;\nexport const x = fetch();\n',
+      'src/lib/z-image.tsx': 'export const I = () => <img alt="" />;\n',
+    });
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const usageRule = (text: string, name: string, usage: string[]) => ({
+    template: 'forbid-usage',
+    source: quote(text),
+    name,
+    files: ['src/components/**'],
+    usage,
+  });
+
+  it('sends it back to be checked, naming the usage and the files that have it', () => {
+    const [entry] = buildGapReport(root, {
+      rules: [
+        usageRule('Avoid `dangerouslySetInnerHTML`.', 'no-dangerous-html', [
+          'dangerouslySetInnerHTML',
+        ]),
+      ],
+    }).entries;
+    expect(entry).toMatchObject({
+      status: 'no-match',
+      evidence: { files: 3, following: 3, elsewhere: 0, vacuous: false },
+      reason:
+        'the code has dangerouslySetInnerHTML (in 2 file(s)) but never reads it as a global; forbid-usage only sees global reads such as fetch or process.env',
+    });
+  });
+
+  it('names every usage the rule cannot see, in name order', () => {
+    const [entry] = buildGapReport(root, {
+      rules: [
+        usageRule('No inline HTML or alt text in components.', 'no-inline-html', [
+          'dangerouslySetInnerHTML',
+          'alt',
+        ]),
+      ],
+    }).entries;
+    expect(entry!.reason).toMatch(
+      /^the code has alt \(in 1 file\(s\)\) and dangerouslySetInnerHTML \(in 2 file\(s\)\) but never reads them as a global/,
+    );
+  });
+
+  it('checks each usage of a rule: one read as a global does not hide one never read so, nor does a local of the same name count against it', () => {
+    const report = buildGapReport(root, {
+      rules: [
+        usageRule(
+          'Never call fetch or set dangerouslySetInnerHTML in a component.',
+          'no-fetch-or-html',
+          ['fetch', 'dangerouslySetInnerHTML'],
+        ),
+        usageRule('Never call eval in a component.', 'no-eval', ['eval']),
+        usageRule('Components never call fetch.', 'no-fetch', ['fetch']),
+      ],
+    });
+    expect(report.entries[0]).toMatchObject({
+      status: 'no-match',
+      evidence: { elsewhere: 1, vacuous: false },
+      reason: expect.stringMatching(
+        /^the code has dangerouslySetInnerHTML \(in 2 file\(s\)\) but never reads it/,
+      ),
+    });
+    expect(report.entries[1]).toMatchObject({ status: 'enforce-now', evidence: { vacuous: true } });
+    expect(report.entries[2]).toMatchObject({ status: 'enforce-now', evidence: { elsewhere: 1 } });
+  });
+});
+
 describe('restate', () => {
   const base = { name: 'x', source: quote('a sentence here'), except: [] };
 

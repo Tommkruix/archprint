@@ -88,6 +88,14 @@ export function restate(rule: DeclaredDefinition): string {
   }
 }
 
+function notGlobalReason(usages: DeclaredMeasure['notGlobal']): string {
+  const named = usages.map(({ usage, files }) => `${usage} (in ${files} file(s))`);
+  const list =
+    named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`;
+  const it = named.length === 1 ? 'it' : 'them';
+  return `the code has ${list} but never reads ${it} as a global; forbid-usage only sees global reads such as fetch or process.env`;
+}
+
 function declaredEntry(
   rule: DeclaredRule,
   measure: DeclaredMeasure,
@@ -103,7 +111,10 @@ function declaredEntry(
     files,
     following: files - new Set(measure.violations.map((v) => v.file)).size,
     elsewhere: measure.elsewhere.length,
-    vacuous: measure.violations.length === 0 && measure.elsewhere.length === 0,
+    vacuous:
+      measure.violations.length === 0 &&
+      measure.elsewhere.length === 0 &&
+      measure.notGlobal.length === 0,
   };
   if (measure.scope.length === 0) {
     return { status: 'no-match', evidence, reason: `no source file matches ${joined(rule.files)}` };
@@ -114,6 +125,14 @@ function declaredEntry(
       evidence,
       ...(measure.violations.length > 0 && { breaking: measure.violations }),
       reason: `no source file matches ${joined(measure.unmatchedTargets)}`,
+    };
+  }
+  if (measure.notGlobal.length > 0) {
+    return {
+      status: 'no-match',
+      evidence,
+      ...(measure.violations.length > 0 && { breaking: measure.violations }),
+      reason: notGlobalReason(measure.notGlobal),
     };
   }
   return measure.violations.length > 0

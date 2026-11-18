@@ -9,6 +9,7 @@ import {
   stringLiterals,
 } from '../scanner/file-walker.js';
 import { classifyFile } from '../scanner/role-classifier.js';
+import { namesTestSetup, testSetupFiles } from '../scanner/test-setup-files.js';
 import { isSourceFileName } from '../scanner/source-paths.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { type ConfigAliases, aliasesFor, importResolution } from './declared-rules.js';
@@ -93,10 +94,10 @@ interface GraphFile {
  * `root`. An app's scan applies only the ignore files inside it, so it can read a folder a parent ignore file excludes
  * (a tracked `src/lib` under a root `.gitignore` entry `lib`); its files must still count as referrers.
  */
-function graphFiles(root: string): GraphFile[] {
+function graphFiles(root: string, accepts: (name: string) => boolean): GraphFile[] {
   const files = new Map<string, string>();
   for (const dir of [root, ...discoverAppDirs(root)]) {
-    for (const absolutePath of listSourceFiles(dir, readsReferences)) {
+    for (const absolutePath of listSourceFiles(dir, accepts)) {
       if (!files.has(absolutePath)) {
         files.set(absolutePath, path.relative(root, absolutePath).split(path.sep).join('/'));
       }
@@ -153,11 +154,24 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
     ),
   ];
 
-  const walked = graphFiles(absoluteRoot);
+  const listed = graphFiles(absoluteRoot, (name) => readsReferences(name) || namesTestSetup(name));
+  const named = (accepts: (name: string) => boolean): GraphFile[] =>
+    listed.filter((file) => accepts(path.basename(file.relativePath)));
+  const walked = named(readsReferences);
+  const setupFiles = testSetupFiles(
+    absoluteRoot,
+    named(namesTestSetup).map((file) => file.relativePath),
+  );
   const tests = new Set<string>();
   const referrers = new Map<string, Set<string>>();
   for (const { relativePath } of walked) {
-    if (isTest(relativePath) || isTest(pathInApp(relativePath, configs))) tests.add(relativePath);
+    if (
+      setupFiles.has(relativePath) ||
+      isTest(relativePath) ||
+      isTest(pathInApp(relativePath, configs))
+    ) {
+      tests.add(relativePath);
+    }
     referrers.set(relativePath, new Set());
   }
   const refer = (from: string, target: string | null): void => {

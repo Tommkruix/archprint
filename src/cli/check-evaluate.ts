@@ -7,14 +7,15 @@ import { detectEnvAccess } from '../detector/env-access-detector.js';
 import { detectFeatureSliceIsolation } from '../detector/feature-slice-detector.js';
 import type { SiblingViolation } from '../detector/sibling-isolation.js';
 import { buildImportGraph } from '../scanner/import-graph.js';
+import type { UsageSubject } from '../scanner/usage-scanner.js';
 import { detectDeepRelativeImports } from '../detector/deep-relative-detector.js';
 import { layerImports } from '../detector/layer-detector.js';
-import { detectForbiddenImports, type PatternConfig } from '../detector/pattern-detector.js';
+import { forbiddenImportOccurrences, type PatternConfig } from '../detector/pattern-detector.js';
 import { detectPhantomDependencies } from '../detector/phantom-dependency-detector.js';
 import { detectPublicApiBoundaries } from '../detector/public-api-detector.js';
-import { detectRoleLayering } from '../detector/role-layering-detector.js';
+import { roleLayeringImports } from '../detector/role-layering-detector.js';
 import { detectServerClientBoundary } from '../detector/server-client-detector.js';
-import { detectStoriesIsolation } from '../detector/stories-isolation-detector.js';
+import { storyImports } from '../detector/stories-isolation-detector.js';
 import { detectTestIsolation } from '../detector/test-isolation-detector.js';
 import { detectUiDataIsolation } from '../detector/ui-data-isolation-detector.js';
 import { detectWorkspacePackageApi } from '../detector/workspace-package-detector.js';
@@ -54,11 +55,11 @@ function forbiddenImportFindings(appDir: string, rules: readonly ForbiddenImport
   for (const mode of modes) {
     const group = rules.filter((rule) => rule.mode === mode);
     if (group.length === 0) continue;
-    const results = detectForbiddenImports(appDir, group.map(toPatternConfig), {
+    const results = forbiddenImportOccurrences(appDir, group.map(toPatternConfig), {
       resolve: mode === 'deep',
     });
-    results.forEach((result, index) => {
-      for (const violation of result.violations) {
+    results.forEach((occurrences, index) => {
+      for (const violation of occurrences) {
         findings.push({
           ruleId: group[index]!.id,
           file: violation.file,
@@ -86,6 +87,13 @@ function containerFindings(
     }));
   });
 }
+
+/** One finding per access, so a file that gains another counts as a new break. */
+const usageFindings = (
+  ruleId: string,
+  { file, lines }: { file: string; lines: readonly number[] },
+  subject: UsageSubject,
+): Finding[] => lines.map((line) => ({ ruleId, file, subject, kind: 'usage', line }));
 
 const DECLARED_KINDS: Record<DeclaredAdoptedRule['template'], SubjectKind> = {
   'forbid-import': 'specifier',
@@ -170,7 +178,7 @@ export function evaluateRules(
   }
   for (const rule of byFamily('console-isolation')) {
     for (const violation of detectConsoleIsolation(appDir).violations) {
-      findings.push({ ruleId: rule.id, file: violation.file, subject: 'console', kind: 'usage' });
+      findings.push(...usageFindings(rule.id, violation, 'console'));
     }
   }
   for (const rule of byFamily('cycles')) {
@@ -225,12 +233,7 @@ export function evaluateRules(
   }
   for (const rule of byFamily('env-access')) {
     for (const violation of detectEnvAccess(appDir).violations) {
-      findings.push({
-        ruleId: rule.id,
-        file: violation.file,
-        subject: 'process.env',
-        kind: 'usage',
-      });
+      findings.push(...usageFindings(rule.id, violation, 'process.env'));
     }
   }
   for (const rule of byFamily('workspace-package-api')) {
@@ -244,7 +247,7 @@ export function evaluateRules(
     }
   }
   for (const rule of byFamily('stories-isolation')) {
-    for (const violation of detectStoriesIsolation(appDir).violations) {
+    for (const violation of storyImports(appDir)) {
       findings.push({
         ruleId: rule.id,
         file: violation.importer,
@@ -265,13 +268,10 @@ export function evaluateRules(
   }
   const roleLayering = byFamily('role-layering');
   if (roleLayering.length > 0) {
-    const boundaries = detectRoleLayering(appDir).boundaries;
+    const importsAcross = roleLayeringImports(appDir);
     for (const rule of roleLayering) {
       if (rule.family !== 'role-layering') continue;
-      const boundary = boundaries.find(
-        (candidate) => candidate.from === rule.from && candidate.to === rule.to,
-      );
-      for (const violation of boundary?.violations ?? []) {
+      for (const violation of importsAcross(rule.from, rule.to)) {
         findings.push({
           ruleId: rule.id,
           file: violation.file,

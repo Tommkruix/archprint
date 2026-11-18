@@ -1,9 +1,9 @@
 import type { DependencyInternalsAnalysis } from '../detector/dependency-internals-detector.js';
-import { exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
+import { exemptDepcruiseFrom, testPaths } from './depcruise-exempt.js';
 
 export const DEPENDENCY_INTERNALS_RULE = 'no-dependency-internals';
 
-const INTERNAL_PATH = 'node_modules/(?:@[^/]+/)?[^/]+/(?:src|internal|internals)/';
+const INTERNAL_PATH = 'node_modules/(?:@[^/]+/[^/]+|[^/]+)/(?:src|internal|internals)/';
 
 export interface NoInternalsRule {
   name: string;
@@ -21,6 +21,7 @@ export function toDependencyCruiserDependencyInternals(
   analysis: DependencyInternalsAnalysis,
   allowedFor: (ruleId: string) => readonly string[],
   appPath = '.',
+  setupFiles: readonly string[] = [],
 ): NoInternalsConfig {
   if (analysis.externalImporterCount === 0 || analysis.gate.status !== 'AUTO') {
     return { forbidden: [] };
@@ -35,7 +36,7 @@ export function toDependencyCruiserDependencyInternals(
         severity: 'error',
         from: {
           pathNot: exemptDepcruiseFrom(
-            [TEST_ROLE_REGEX, 'node_modules'],
+            [...testPaths(setupFiles, appPath), 'node_modules'],
             [
               ...analysis.violations,
               ...allowedFor(DEPENDENCY_INTERNALS_RULE).map((file) => ({ file })),

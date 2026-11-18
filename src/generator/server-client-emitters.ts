@@ -2,7 +2,7 @@ import {
   SERVER_ONLY_PACKAGE,
   type ServerClientAnalysis,
 } from '../detector/server-client-detector.js';
-import { exactAppFiles, exemptDepcruiseFrom, TEST_ROLE_REGEX } from './depcruise-exempt.js';
+import { exactAppFiles, exemptDepcruiseFrom, testPaths } from './depcruise-exempt.js';
 
 export const SERVER_CLIENT_RULE = 'no-server-only-in-client';
 
@@ -26,6 +26,7 @@ export function toDependencyCruiserServerClient(
   analysis: ServerClientAnalysis,
   appPath: string,
   allowedFor: (ruleId: string) => readonly string[],
+  setupFiles: readonly string[] = [],
 ): ServerClientConfig {
   if (analysis.clientCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
   const conform = analysis.clientCount - analysis.offenderCount;
@@ -40,7 +41,7 @@ export function toDependencyCruiserServerClient(
         from: {
           path: exactAppFiles(analysis.clients, appPath),
           pathNot: exemptDepcruiseFrom(
-            TEST_ROLE_REGEX,
+            testPaths(setupFiles, appPath),
             [...analysis.violations, ...allowedFor(SERVER_CLIENT_RULE).map((file) => ({ file }))],
             appPath,
           ),

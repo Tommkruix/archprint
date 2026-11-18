@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cruise, type IFlattenedRuleSet } from 'dependency-cruiser';
 import { afterAll, describe, expect, it } from 'vitest';
 import { type DependencyCruiserRule, evaluateGate, REQUEST_ENTRY_ROLES } from '../../src/index.js';
 import { summarizeRules } from '../../src/cli/summary.js';
@@ -31,6 +32,7 @@ import type {
 } from '../../src/index.js';
 import { excludeAllowed } from '../../src/cli/allowed-evidence.js';
 import { scanRepo, type ScannedPattern, type ScanResult } from '../../src/cli/scan.js';
+import { TEST_ROLE_REGEX } from '../../src/generator/depcruise-exempt.js';
 import { renderReport, renderExplain } from '../../src/cli/report.js';
 import {
   collectEnforcement,
@@ -342,6 +344,7 @@ function emptyScan(overrides: Partial<ScanResult> = {}): ScanResult {
     layerAliases: [],
     virtualModules: [],
     gitignoredPaths: [],
+    testSetupFiles: [],
     cycles: emptyCycles(),
     orphans: emptyOrphans(),
     reachability: emptyReachability(),
@@ -996,6 +999,123 @@ describe('cli generate', () => {
     expect(new RegExp(tsArch.from.path).test('utils/a.ts')).toBe(true);
   });
 
+  it('exempts a file a test runner config names in every rule that exempts test files', () => {
+    const setup = 'src/vitest.setup.ts';
+    const scan = emptyScan({
+      testSetupFiles: [setup],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
+      testIsolation: fakeTestIsolation(40, 0, 5),
+      dependencyInternals: fakeDependencyInternals(60, 0),
+      entryPurity: fakeEntryPurity(60, 0),
+      phantomDependencies: fakePhantom(60, 0),
+      serverClient: fakeServerClient(60, 0),
+      deepRelative: fakeDeepRelative(60, 0),
+      consoleIsolation: fakeConsole(60, 0),
+      envAccess: fakeEnv(60, 0),
+      workspacePackageApi: fakeWpkg(60, 0),
+    });
+    const families = collect(scan, { enforcers: ESLINT }).eslintFamilies.filter((family) =>
+      family.ignores.includes('**/__tests__/**'),
+    );
+    expect(
+      families
+        .filter((family) => family.ignores.includes(setup))
+        .map((family) => family.name)
+        .sort(),
+    ).toEqual([
+      'console-isolation',
+      'env-access',
+      'import-style',
+      'test-isolation',
+      'workspace-package',
+    ]);
+    expect(families).toHaveLength(5);
+
+    const matches = (patterns: string | string[] | undefined): boolean =>
+      [patterns ?? []].flat().some((pattern) => new RegExp(pattern).test(setup));
+    const rules = collect(scan).depcruise.flatMap((family) => family.forbidden) as unknown as {
+      name: string;
+      from: { pathNot?: string | string[] };
+      to: { path?: string | string[] };
+    }[];
+    const exemptsTests = rules.filter((rule) =>
+      [rule.from.pathNot ?? []].flat().includes(TEST_ROLE_REGEX),
+    );
+    expect(
+      exemptsTests
+        .filter((rule) => matches(rule.from.pathNot))
+        .map((rule) => rule.name)
+        .sort(),
+    ).toEqual([
+      'no-deep-import-features-auth',
+      'no-dependency-internals',
+      'no-import-framework-entry',
+      'no-phantom-dependencies',
+      'no-server-only-in-client',
+      'no-utils-to-api',
+      'not-to-test',
+    ]);
+    expect(exemptsTests).toHaveLength(7);
+    expect(matches(rules.find((rule) => rule.name === 'not-to-test')!.to.path)).toBe(true);
+  });
+
+  it('emits only dependency-cruiser rules dependency-cruiser accepts, in every family', async () => {
+    const scan = emptyScan({
+      testSetupFiles: ['src/vitest.setup.ts'],
+      layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)],
+      roleLayering: { appDir: 'x', boundaries: [fakeRoleBoundary('REPOSITORY', 'SERVICE', 40)] },
+      publicApi: { appDir: 'x', groups: [fakeApiGroup('features/auth', 40, 0)] },
+      featureSlices: { appDir: 'x', groups: [fakeSliceGroup('src/features', 40, 0)] },
+      appIsolation: { appDir: 'x', groups: [fakeAppGroup('apps', 40, 0)] },
+      testIsolation: fakeTestIsolation(40, 0, 5),
+      dependencyInternals: fakeDependencyInternals(60, 0),
+      entryPurity: {
+        ...fakeEntryPurity(60, 0),
+        imports: [{ file: 'app/[slug]/page.tsx', importer: 'lib/links.ts' }],
+      },
+      phantomDependencies: fakePhantom(60, 0),
+      serverClient: fakeServerClient(60, 0),
+      storiesIsolation: fakeStories(60, 0),
+      uiDataIsolation: fakeUiData(60, 0),
+    });
+    const ruleNames = collect(scan, { appPath: 'apps/web' })
+      .depcruise.flatMap((family) => family.forbidden)
+      .map((rule) => rule.name);
+    const exceptions = ['app/[id]/page.tsx', 'app/(marketing)/about/page.tsx', 'lib/a+b.ts'];
+    const collected = collectEnforcement(scan, {
+      enforcers: DEPCRUISE,
+      structural: true,
+      appPath: 'apps/web',
+      allowed: new Map([...ruleNames, 'test-isolation'].map((name) => [name, exceptions])),
+    });
+    expect(collected.depcruise.map((family) => family.family).sort()).toEqual([
+      'app-isolation',
+      'dependency-internals',
+      'entry-purity',
+      'feature-slice',
+      'layer',
+      'phantom-deps',
+      'public-api',
+      'role-layering',
+      'server-client',
+      'stories-isolation',
+      'test-isolation',
+      'ui-data',
+    ]);
+
+    const empty = mkdtempSync(path.join(tmpdir(), 'archprint-depcruise-'));
+    const rejected: string[] = [];
+    for (const rule of collected.depcruise.flatMap((family) => family.forbidden)) {
+      const ruleSet = JSON.parse(JSON.stringify({ forbidden: [rule] })) as IFlattenedRuleSet;
+      await cruise([empty], { validate: true, ruleSet }).catch((error: Error) =>
+        rejected.push(`${rule.name}: ${error.message.split('\n')[0]}`),
+      );
+    }
+    rmSync(empty, { recursive: true, force: true });
+    expect(rejected).toEqual([]);
+  });
+
   it('collects ts-arch boundary rules and expands the test file from AUTO boundaries', () => {
     rmSync(outDir, { recursive: true, force: true });
     const scan = emptyScan({ layerBoundaries: [fakeLayerBoundary('utils', 'api', 40)] });
@@ -1051,7 +1171,7 @@ describe('cli generate', () => {
   });
 
   it('scopes the env-access exemptions to the app for a config at the repository root', () => {
-    const env = { ...fakeEnv(60, 1), violations: [{ file: 'app/[id]/env.ts' }] };
+    const env = { ...fakeEnv(60, 1), violations: [{ file: 'app/[id]/env.ts', lines: [1] }] };
     const collected = collectEnforcement(emptyScan({ envAccess: env }), {
       enforcers: ESLINT,
       structural: true,

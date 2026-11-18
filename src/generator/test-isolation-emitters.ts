@@ -1,23 +1,21 @@
 import type { TestIsolationAnalysis } from '../detector/test-isolation-detector.js';
 import { withMinedExemptions } from './console-isolation-emitters.js';
 import type { EslintFamilyRule } from './eslint-family-rules.js';
-import { TEST_GLOBS } from './eslint-scope.js';
+import { testGlobs } from './eslint-scope.js';
 import {
   type AllowedFor,
   exemptDepcruiseFrom,
   noneAllowed,
-  TEST_ROLE_REGEX,
+  testPaths,
   toleratedFiles,
 } from './depcruise-exempt.js';
-
-const TEST_PATH = TEST_ROLE_REGEX;
 
 export interface NotToTestRule {
   name: string;
   comment: string;
   severity: 'error' | 'warn' | 'info';
   from: { pathNot: string | string[] };
-  to: { path: string };
+  to: { path: string | string[] };
 }
 
 export interface NotToTestConfig {
@@ -28,8 +26,10 @@ export function toDependencyCruiserTestIsolation(
   analysis: TestIsolationAnalysis,
   appPath = '.',
   allowedFor: AllowedFor = noneAllowed,
+  setupFiles: readonly string[] = [],
 ): NotToTestConfig {
   if (analysis.testFileCount === 0 || analysis.gate.status !== 'AUTO') return { forbidden: [] };
+  const tests = testPaths(setupFiles, appPath);
   const conform = analysis.productionFileCount - analysis.offenderCount;
   const floor = `${(analysis.gate.conditions.confidence.value * 100).toFixed(0)}%`;
   return {
@@ -40,23 +40,26 @@ export function toDependencyCruiserTestIsolation(
         severity: 'error',
         from: {
           pathNot: exemptDepcruiseFrom(
-            TEST_PATH,
+            tests,
             toleratedFiles(analysis.violations, allowedFor('test-isolation')),
             appPath,
           ),
         },
-        to: { path: TEST_PATH },
+        to: { path: tests.length === 1 ? tests[0]! : tests },
       },
     ],
   };
 }
 
-export function toEslintTestIsolation(analysis: TestIsolationAnalysis): EslintFamilyRule | null {
+export function toEslintTestIsolation(
+  analysis: TestIsolationAnalysis,
+  setupFiles: readonly string[] = [],
+): EslintFamilyRule | null {
   if (analysis.testFileCount === 0 || analysis.gate.status !== 'AUTO') return null;
   return {
     name: 'test-isolation',
     message: 'Do not import a test file from production code.',
-    ignores: withMinedExemptions([...TEST_GLOBS], analysis.violations),
+    ignores: withMinedExemptions(testGlobs(setupFiles), analysis.violations),
     check: { kind: 'import', regex: '\\.(test|spec)(\\.|$)', typeImports: false },
   };
 }
