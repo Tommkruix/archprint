@@ -9,6 +9,7 @@ import {
   propertyName,
 } from './config-literals.js';
 import { declaredPackages } from './package-name.js';
+import { viteConfigIn } from './vite-config.js';
 import { findWorkspaceRoot } from './workspace-packages.js';
 
 const CONFIG_NAMES = [
@@ -17,9 +18,6 @@ const CONFIG_NAMES = [
   'svelte.config.cjs',
   'svelte.config.ts',
 ];
-const VITE_CONFIG_NAMES = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'].map(
-  (ext) => `vite.config.${ext}`,
-);
 const KIT_VITE_PLUGIN = '@sveltejs/kit/vite';
 const DEFAULT_LIB = 'src/lib';
 
@@ -47,7 +45,7 @@ function svelteKitConfig(dir: string): string | undefined {
  * folder or its workspace root declares `@sveltejs/kit`.
  */
 function loadsKitVitePlugin(dir: string): boolean {
-  const configPath = VITE_CONFIG_NAMES.map((name) => path.join(dir, name)).find(existsSync);
+  const configPath = viteConfigIn(dir);
   return (
     configPath !== undefined &&
     declaresKitFor(dir) &&

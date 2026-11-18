@@ -39,6 +39,22 @@ describe('files a module loads by a path it computes', () => {
     expect(orphans).toContain('evals/other.ts');
   });
 
+  it('follows join imported by name from node:path, not a join of its own', () => {
+    const orphans = orphansOf({
+      'cli/load.ts': [
+        "import { join } from 'node:path';",
+        "import { join as glue } from './glue';",
+        'export const load = (name: string) => import(join(__dirname, "commands", `${name}.ts`));',
+        'export const other = (name: string) => import(glue(__dirname, "steps", `${name}.ts`));',
+      ].join('\n'),
+      'cli/glue.ts': 'export const join = (...parts: string[]) => parts.join("/");\n',
+      'cli/commands/deploy.ts': MODULE,
+      'cli/steps/build.ts': MODULE,
+    });
+    expect(orphans).not.toContain('cli/commands/deploy.ts');
+    expect(orphans).toContain('cli/steps/build.ts');
+  });
+
   it('reads path.resolve with import.meta.dirname and pathToFileURL(...).href', () => {
     const orphans = orphansOf({
       'cli/load.ts': [
