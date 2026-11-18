@@ -198,8 +198,10 @@ Each sentence comes back in one group:
 - **Enforce now**: the code follows it. A `forbid-file` rule is always here, with the files it freezes.
 - **Enforce with a baseline**: some files break it today, listed with the line.
 - **Already an archprint rule**: the rule's own status and evidence.
-- **Check the mapping**: the quote is not in the file, the files or a target match no source file, or the entry is
-  not a valid mapping (the reason says which).
+- **Check the mapping**: the quote is not in the file, the files or a target match no source file, a `forbid-usage`
+  name is in the code only as something other than a global (a JSX attribute such as `dangerouslySetInnerHTML`, a
+  member such as `window.localStorage`, a local variable), so the rule could never see it, or the entry is not a
+  valid mapping (the reason says which).
 - **Guidance only**: no template fits.
 
 A declared rule is named `doc-<name>`, for example `doc-no-fetch-in-components`.
