@@ -255,7 +255,11 @@ that sets a Routify `ignore` glob or a `ROUTIFY_` variable in `.env`, is not mod
 only in the environment of the build). Remix, Routify 3 and Nuxt are
 not modeled yet. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
-`*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
+`*` patterns included), and each module its Nx or Angular devkit collections name (the `generators`, `executors`,
+`builders` and `schematics` files, and the `migrations` of `ng-update` or `nx-migrations`: every `factory` and
+`implementation`, relative to the collection file; a collection's `extends` is not followed): a target built into
+the `outDir` of any of the package's tsconfigs (`tsconfig.json`, `tsconfig.build.json`, `tsconfig.lib.json`, ...;
+not a test one such as `tsconfig.spec.json`), or into `dist/`, `lib/`, `build/` or
 `out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
 runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
 config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint

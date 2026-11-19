@@ -75,6 +75,59 @@ const TREE: Record<string, string> = {
   'packages/scripted/src/server.ts': SOURCE,
   'packages/scripted/scripts/seed.ts': SOURCE,
   'packages/scripted/src/unused.ts': SOURCE,
+  'packages/nx-plugin/package.json': json({
+    name: 'nx-plugin',
+    generators: './generators.json',
+    executors: './executors.json',
+    builders: './batch.json',
+    'ng-update': { migrations: './migrations.json' },
+    'nx-migrations': './more-migrations.json',
+  }),
+  'packages/nx-plugin/tsconfig.lib.json': json({
+    compilerOptions: { outDir: 'dist', rootDir: '.' },
+  }),
+  'packages/nx-plugin/tsconfig.spec.json': json({
+    compilerOptions: { outDir: 'dist', rootDir: 'spec' },
+  }),
+  'packages/nx-plugin/spec/src/generators/app/app.ts': SOURCE,
+  'packages/nx-plugin/generators.json': json({
+    generators: {
+      app: { factory: './dist/src/generators/app/app#appGenerator', schema: './schema.json' },
+    },
+  }),
+  'packages/nx-plugin/executors.json': json({
+    executors: { build: { implementation: './src/executors/build/build', schema: './s.json' } },
+    builders: { serve: { implementation: './dist/src/builders/serve#serve' } },
+  }),
+  'packages/nx-plugin/batch.json': json({
+    executors: { test: { batchImplementation: './src/executors/test/batch#batch' } },
+  }),
+  'packages/nx-plugin/migrations.json': json({
+    generators: { 'update-1': { factory: './dist/src/migrations/update-1/update-1' } },
+  }),
+  'packages/nx-plugin/more-migrations.json': json({
+    schematics: { 'update-2': { implementation: './src/migrations/update-2/update-2' } },
+  }),
+  'packages/nx-plugin/src/generators/app/app.ts': SOURCE,
+  'packages/nx-plugin/src/executors/build/build.ts': SOURCE,
+  'packages/nx-plugin/src/builders/serve.ts': SOURCE,
+  'packages/nx-plugin/src/migrations/update-1/update-1.ts': SOURCE,
+  'packages/nx-plugin/src/migrations/update-2/update-2.ts': SOURCE,
+  'packages/nx-plugin/src/executors/test/batch.ts': SOURCE,
+  'packages/nx-plugin/src/generators/unused/unused.ts': SOURCE,
+  'packages/ng-lib/package.json': json({
+    name: 'ng-lib',
+    schematics: './schematics/collection.json',
+  }),
+  'packages/ng-lib/schematics/collection.json': json({
+    schematics: { 'ng-add': { factory: './ng-add/index#ngAdd' } },
+  }),
+  'packages/ng-lib/schematics/ng-add/index.ts': SOURCE,
+  'packages/lib-variant/package.json': json({ name: 'lib-variant', main: './dist/index.js' }),
+  'packages/lib-variant/tsconfig.lib.json': json({
+    compilerOptions: { outDir: 'dist', rootDir: '.' },
+  }),
+  'packages/lib-variant/index.ts': SOURCE,
   'standalone/package.json': json({ name: 'standalone', main: './app/server.ts' }),
   'standalone/app/server.ts': SOURCE,
   'standalone/app/unused.ts': SOURCE,
@@ -167,6 +220,26 @@ describe('packageEntriesUnder', () => {
     expect(entries).toContain('packages/bundled/src/icons/star.ts');
     expect(entries).toContain('packages/bundled/src/legacy/old.ts');
     expect(entries).toContain('packages/typed/src/types.ts');
+  });
+
+  it("counts each module a package's devkit collections name: generators, executors, builders, migrations", () => {
+    for (const file of [
+      'generators/app/app',
+      'executors/build/build',
+      'builders/serve',
+      'migrations/update-1/update-1',
+      'migrations/update-2/update-2',
+      'executors/test/batch',
+    ]) {
+      expect(entries).toContain(`packages/nx-plugin/src/${file}.ts`);
+    }
+    expect(entries).toContain('packages/ng-lib/schematics/ng-add/index.ts');
+    expect(entries).not.toContain('packages/nx-plugin/src/generators/unused/unused.ts');
+    expect(entries).not.toContain('packages/nx-plugin/spec/src/generators/app/app.ts');
+  });
+
+  it('maps a target through any tsconfig of the package, tsconfig.lib.json included', () => {
+    expect(entries).toContain('packages/lib-variant/index.ts');
   });
 
   it('counts the files a package script runs, built paths mapped to their source', () => {
