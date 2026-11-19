@@ -386,12 +386,17 @@ describe('renderGapReport', () => {
           following: 39,
         },
       },
-      { status: 'invalid', source: null, reason: '"template" must be one of ...' },
+      {
+        status: 'invalid',
+        source: null,
+        reason:
+          '"template" must be one of forbid-import, forbid-usage, forbid-file, inferred, none',
+      },
       {
         status: 'guidance',
         source: { ...quote('Prefer small pull requests.'), line: 7 },
         template: 'none',
-        reason: 'a process rule',
+        reason: 'A process rule, not something the code shows.',
       },
     ],
   };
@@ -427,14 +432,27 @@ describe('renderGapReport', () => {
     );
   });
 
-  it('shows an inferred rule with its status, and the reason for invalid and guidance entries', () => {
+  it('shows an inferred rule with its status, and the reason for invalid and guidance entries, ending each once', () => {
     expect(text).toContain(
       '    archprint rule import-style (AUTO, enforce): prefer workspace aliases over deep relative imports.\n    39 of 40 file(s) follow it.',
     );
     expect(text).toContain(
-      '  entry  (no source)\n    Not a valid mapping: "template" must be one of ....',
+      '  entry  (no source)\n    Not a valid mapping: "template" must be one of forbid-import, forbid-usage, forbid-file, inferred, none.',
     );
+    const handlerRule = {
+      ...report.entries.find((entry) => entry.status === 'inferred')!.rule!,
+      id: 'AP-002',
+      statement: 'A request handler must not import UI components.',
+    };
+    expect(
+      renderGapReport({
+        ...report,
+        entries: [{ status: 'inferred', source: null, template: 'inferred', rule: handlerRule }],
+      }),
+    ).toMatch(/: A request handler must not import UI components\.$/m);
     expect(text).toContain('  guidance  (CLAUDE.md:7)');
-    expect(text).toContain('    Not checkable by a template: a process rule.');
+    expect(text).toMatch(
+      /^ {4}Not checkable by a template: A process rule, not something the code shows\.$/m,
+    );
   });
 });

@@ -31,6 +31,7 @@ import {
 import { createLineLocator } from './check-locate.js';
 import { describeBurnDown, exceptionBurnDown, type ExceptionBurnDown } from './check-exceptions.js';
 import { staleSentenceMessage } from './declared-adoption.js';
+import { statementSentence } from './rule-statements.js';
 
 export type FailOn = 'none' | 'new';
 
@@ -303,14 +304,9 @@ export function checkExitCode(result: CheckResult, failOn: FailOn): number {
   return result.status === 'checked' && failOn === 'new' && result.introduced.length > 0 ? 1 : 0;
 }
 
-const sentence = (text: string): string => {
-  const trimmed = text.trim().replace(/\.$/, '');
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-};
-
 export function findingMessage(rule: AdoptedRule): string {
   const { conforming, total, floor } = rule.evidence;
-  return `${sentence(rule.statement)}. When this rule was adopted, ${conforming} of ${total} files it applies to followed it (confidence ${Math.round(floor * 100)}%).`;
+  return `${statementSentence(rule)} When this rule was adopted, ${conforming} of ${total} files it applies to followed it (confidence ${Math.round(floor * 100)}%).`;
 }
 
 const describeSubject = (finding: Pick<Finding, 'kind' | 'subject'>): string =>

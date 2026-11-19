@@ -10,7 +10,7 @@ import type { FamilyKey } from '../detector/family-maturity.js';
 import type { ArchprintConfig } from './archprint-config.js';
 import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
-import { FAMILY_STATEMENTS } from './rule-statements.js';
+import { FAMILY_STATEMENTS, statementText } from './rule-statements.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import type { RuleSummary } from './summary.js';
 import type { AdoptedRule } from './adopted-rules.js';
@@ -577,13 +577,8 @@ const adoptionItem = (r: { title: string; enforcer?: string }): string =>
 const adoptionSection = (heading: string, blurb: string, items: string[]): string[] =>
   items.length === 0 ? [] : ['', `### ${heading}`, blurb, '', ...items];
 
-const asSentence = (statement: string): string => {
-  const trimmed = statement.replace(/\.$/, '');
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-};
-
 const adoptedItem = (rule: AdoptedRule): string =>
-  `- \`${rule.id}\`: ${asSentence(rule.statement)} (${rule.evidence.conforming} of ${rule.evidence.total} files it applies to follow it)`;
+  `- \`${rule.id}\`: ${statementText(rule).replace(/\.$/, '')} (${rule.evidence.conforming} of ${rule.evidence.total} files it applies to follow it)`;
 
 /** The README section: this repo's adopted rules with their evidence, and what it follows but does not enforce. */
 export function renderAdoptionBody(rec: Recommendations, rules: readonly AdoptedRule[]): string {

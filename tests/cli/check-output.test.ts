@@ -1,5 +1,12 @@
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { AdoptedRule, DeclaredAdoptedRule } from '../../src/cli/adopted-rules.js';
+import {
+  type AdoptedRule,
+  type DeclaredAdoptedRule,
+  layerRule,
+} from '../../src/cli/adopted-rules.js';
+import { scanRepo } from '../../src/cli/scan.js';
 import {
   checkExitCode,
   checkJson,
@@ -11,6 +18,9 @@ import {
   type ReportedFinding,
 } from '../../src/cli/check.js';
 import type { ContextReport } from '../../src/cli/check-context.js';
+
+const fixture = (name: string): string =>
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', name);
 
 const rule: AdoptedRule = {
   id: 'AP-001',
@@ -63,6 +73,37 @@ describe('findingMessage', () => {
   it('capitalizes a lowercase statement and adds the full stop itself', () => {
     const lower = { ...rule, statement: 'library code must not use console' };
     expect(findingMessage(lower)).toMatch(/^Library code must not use console\. When/);
+  });
+
+  it("keeps the team's sentence as written, ending it once", () => {
+    const declared: DeclaredAdoptedRule = {
+      id: 'doc-lucide-icons',
+      family: 'declared',
+      template: 'forbid-import',
+      files: ['src/**'],
+      except: ['src/lib/icons/**'],
+      targets: [],
+      packages: [{ name: 'lucide-react' }],
+      statement: 'lucide-react for icons (re-exported through `src/lib/icons`).',
+      mode: 'fast',
+      root: '.',
+      source: { file: 'CLAUDE.md', line: 9 },
+      evidence: { conforming: 40, total: 40, floor: 0.9124 },
+    };
+    expect(findingMessage(declared)).toMatch(
+      /^lucide-react for icons \(re-exported through `src\/lib\/icons`\)\. When/,
+    );
+    expect(findingMessage({ ...declared, statement: 'Never call fetch from a page!' })).toMatch(
+      /^Never call fetch from a page! When/,
+    );
+  });
+
+  it("capitalizes archprint's own statement of a layer rule", () => {
+    const layer = layerRule(scanRepo(fixture('layer-auto')).layerBoundaries[0]!);
+    expect(layer.statement).toBe('the helpers layer must not import the views layer');
+    expect(findingMessage(layer)).toMatch(
+      /^The helpers layer must not import the views layer\. When/,
+    );
   });
 });
 
