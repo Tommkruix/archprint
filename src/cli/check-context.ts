@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import type { DeclaredAdoptedRule } from './adopted-rules.js';
+import type { DeclaredAdoptedRule, StatedSentence } from './adopted-rules.js';
 import { changedFiles, fileAtCommit } from './check-git.js';
 import { contextSentences, readsLikeRule } from './context-sentences.js';
 import { relocateSources } from './declared-adoption.js';
@@ -106,9 +106,13 @@ export function contextReport(options: {
   appPrefix: string;
   rulesDir: string;
   declared: readonly DeclaredAdoptedRule[];
+  stated: readonly StatedSentence[];
 }): ContextReport {
-  const { root, commit, appPrefix, rulesDir, declared } = options;
-  const statements = declared.map((rule) => normalize(rule.statement).text);
+  const { root, commit, appPrefix, rulesDir, declared, stated } = options;
+  const statements = [
+    ...declared.map((rule) => rule.statement),
+    ...stated.map((entry) => entry.quote),
+  ].map((text) => normalize(text).text);
   const files = changedFiles(root, commit)
     .filter((change) => {
       const owner = contextOwner(change.path);

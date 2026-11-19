@@ -350,7 +350,7 @@ describe('context files in the output', () => {
     expect(text).toContain('    and 2 more');
     expect(text).toContain('  apps/web/CLAUDE.md: 2 new sentence(s) no adopted rule checks.');
     expect(text).toContain(
-      'To enforce one, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.',
+      'To enforce one, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare; when an adopted rule already enforces it, the inferred template records that.',
     );
     const summary = githubSummary(checked({ context }));
     expect(summary).toContain(

@@ -27,7 +27,9 @@ import {
   LEGACY_RULES_FILE,
   readAdoptedRules,
   readRemovedRules,
+  readStated,
   type ResolutionMode,
+  type StatedSentence,
 } from './adopted-rules.js';
 import { findRule } from './rule-ref.js';
 import { measureAdopted } from './check-evaluate.js';
@@ -76,7 +78,7 @@ export interface WriteLayoutResult {
   folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
-  /** Previously adopted rules outside this run's selection that it kept, and those the current scan no longer generates. */
+  /** Previously adopted rules this run kept, and those outside its selection the current scan no longer generates. */
   kept: string[];
   dropped: string[];
   /** Previously adopted rules --reset removed. */
@@ -134,6 +136,15 @@ function rulesToRemove(refs: readonly string[], adopted: readonly AdoptedRule[])
       adopted.map((rule) => rule.id),
     );
   return adopted.filter((rule) => refs.some((ref) => findRule(ref, [rule]) !== undefined));
+}
+
+const statedKey = (entry: StatedSentence): string =>
+  [entry.rule, entry.file, entry.quote].join('\u0000');
+
+/** Each stated sentence once, by rule, file and quote. */
+function uniqueStated(entries: readonly StatedSentence[]): StatedSentence[] {
+  const byKey = new Map(entries.map((entry) => [statedKey(entry), entry]));
+  return [...byKey.keys()].sort().map((key) => byKey.get(key)!);
 }
 
 const LEGACY_FILES: readonly string[] = [LEGACY_RULES_FILE, LEGACY_ALLOW_FILE];
@@ -241,6 +252,7 @@ export function writeLayout(
           rulesDir: outDir,
           baseline: options.baseline ?? false,
           allowedFor,
+          adoptedRules: new Set([...inferredBefore, ...requested.adopted].map((rule) => rule.id)),
         });
   const redeclared = new Set(declaration?.adopted.map((rule) => rule.id));
   const declaredRemoving = [...redeclared].filter((id) => removingIds.has(id));
@@ -275,6 +287,10 @@ export function writeLayout(
   });
   const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
   const keptRules = previousRules.filter((rule) => emittedIds.has(rule.id));
+  const stated = uniqueStated([
+    ...(options.reset ? [] : readStated(outDir)),
+    ...(declaration?.stated ?? []),
+  ]).filter((entry) => emittedIds.has(entry.rule));
   const keptComparable = keptRules.filter(comparableIn(options.mode));
   const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
@@ -342,6 +358,7 @@ export function writeLayout(
           })),
           ...declaredRules,
         ].sort(byRuleId),
+        stated,
         removed: [...new Set(excluded)].filter((id) => !emittedIds.has(id)).sort(),
         allowed: sortAllowed(allowed),
       },
@@ -355,7 +372,7 @@ export function writeLayout(
     folded,
     readme,
     configPath,
-    kept: carried.filter((id) => emittedIds.has(id)),
+    kept: [...keptRules, ...declaredKept].sort(byRuleId).map((rule) => rule.id),
     dropped: carried.filter((id) => !emittedIds.has(id)),
     reset: options.reset
       ? [
@@ -379,6 +396,7 @@ export function writeLayout(
       kept: declaredKept.map((rule) => rule.id),
       replaced: declaredBefore.filter((rule) => redeclared.has(rule.id)).map((rule) => rule.id),
       stale: relocated.stale,
+      stated: (declaration?.stated ?? []).filter((entry) => emittedIds.has(entry.rule)),
     },
     touched: [
       configPath,

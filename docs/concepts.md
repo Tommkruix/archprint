@@ -245,9 +245,13 @@ in (the globs are relative to it). It verifies the mapping again, then adopts, f
   then only removes as it is fixed, as for inferred rules;
 - a `forbid-file` rule, which records the files there today, so only a new one breaks it.
 
+An `inferred` sentence whose rule the app has adopted is recorded as stated by that rule (in `stated` in
+`.archprint/config.json`), so `archprint check` counts the sentence as checked. The record goes when the rule is
+removed, and on `--reset`; a sentence edited afterwards counts as a new one.
+
 It refuses the rest and says why: the quote is not in the file, the mapping matches no file, the files are in
-another app (adopt it from that app), or the sentence is a rule archprint already finds (adopt it with
-`--rules <id>`).
+another app (adopt it from that app), or the sentence is a rule archprint finds but the app has not adopted (adopt
+it with `--rules <id>`).
 
 An adopted rule is enforced by an `archprint/doc-<name>` rule in `.archprint/eslint.mjs`, whose error message is
 your team's sentence and where it is written, for example `Components never call fetch directly. (CLAUDE.md:2)`,
@@ -262,7 +266,8 @@ if the sentence is gone, `generate` says so (and so does `archprint check`, on e
 stays until `archprint generate --remove <id>` removes it. dependency-cruiser does not enforce declared rules.
 
 **Keeping up as the files change.** When a change edits a context file, `archprint check` compares it with the
-base branch and lists, per file, the sentences the change adds that no adopted rule quotes. A file counts when it
+base branch and lists, per file, the sentences the change adds that no adopted rule quotes or is recorded as stating
+(map one an adopted rule already enforces with the `inferred` template). A file counts when it
 applies to the checked app: CLAUDE.md, AGENTS.md, GEMINI.md, `.cursorrules` or `.windsurfrules` in the app, below
 it or in a folder above it, and `.cursor/rules/`, `.github/copilot-instructions.md` and
 `.github/instructions/*.instructions.md` beside such a folder. Prose counts (paragraphs, list items, quotes, table

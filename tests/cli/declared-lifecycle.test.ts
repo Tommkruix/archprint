@@ -149,6 +149,7 @@ describe('declared rules: adopted with generate --declare, then kept by the ratc
     write({ declare: MAPPING, baseline: true });
     const result = write();
     expect(result.declared.kept).toEqual(['doc-freeze-ui', 'doc-no-fetch-in-components']);
+    expect(result.kept).toEqual(expect.arrayContaining(result.declared.kept));
     expect(declared().map((rule) => rule.id)).toEqual([
       'doc-freeze-ui',
       'doc-no-fetch-in-components',

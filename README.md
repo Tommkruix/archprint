@@ -310,9 +310,9 @@ format.
 
 - **`.archprint/config.json`** (always): the exact definition of each rule you adopted, with the
   evidence recorded at adoption and the resolution mode it was generated in (`archprint check` reads it, so a check
-  never re-infers a rule), the rules you removed with `generate --remove`, the exceptions you allowed with a reason,
-  what is enforced, followed but only reported, held for review, and worth adopting, and the list of managed outputs
-  `eject` removes.
+  never re-infers a rule), the rules you removed with `generate --remove`, the context-file sentences an adopted rule
+  states, the exceptions you allowed with a reason, what is enforced, followed but only reported, held for review,
+  and worth adopting, and the list of managed outputs `eject` removes.
 - **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
   every inferred ESLint rule (marker-based forbidden imports, import style, test isolation, console isolation,
   and, when you include structural rules and do not use dependency-cruiser, env access, workspace package APIs,
@@ -587,7 +587,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `scan`, `recommend`, `explain`, and `check` tools. Serves over stdio by default; `--http` runs a remote server
   that scans a public repo by URL (`scan`, `recommend`, and `explain`).
 
-`scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting. Exit
+`scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting; `scan
+--json` lists every dead-code file in each app's `deadCode` (`orphans` and `importedOnlyByTests`), where the text
+report shows the first 8. Exit
 codes are the contract: `0` on success, `1` on error (for `check`: new violations with `--fail-on new`), `2` for a
 `check` that could not run because of the CI setup.
 
