@@ -85,6 +85,41 @@ export function renamedPaths(root: string, commit: string): Map<string, string> 
   );
 }
 
+const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+/** The lines each file under `dir` gained in the working tree against `commit`, by repo-relative path. */
+export function addedLines(root: string, commit: string, dir: string): Map<string, Set<number>> {
+  const added = new Map<string, Set<number>>();
+  let lines: Set<number> | null = null;
+  const diff = git(root, [
+    '-c',
+    'core.quotePath=false',
+    'diff',
+    '-U0',
+    '-M',
+    '--no-color',
+    '--no-ext-diff',
+    '--no-prefix',
+    commit,
+    '--',
+    dir || '.',
+  ]);
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++ ')) {
+      const file = line.slice(4).replace(/\t$/, '');
+      lines = file === '/dev/null' ? null : new Set();
+      if (lines !== null) added.set(file, lines);
+      continue;
+    }
+    const hunk = HUNK.exec(line);
+    if (hunk === null || lines === null) continue;
+    const start = Number(hunk[1]);
+    const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+    for (let number = start; number < start + count; number++) lines.add(number);
+  }
+  return added;
+}
+
 export interface ChangedFile {
   /** Repo-relative, POSIX. */
   path: string;
