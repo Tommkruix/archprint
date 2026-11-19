@@ -108,10 +108,16 @@ function graphFiles(root: string, accepts: (name: string) => boolean): GraphFile
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
+/** The module an import names without its bundler query (`./theme?raw`, `./worker.js?worker&url`). */
+const withoutQuery = (specifier: string): string => {
+  const query = specifier.indexOf('?');
+  return query > 0 ? specifier.slice(0, query) : specifier;
+};
+
 /**
  * Every source file under `root` with the files that reference it, imports resolved first hop the way the scan and
- * the generated rules resolve them: through the importing file's deepest tsconfig aliases, its package.json `imports`
- * and the workspace packages.
+ * the generated rules resolve them (through the importing file's deepest tsconfig aliases, its package.json `imports`
+ * and the workspace packages), without a bundler query.
  */
 export function buildReferenceGraph(root: string): ReferenceGraph {
   const absoluteRoot = path.resolve(root);
@@ -179,7 +185,9 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   };
   for (const file of walked) {
     for (const specifier of readSafely(() => moduleReferences(file.absolutePath))) {
-      for (const target of targets(file.relativePath, specifier)) refer(file.relativePath, target);
+      for (const target of targets(file.relativePath, withoutQuery(specifier))) {
+        refer(file.relativePath, target);
+      }
     }
   }
   const sources = [...referrers.keys()];

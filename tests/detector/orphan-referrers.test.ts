@@ -107,3 +107,32 @@ describe('orphans: Astro components reference source files', () => {
     ]);
   });
 });
+
+describe('orphans: an import with a bundler query names its file', () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-orphans-query-')));
+    writeTree(repo, {
+      'tsconfig.json': '{}',
+      'src/theme.tsx': [
+        "import script from './load-theme?compiled-string';",
+        "import workerUrl from './worker.js?worker&url';",
+        "import raw from './notes.ts?raw';",
+        'export const parts = [script, workerUrl, raw];',
+      ].join('\n'),
+      'src/load-theme.ts': SOURCE,
+      'src/worker.ts': SOURCE,
+      'src/notes.ts': SOURCE,
+      'src/unused.ts': SOURCE,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('counts the file without its query, and still lists a file nothing imports', () => {
+    const { orphans } = detectOrphans(repo);
+    expect(orphans).toEqual(expect.arrayContaining(['src/unused.ts']));
+    for (const file of ['src/load-theme.ts', 'src/worker.ts', 'src/notes.ts']) {
+      expect(orphans).not.toContain(file);
+    }
+  });
+});
