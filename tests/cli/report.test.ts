@@ -46,7 +46,7 @@ const baseScan = (overrides: Partial<ScanResult>): ScanResult => ({
     filesInCycles: 0,
     gate: evaluateGate({ roleFileCount: 1, violatingFileCount: 0, roleConfidence: 1 }),
   },
-  orphans: { appDir: '/app', fileCount: 10, orphans: [], testOnly: [] },
+  orphans: { appDir: '/app', fileCount: 10, orphans: [], testOnly: [], shipped: [] },
   reachability: { appDir: '/app', layers: [], reaches: new Map() },
   publicApi: { appDir: '/app', groups: [] },
   featureSlices: { appDir: '/app', groups: [] },
@@ -269,12 +269,15 @@ describe('renderReport orphan modules', () => {
           fileCount: 10,
           orphans: ['lib/unused.ts'],
           testOnly: ['components/pm-view.tsx'],
+          shipped: ['src/model.ts'],
         },
       }),
       '1.0.0',
     );
     expect(text).toContain('IMPORTED ONLY BY TESTS (1, review before deleting)');
     expect(text).toContain('ORPHAN MODULES (1, review before deleting)');
+    expect(text).toContain('SHIPPED IN A PUBLISHED PACKAGE (1, review before deleting)');
     expect(text.indexOf('components/pm-view.tsx')).toBeLessThan(text.indexOf('lib/unused.ts'));
+    expect(text.indexOf('lib/unused.ts')).toBeLessThan(text.indexOf('src/model.ts'));
   });
 });

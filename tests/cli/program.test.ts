@@ -119,6 +119,35 @@ describe('cli program', () => {
     }
   });
 
+  it('scan --json lists the unimported files a published package ships apart from the orphans', async () => {
+    const app = mkdtempSync(path.join(tmpdir(), 'archprint-shipped-'));
+    writeFileSync(
+      path.join(app, 'package.json'),
+      JSON.stringify({ name: 'legacy-lib', main: 'lib/index.js', files: ['lib'] }),
+    );
+    writeFileSync(
+      path.join(app, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: { outDir: 'lib', rootDir: 'src' } }),
+    );
+    mkdirSync(path.join(app, 'src'));
+    mkdirSync(path.join(app, 'scripts'));
+    writeFileSync(path.join(app, 'src', 'index.ts'), 'export const a = 1;\n');
+    writeFileSync(path.join(app, 'src', 'model.ts'), 'export const b = 1;\n');
+    writeFileSync(path.join(app, 'scripts', 'release.ts'), 'export const c = 1;\n');
+    try {
+      await run(['scan', app, '--json']);
+      const { deadCode } = (
+        JSON.parse(output()) as {
+          apps: { deadCode: { orphans: string[]; shipped: string[] } }[];
+        }
+      ).apps[0]!;
+      expect(deadCode.shipped).toEqual(['src/model.ts']);
+      expect(deadCode.orphans).toEqual(['scripts/release.ts']);
+    } finally {
+      rmSync(app, { recursive: true, force: true });
+    }
+  });
+
   it('recommend --json emits per-app tiers as parseable JSON', async () => {
     await run(['recommend', auto, '--json']);
     const parsed = JSON.parse(output()) as {

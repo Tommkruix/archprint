@@ -588,7 +588,7 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   that scans a public repo by URL (`scan`, `recommend`, and `explain`).
 
 `scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting; `scan
---json` lists every dead-code file in each app's `deadCode` (`orphans` and `importedOnlyByTests`), where the text
+--json` lists every dead-code file in each app's `deadCode` (`orphans`, `importedOnlyByTests` and `shipped`), where the text
 report shows the first 8. Exit
 codes are the contract: `0` on success, `1` on error (for `check`: new violations with `--fail-on new`), `2` for a
 `check` that could not run because of the CI setup.

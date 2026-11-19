@@ -47,8 +47,11 @@ export interface ScanSummary {
   fileCount: number;
   aliasCount: number;
   rules: RuleSummary[];
-  /** Production files nothing imports, and those only tests import; suggestions, never enforced. */
-  deadCode: { orphans: string[]; importedOnlyByTests: string[] };
+  /**
+   * Production files nothing imports, those only tests import, and those a published package without `exports` ships
+   * (outside users may import them); suggestions, never enforced.
+   */
+  deadCode: { orphans: string[]; importedOnlyByTests: string[]; shipped: string[] };
 }
 
 export interface GateEntry {
@@ -215,6 +218,10 @@ export function toScanSummary(scan: ScanResult): ScanSummary {
     fileCount: scan.fileCount,
     aliasCount: scan.aliasCount,
     rules: summarizeRules(scan),
-    deadCode: { orphans: scan.orphans.orphans, importedOnlyByTests: scan.orphans.testOnly },
+    deadCode: {
+      orphans: scan.orphans.orphans,
+      importedOnlyByTests: scan.orphans.testOnly,
+      shipped: scan.orphans.shipped,
+    },
   };
 }

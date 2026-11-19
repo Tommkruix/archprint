@@ -285,8 +285,8 @@ change.` When a fixed exception is still recorded, it says to run `archprint gen
 - **Safe on pull requests from forks.** It needs only read access, uses no secrets, and never runs your code.
 
 `scan --json` and `recommend --json` also emit stable, version-keyed JSON for scripting, with exit code `0` on
-success and `1` on error. `scan --json` lists every dead-code file in each app's `deadCode` (`orphans` and
-`importedOnlyByTests`), where the text report shows the first 8.
+success and `1` on error. `scan --json` lists every dead-code file in each app's `deadCode` (`orphans`,
+`importedOnlyByTests` and `shipped`), where the text report shows the first 8.
 
 ## Use with AI agents (MCP)
 

@@ -227,6 +227,11 @@ export function renderReport(
     scan.orphans.orphans,
     'Nothing imports these and they are not framework entries.',
   );
+  orphanList(
+    'SHIPPED IN A PUBLISHED PACKAGE',
+    scan.orphans.shipped,
+    'Nothing in the repo imports these outside tests, but a published package without an exports map ships them, so its users may import them by path.',
+  );
   const autoApi = scan.publicApi.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApi = scan.publicApi.groups.filter((g) => g.gate.status === 'SUGGEST');
   if (autoApi.length > 0) {

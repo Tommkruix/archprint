@@ -14,7 +14,7 @@ const EXTENSION = /(\.d)?\.(tsx?|jsx?|mjs|cjs|mts|cts)$/;
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 const stem = (file: string): string => file.replace(EXTENSION, '');
 
-function readJson(file: string): Record<string, unknown> | null {
+export function readJson(file: string): Record<string, unknown> | null {
   try {
     return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
   } catch {
@@ -148,9 +148,12 @@ export function scriptTargets(manifest: Record<string, unknown>): string[] {
   );
 }
 
-interface CompiledRoot {
+/** Where one tsconfig writes its output, and the source folder that output mirrors, from the package directory. */
+export interface CompiledRoot {
   outDir: string;
   rootDir: string;
+  /** Whether the config builds this file (from the package directory): it emits and lists the file as an input. */
+  emits: (file: string) => boolean;
 }
 
 function commonDirectory(files: readonly string[]): string {
@@ -168,10 +171,11 @@ function commonDirectory(files: readonly string[]): string {
 const OPTIONS_ONLY: ts.ParseConfigHost = { ...ts.sys, readDirectory: () => [] };
 
 /**
- * Where each of the package's tsconfigs writes its output and the source folder that output mirrors; the input files
- * are listed only to infer a `rootDir` the config does not state.
+ * Where each of the package's tsconfigs writes its output and the source folder that output mirrors, which may lie
+ * outside the package (a published package compiling another's sources); the input files are listed only when needed,
+ * to infer a `rootDir` the config does not state or to tell which files it builds.
  */
-function compiledRoots(packageDir: string): CompiledRoot[] {
+export function compiledRoots(packageDir: string): CompiledRoot[] {
   const roots: CompiledRoot[] = [];
   for (const name of readdirSync(packageDir)
     .filter((entry) => TSCONFIG.test(entry) && !TEST_TSCONFIG.test(entry))
@@ -185,18 +189,22 @@ function compiledRoots(packageDir: string): CompiledRoot[] {
     const relative = (dir: string): string => toPosix(path.relative(packageDir, dir));
     const outDir = relative(options.outDir);
     if (outDir.startsWith('..')) continue;
+    let listed: string[] | undefined;
+    const inputs = (): string[] =>
+      (listed ??= parse(ts.sys)
+        .fileNames.filter((file) => !/\.d\.[cm]?ts$/.test(file))
+        .map(relative));
     let rootDir: string;
     if (options.rootDir === undefined) {
-      const inputs = parse(ts.sys)
-        .fileNames.filter((file) => !/\.d\.[cm]?ts$/.test(file))
-        .map(relative);
-      if (inputs.length === 0) continue;
-      rootDir = commonDirectory(inputs);
+      if (inputs().length === 0) continue;
+      rootDir = commonDirectory(inputs());
     } else {
       rootDir = relative(options.rootDir);
     }
-    if (rootDir.startsWith('..')) continue;
-    roots.push({ outDir, rootDir });
+    let built: Set<string> | undefined;
+    const emits = (file: string): boolean =>
+      options.noEmit !== true && (built ??= new Set(inputs())).has(file);
+    roots.push({ outDir, rootDir, emits });
   }
   return roots;
 }
