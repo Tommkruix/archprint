@@ -136,3 +136,43 @@ describe('orphans: an import with a bundler query names its file', () => {
     }
   });
 });
+
+describe("orphans: a workspace package's exported subpath resolves like an import of it", () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-orphans-exports-')));
+    writeTree(repo, {
+      'package.json': json({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      'tsconfig.json': json({
+        compilerOptions: {
+          paths: {
+            '@scope/react/ListPlugin': ['./packages/react/src/ListPlugin.tsx'],
+            '@scope/react/Blocked': ['./packages/react/src/Blocked.tsx'],
+          },
+        },
+      }),
+      'packages/react/package.json': json({
+        name: '@scope/react',
+        exports: {
+          './ListPlugin': {
+            import: { types: './ListPlugin.d.ts', default: './ListPlugin.mjs' },
+            require: './ListPlugin.js',
+          },
+          './Blocked': null,
+          './icons/*': './icons/*.mjs',
+        },
+      }),
+      'packages/react/src/ListPlugin.tsx': SOURCE,
+      'packages/react/src/ListPlugin.test.tsx': "import { value } from './ListPlugin';\n",
+      'packages/react/src/Blocked.tsx': SOURCE,
+      'packages/react/src/Unexported.tsx': SOURCE,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('counts the source file the tsconfig paths name for an exported subpath, not a blocked or unexported one', () => {
+    const { orphans, testOnly } = detectOrphans(path.join(repo, 'packages', 'react'));
+    expect(testOnly).toEqual([]);
+    expect(orphans).toEqual(['src/Blocked.tsx', 'src/Unexported.tsx']);
+  });
+});

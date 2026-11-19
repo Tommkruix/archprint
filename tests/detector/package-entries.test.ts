@@ -128,6 +128,15 @@ const TREE: Record<string, string> = {
     compilerOptions: { outDir: 'dist', rootDir: '.' },
   }),
   'packages/lib-variant/index.ts': SOURCE,
+  'packages/in-place/package.json': json({
+    name: 'in-place',
+    main: 'lit-thing.js',
+    exports: { './loaders/observer.js': { default: './loaders/observer.js' } },
+  }),
+  'packages/in-place/tsconfig.json': json({ compilerOptions: { outDir: './', rootDir: './src' } }),
+  'packages/in-place/src/lit-thing.ts': SOURCE,
+  'packages/in-place/src/loaders/observer.ts': SOURCE,
+  'packages/in-place/src/loaders/other.ts': SOURCE,
   'standalone/package.json': json({ name: 'standalone', main: './app/server.ts' }),
   'standalone/app/server.ts': SOURCE,
   'standalone/app/unused.ts': SOURCE,
@@ -236,6 +245,12 @@ describe('packageEntriesUnder', () => {
     expect(entries).toContain('packages/ng-lib/schematics/ng-add/index.ts');
     expect(entries).not.toContain('packages/nx-plugin/src/generators/unused/unused.ts');
     expect(entries).not.toContain('packages/nx-plugin/spec/src/generators/app/app.ts');
+  });
+
+  it('maps a target to the rootDir when the tsconfig outDir is the package directory itself', () => {
+    expect(entries).toContain('packages/in-place/src/lit-thing.ts');
+    expect(entries).toContain('packages/in-place/src/loaders/observer.ts');
+    expect(entries).not.toContain('packages/in-place/src/loaders/other.ts');
   });
 
   it('maps a target through any tsconfig of the package, tsconfig.lib.json included', () => {
