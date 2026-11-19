@@ -259,8 +259,11 @@ file a package exposes through its package.json (`main`, `module`, `types`, `bro
 `builders` and `schematics` files, and the `migrations` of `ng-update` or `nx-migrations`: every `factory` and
 `implementation`, relative to the collection file; a collection's `extends` is not followed): a target built into
 the `outDir` of any of the package's tsconfigs (`tsconfig.json`, `tsconfig.build.json`, `tsconfig.lib.json`, ...;
-not a test one such as `tsconfig.spec.json`), or into `dist/`, `lib/`, `build/` or
-`out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
+not a test one such as `tsconfig.spec.json`), the package folder itself included (`"outDir": "."`), or into `dist/`,
+`lib/`, `build/` or `out/`, counts for the source file it was built from. Each subpath a workspace package exports
+also counts as an import of `<name>/<subpath>`, resolved the way the repo resolves imports, so a tsconfig `paths`
+entry that maps `@scope/ui/Button` to `packages/ui/src/Button.tsx` marks that file as used when the package exports
+`./Button`. So does a file a package.json script runs with a JavaScript
 runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
 config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint
 glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be

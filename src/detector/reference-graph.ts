@@ -27,7 +27,7 @@ export interface ReferenceGraph {
   tests: ReadonlySet<string>;
   /**
    * Imports of any kind (type-only included), re-exports, `import()` and `require()` calls, `import.meta.glob` and
-   * `require.context` loaders, and tool configs.
+   * `require.context` loaders, tool configs, and a workspace package's package.json for each subpath it exports.
    */
   referrers: ReadonlyMap<string, ReadonlySet<string>>;
 }
@@ -117,7 +117,8 @@ const withoutQuery = (specifier: string): string => {
 /**
  * Every source file under `root` with the files that reference it, imports resolved first hop the way the scan and
  * the generated rules resolve them (through the importing file's deepest tsconfig aliases, its package.json `imports`
- * and the workspace packages), without a bundler query.
+ * and the workspace packages), without a bundler query. Each subpath a workspace package exports counts as an import
+ * of `<name>/<subpath>` from its package.json, so the repo's own tsconfig `paths` say which source file it is.
  */
 export function buildReferenceGraph(root: string): ReferenceGraph {
   const absoluteRoot = path.resolve(root);
@@ -212,6 +213,13 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
     for (const literal of readSafely(() => stringLiterals(path.join(absoluteRoot, config)))) {
       const specifier = literal.replace(/^<rootDir>\//, './');
       refer(config, resolve(config, specifier.startsWith('.') ? specifier : `./${specifier}`));
+    }
+  }
+  for (const { name, dir, subpaths } of packages) {
+    const manifest = `${dir}/package.json`;
+    for (const { key, targets: written } of subpaths) {
+      if (written.length === 0) continue;
+      for (const target of targets(manifest, `${name}${key.slice(1)}`)) refer(manifest, target);
     }
   }
   return { root: absoluteRoot, tests, referrers };

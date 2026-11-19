@@ -184,7 +184,7 @@ function compiledRoots(packageDir: string): CompiledRoot[] {
     if (options.outDir === undefined) continue;
     const relative = (dir: string): string => toPosix(path.relative(packageDir, dir));
     const outDir = relative(options.outDir);
-    if (outDir === '' || outDir.startsWith('..')) continue;
+    if (outDir.startsWith('..')) continue;
     let rootDir: string;
     if (options.rootDir === undefined) {
       const inputs = parse(ts.sys)
@@ -201,11 +201,15 @@ function compiledRoots(packageDir: string): CompiledRoot[] {
   return roots;
 }
 
-/** The source paths a target may have been built from: itself, through each tsconfig `outDir`, and through `src/`. */
+/**
+ * The source paths a target may have been built from: itself, through each tsconfig `outDir` (the package directory
+ * itself included), and through `src/`.
+ */
 function sourceCandidates(target: string, roots: readonly CompiledRoot[]): string[] {
   const candidates = [target];
   for (const { outDir, rootDir } of roots) {
-    if (target.startsWith(`${outDir}/`)) {
+    if (outDir === '') candidates.push(path.posix.join(rootDir, target));
+    else if (target.startsWith(`${outDir}/`)) {
       candidates.push(path.posix.join(rootDir, target.slice(outDir.length + 1)));
     }
   }
