@@ -55,6 +55,19 @@ describe('files a module loads by a path it computes', () => {
     expect(orphans).toContain('cli/steps/build.ts');
   });
 
+  it("follows join destructured from require('path') in a CommonJS file", () => {
+    const orphans = orphansOf({
+      'scripts/load.cjs': [
+        "const { join: glue } = require('path');",
+        'module.exports = (name) => require(glue(__dirname, "steps", `${name}.ts`));',
+      ].join('\n'),
+      'scripts/steps/build.ts': MODULE,
+      'scripts/other.ts': MODULE,
+    });
+    expect(orphans).not.toContain('scripts/steps/build.ts');
+    expect(orphans).toContain('scripts/other.ts');
+  });
+
   it('reads path.resolve with import.meta.dirname and pathToFileURL(...).href', () => {
     const orphans = orphansOf({
       'cli/load.ts': [

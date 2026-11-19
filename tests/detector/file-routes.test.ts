@@ -203,6 +203,18 @@ describe('files a file-based router loads by their location', () => {
     ).toEqual(['src/renderer/routes/__root.tsx', 'src/renderer/routes/copilots/my.tsx']);
   });
 
+  it('TanStack Router: a routesDirectory passed as a variable is not guessed', () => {
+    const root = repo({
+      'package.json': manifest({ '@tanstack/router-plugin': '1.130.0' }),
+      'vite.config.ts': [
+        "import { tanstackRouter } from '@tanstack/router-plugin/vite';",
+        "const routesDirectory = process.env.ROUTES ?? './src/pages';",
+        'export default { plugins: [tanstackRouter({ routesDirectory })] };',
+      ].join('\n'),
+    });
+    expect(loaded(root, ['src/routes/index.tsx', 'src/pages/index.tsx'])).toEqual([]);
+  });
+
   it('TanStack Router: ./src/routes by default, with the ignore prefix tsr.config.json sets', () => {
     const root = repo({
       'package.json': manifest({ '@tanstack/router-cli': '1.130.0' }),
@@ -338,6 +350,19 @@ describe('files a file-based router loads by their location', () => {
           'vite.config.js': [
             "const routify = require('@roxi/routify/plugins/rollup');",
             'module.exports = { plugins: [routify(options)] };',
+          ].join('\n'),
+        }),
+        page,
+      ),
+    ).toEqual([]);
+    expect(
+      loaded(
+        repo({
+          'package.json': pkg({}),
+          'rollup.config.js': [
+            "import routify from '@roxi/routify/plugins/rollup';",
+            'const pages = process.env.PAGES;',
+            'export default { plugins: [routify({ pages })] };',
           ].join('\n'),
         }),
         page,
