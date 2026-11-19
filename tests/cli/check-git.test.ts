@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { changedFiles, renamedPaths } from '../../src/cli/check-git.js';
+import { addedLines, changedFiles, renamedPaths } from '../../src/cli/check-git.js';
 import { gitEnv } from '../../src/cli/git-env.js';
 import { writeTree } from '../integration/layer-app.js';
 
@@ -48,5 +48,20 @@ describe('changedFiles', () => {
       ].sort(byPath),
     );
     expect(renamedPaths(repo, base)).toEqual(new Map([['old.md', 'new.md']]));
+  });
+
+  it('gives the lines each file gained: one-line and multi-line hunks, paths with spaces or non-ASCII, none for a pure rename, scoped to a folder', () => {
+    writeTree(repo, {
+      'a b/AGENTS.md': 'Zero.\nOne.\nTwo.\nThree.\n',
+      'ünï/CLAUDE.md': 'Changed.\n',
+    });
+    git('mv', 'old.md', 'new.md');
+    expect(addedLines(repo, base, '')).toEqual(
+      new Map([
+        ['a b/AGENTS.md', new Set([1, 3, 4])],
+        ['ünï/CLAUDE.md', new Set([1])],
+      ]),
+    );
+    expect(addedLines(repo, base, 'ünï')).toEqual(new Map([['ünï/CLAUDE.md', new Set([1])]]));
   });
 });

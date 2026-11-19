@@ -150,11 +150,47 @@ describe('diffFindings', () => {
     expect(diffFindings([first], [first, second], new Map()).introduced).toEqual([second]);
   });
 
-  it('counts like ESLint bulk suppressions: one more break of the same kind in a file lists all of them', () => {
+  it('counts like ESLint bulk suppressions: without the added lines, one more break of a kind lists all of them', () => {
     const old = finding({ ruleId: 'doc-no-fetch', kind: 'usage', subject: 'fetch', line: 3 });
     const added = { ...old, line: 9 };
     expect(diffFindings([old], [added, old], new Map()).introduced).toEqual([old, added]);
     expect(diffFindings([old], [{ ...old, line: 5 }], new Map()).introduced).toEqual([]);
+  });
+
+  it('lists only the breaks on lines the change added, when there are as many as the count grew by', () => {
+    const old = finding({ ruleId: 'doc-no-fetch', kind: 'usage', subject: 'fetch', line: 3 });
+    const shifted = { ...old, line: 4 };
+    const added = { ...old, line: 1 };
+    const addedIn = (lines: number[]) => (file: string) =>
+      file === old.file ? new Set(lines) : new Set<number>();
+    expect(diffFindings([old], [added, shifted], new Map(), addedIn([1])).introduced).toEqual([
+      added,
+    ]);
+    expect(diffFindings([old], [added, shifted], new Map(), addedIn([1, 4])).introduced).toEqual([
+      added,
+      shifted,
+    ]);
+    expect(diffFindings([old], [added, shifted], new Map(), addedIn([])).introduced).toEqual([
+      added,
+      shifted,
+    ]);
+    const unlocated = { ...old, line: undefined };
+    expect(
+      diffFindings([unlocated], [unlocated, unlocated], new Map(), addedIn([1])).introduced,
+    ).toEqual([unlocated, unlocated]);
+    const later = { ...old, line: 9 };
+    expect(
+      diffFindings([old], [added, shifted, later], new Map(), addedIn([1])).introduced,
+    ).toEqual([added, shifted, later]);
+  });
+
+  it('asks for the added lines only when a kind the base had grows', () => {
+    const old = finding({ ruleId: 'doc-no-fetch', kind: 'usage', subject: 'fetch', line: 3 });
+    const unused = (): ReadonlySet<number> => {
+      throw new Error('added lines read for an unambiguous kind');
+    };
+    expect(diffFindings([], [old], new Map(), unused).introduced).toEqual([old]);
+    expect(diffFindings([old], [{ ...old, line: 5 }], new Map(), unused).introduced).toEqual([]);
   });
 
   it('counts a break fixed when a file has fewer of its kind than the base', () => {

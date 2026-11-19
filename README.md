@@ -360,8 +360,8 @@ this layout and rewires your configs in place.
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
 and now breaks it more often is reported, a recorded exception included. A new import is listed on its own; when
-the file has more of the same break (another `console` call), every one of them is listed, since which one is new
-cannot be told. It works in any CI, and on GitHub it shows each finding inline on the pull request
+the file has more of the same break (another `console` call), the ones on lines the change added are listed, or every
+one of them when the change also edited an old one or moved code, so the diff cannot tell them apart. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,

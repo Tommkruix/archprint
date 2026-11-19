@@ -61,22 +61,38 @@ function byIdentity(findings: readonly Finding[]): Map<string, Finding[]> {
 const inOrder = (a: Finding, b: Finding): number =>
   identity(a).localeCompare(identity(b)) || (a.line ?? 0) - (b.line ?? 0);
 
+/** The lines a file gained in the change. */
+export type AddedLines = (file: string) => ReadonlySet<number>;
+
 /**
- * What the head adds and removes, counting like ESLint's bulk suppressions with the base as the baseline: a
- * finding is new when the head has more of its kind (rule, file, subject) than the base. Then every one of them is
- * listed, since which is the new one cannot be told; fewer than the base means some were fixed.
+ * Which findings of a kind the base had `before` of are the new ones: those on lines the change added when there
+ * are exactly as many as the count grew by, else every one, since the diff cannot tell them apart.
+ */
+function newOfKind(group: readonly Finding[], before: number, addedIn?: AddedLines): Finding[] {
+  if (before === 0 || addedIn === undefined) return [...group];
+  const added = addedIn(group[0]!.file);
+  const onAdded = group.filter((finding) => finding.line !== undefined && added.has(finding.line));
+  return onAdded.length === group.length - before ? onAdded : [...group];
+}
+
+/**
+ * What the head adds and removes, counting like ESLint's bulk suppressions with the base as the baseline: a kind
+ * (rule, file, subject) has a new finding when the head has more of it than the base, and fewer means some were
+ * fixed. `addedIn` tells which of a kind are new; without it every one is listed.
  */
 export function diffFindings(
   base: readonly Finding[],
   head: readonly Finding[],
   renames: ReadonlyMap<string, string>,
+  addedIn?: AddedLines,
 ): FindingDiff {
   const baseGroups = byIdentity(base.map((finding) => renameFinding(finding, renames)));
   const headGroups = byIdentity(head);
   const introduced: Finding[] = [];
   const fixed: Finding[] = [];
   for (const [key, group] of headGroups) {
-    if (group.length > (baseGroups.get(key)?.length ?? 0)) introduced.push(...group);
+    const before = baseGroups.get(key)?.length ?? 0;
+    if (group.length > before) introduced.push(...newOfKind(group, before, addedIn));
   }
   for (const [key, group] of baseGroups) {
     const remaining = headGroups.get(key)?.length ?? 0;
