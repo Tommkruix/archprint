@@ -193,7 +193,8 @@ heuristic. **When not to use:** rarely; low volume.
 ### Orphans (Report)
 
 Production files nothing in the workspace references, listed after the files only tests import (dead code the
-tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
+tests keep alive, usually the more actionable list). A reference is any import, type-only included (an import with
+a bundler query, such as `./theme?raw` or `./worker.js?worker&url`, names the file without its query), an `export ...
 from` through a barrel, an `import()` or `require()` call, an `import.meta.glob` (Vite) or `require.context`
 (webpack) call whose patterns or folder are written out (every file it matches; `!` patterns excluded; relative
 patterns start at a literal `base` option when there is one; a pattern starting with `/` starts at the nearest folder
