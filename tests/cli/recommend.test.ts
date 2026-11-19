@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { scanRepo } from '../../src/cli/scan.js';
 import { buildRecommendations, detectStack, resolveEnforcer } from '../../src/cli/recommend.js';
 import { renderAdoptionBody, renderRecommendations } from '../../src/cli/report.js';
-import { consoleIsolationRule } from '../../src/cli/adopted-rules.js';
+import { consoleIsolationRule, type DeclaredAdoptedRule } from '../../src/cli/adopted-rules.js';
 import type { InstalledEnforcers } from '../../src/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -100,6 +100,26 @@ describe('renderAdoptionBody', () => {
     expect(md).not.toContain('comparable repos');
     expect(md).not.toContain('Worth adopting');
     expect(md).not.toContain('Test isolation');
+  });
+
+  it("keeps the team's sentence as written", () => {
+    const declared: DeclaredAdoptedRule = {
+      id: 'doc-lucide-icons',
+      family: 'declared',
+      template: 'forbid-import',
+      files: ['src/**'],
+      except: ['src/lib/icons/**'],
+      targets: [],
+      packages: [{ name: 'lucide-react' }],
+      statement: 'lucide-react for icons (re-exported through `src/lib/icons`).',
+      mode: 'fast',
+      root: '.',
+      source: { file: 'CLAUDE.md', line: 9 },
+      evidence: { conforming: 40, total: 40, floor: 0.9124 },
+    };
+    expect(renderAdoptionBody(rec, [declared])).toContain(
+      '- `doc-lucide-icons`: lucide-react for icons (re-exported through `src/lib/icons`) (40 of 40 files it applies to follow it)',
+    );
   });
 
   it('omits the adopted section when no rule was adopted', () => {
