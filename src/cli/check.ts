@@ -14,6 +14,7 @@ import { allowKey, readAllowed, type AllowedException } from './allowed-exceptio
 import { diffFindings, partitionRules, type RuleChange } from './check-diff.js';
 import { evaluateRules, type Finding } from './check-evaluate.js';
 import {
+  addedLines,
   CheckSetupError,
   checkoutBase,
   defaultBase,
@@ -230,10 +231,15 @@ export function runCheck(options: CheckOptions): CheckResult {
       ? evaluateRules(baseApp, partition.comparable, baseOutDir)
       : [];
     const headFindings = evaluateRules(appDir, partition.comparable, outDir);
+    let added: Map<string, Set<number>> | undefined;
+    const addedIn = (file: string): ReadonlySet<number> =>
+      (added ??= addedLines(root, commit, appPrefix)).get(path.posix.join(appPrefix, file)) ??
+      new Set();
     const { introduced } = diffFindings(
       baseFindings,
       withoutAllowed(headFindings, allowed),
       renames,
+      addedIn,
     );
     const { fixed } = diffFindings(baseFindings, headFindings, renames);
     const locate = createLineLocator(appDir);

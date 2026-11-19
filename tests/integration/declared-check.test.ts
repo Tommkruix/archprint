@@ -70,16 +70,26 @@ describe('archprint check and explain with a declared rule', { timeout: 120_000 
     expect(result.exceptions.left).toBe(1);
   });
 
-  it('reports a second break added to a file whose first one is recorded, listing both', () => {
-    put('src/components/card.tsx', FETCH + "export const More = () => fetch('/y');\n");
+  const introducedLines = (): (number | null)[] => {
     const result = runCheck({ cwd: repo, out: '.archprint', base: 'main' });
     if (result.status !== 'checked') throw new Error(`check did not run: ${result.status}`);
-    expect(
-      result.introduced.map((finding) => [finding.ruleId, finding.file, finding.line]),
-    ).toEqual([
-      ['doc-no-fetch-in-components', 'src/components/card.tsx', 1],
-      ['doc-no-fetch-in-components', 'src/components/card.tsx', 2],
-    ]);
+    expect(new Set(result.introduced.map((finding) => finding.file))).toEqual(
+      new Set(['src/components/card.tsx']),
+    );
+    return result.introduced.map((finding) => finding.line);
+  };
+  const MORE = "export const More = () => fetch('/y');\n";
+
+  it('reports a second break added to a file whose first one is recorded, by the line the change added', () => {
+    put('src/components/card.tsx', FETCH + MORE);
+    expect(introducedLines()).toEqual([2]);
+    put('src/components/card.tsx', MORE + FETCH);
+    expect(introducedLines()).toEqual([1]);
+  });
+
+  it('lists every break of the kind when the change also edits the recorded one', () => {
+    put('src/components/card.tsx', FETCH.replace("'/x'", "'/z'") + MORE);
+    expect(introducedLines()).toEqual([1, 2]);
   });
 
   it('counts a fixed exception in the burn-down', () => {
