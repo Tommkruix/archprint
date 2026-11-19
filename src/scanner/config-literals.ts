@@ -62,6 +62,36 @@ export function importedNames(source: ts.SourceFile, moduleName: string): Map<st
   return names;
 }
 
+const isRequireOf = (node: ts.Expression | undefined, moduleName: string): boolean =>
+  node !== undefined &&
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === 'require' &&
+  node.arguments.length === 1 &&
+  asString(node.arguments[0]) === moduleName;
+
+/** The local name a file gives a module's default export: `import x from 'm'` or `const x = require('m')`. */
+export function defaultImportName(source: ts.SourceFile, moduleName: string): string | undefined {
+  for (const statement of source.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === moduleName &&
+      statement.importClause?.name !== undefined
+    ) {
+      return statement.importClause.name.text;
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && isRequireOf(declaration.initializer, moduleName)) {
+          return declaration.name.text;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
 /** The arguments of each call to a function called `name` anywhere in a file. */
 export function callArguments(source: ts.SourceFile, name: string): ts.NodeArray<ts.Expression>[] {
   const calls: ts.NodeArray<ts.Expression>[] = [];

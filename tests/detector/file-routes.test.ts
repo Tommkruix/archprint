@@ -213,6 +213,149 @@ describe('files a file-based router loads by their location', () => {
     ).toEqual(['src/routes/index.tsx', 'src/routes/-not-ignored.tsx']);
   });
 
+  it('Routify 2: files of src/pages with its extensions, minus underscored folders and files but layouts', () => {
+    const root = repo({
+      'packages/builder/package.json': JSON.stringify({
+        dependencies: { '@roxi/routify': '2.18.19' },
+        scripts: { build: 'routify -b && vite build', dev: 'routify -c dev:vite' },
+      }),
+      'packages/v3/package.json': manifest({ '@roxi/routify': '^3.0.0' }),
+    });
+    expect(
+      loaded(root, [
+        'packages/builder/src/pages/index.svelte',
+        'packages/builder/src/pages/_layout.svelte',
+        'packages/builder/src/pages/_fallback.svelte',
+        'packages/builder/src/pages/builder/[id]/settings.svelte',
+        'packages/builder/src/pages/builder/_reset.svelte',
+        'packages/builder/src/pages/builder/_layout.workspace.svelte',
+        'packages/builder/src/pages/builder/_components/Card.svelte',
+        'packages/builder/src/pages/builder/defaultWorkspace.ts',
+        'packages/builder/src/components/Unused.svelte',
+        'packages/v3/src/pages/index.svelte',
+      ]),
+    ).toEqual([
+      'packages/builder/src/pages/index.svelte',
+      'packages/builder/src/pages/_layout.svelte',
+      'packages/builder/src/pages/_fallback.svelte',
+      'packages/builder/src/pages/builder/[id]/settings.svelte',
+      'packages/builder/src/pages/builder/_reset.svelte',
+    ]);
+  });
+
+  it('Routify 2: pages and extensions from package.json, routify.config.js, script flags and the rollup plugin', () => {
+    const settings = (files: Record<string, string>, paths: string[]): string[] =>
+      loaded(repo({ ...files }), paths);
+    const routify = (extra: object): string =>
+      JSON.stringify({ devDependencies: { '@roxi/routify': '~2.1.0' }, ...extra });
+    expect(
+      settings(
+        {
+          'package.json': routify({ routify: { pages: './src/routes/', extensions: 'svelte,ts' } }),
+        },
+        ['src/routes/a.ts', 'src/pages/b.svelte'],
+      ),
+    ).toEqual(['src/routes/a.ts']);
+    expect(
+      settings(
+        {
+          'package.json': routify({}),
+          'routify.config.js': "module.exports = { pages: 'app/pages', extensions: ['svelte'] };\n",
+        },
+        ['app/pages/a.svelte', 'src/pages/b.svelte'],
+      ),
+    ).toEqual(['app/pages/a.svelte']);
+    expect(
+      settings(
+        {
+          'package.json': routify({
+            scripts: { dev: 'routify --pages=web/pages', build: 'routify -b' },
+          }),
+        },
+        ['web/pages/a.svelte', 'src/pages/b.svelte', 'lib/c.svelte'],
+      ),
+    ).toEqual(['web/pages/a.svelte', 'src/pages/b.svelte']);
+    expect(
+      settings(
+        {
+          'package.json': routify({}),
+          'rollup.config.js': [
+            "import routify from '@roxi/routify/plugins/rollup';",
+            "export default { plugins: [routify({ pages: 'client/pages', singleBuild: true })] };",
+          ].join('\n'),
+        },
+        ['client/pages/a.svelte', 'src/pages/b.svelte'],
+      ),
+    ).toEqual(['client/pages/a.svelte']);
+    expect(
+      settings(
+        {
+          'package.json': JSON.stringify({
+            dependencies: { '@roxi/routify': '2.0.0', 'meteor-node-stubs': '1.0.0' },
+          }),
+        },
+        ['imports/ui/pages/a.svelte', 'src/pages/b.svelte'],
+      ),
+    ).toEqual(['imports/ui/pages/a.svelte']);
+  });
+
+  it('Routify 2: a setting written as code, an ignore glob or a ROUTIFY_ variable in .env is not guessed', () => {
+    const pkg = (extra: object): string =>
+      JSON.stringify({ dependencies: { '@roxi/routify': '^2.18.0' }, ...extra });
+    const page = ['src/pages/a.svelte'];
+    expect(loaded(repo({ 'package.json': pkg({ routify: { ignore: '**/_*' } }) }), page)).toEqual(
+      [],
+    );
+    expect(
+      loaded(
+        repo({ 'package.json': pkg({ scripts: { dev: "routify -i '**/legacy/**'" } }) }),
+        page,
+      ),
+    ).toEqual([]);
+    expect(loaded(repo({ 'package.json': pkg({ routify: { pages: 5 } }) }), page)).toEqual([]);
+    expect(
+      loaded(
+        repo({
+          'package.json': pkg({}),
+          'routify.config.js': 'module.exports = { pages: process.env.PAGES };\n',
+        }),
+        page,
+      ),
+    ).toEqual([]);
+    expect(
+      loaded(
+        repo({ 'package.json': pkg({}), 'routify.config.js': 'module.exports = makeConfig();\n' }),
+        page,
+      ),
+    ).toEqual([]);
+    expect(loaded(repo({ 'package.json': pkg({}), '.env': 'ROUTIFY_PAGES=x\n' }), page)).toEqual(
+      [],
+    );
+    expect(
+      loaded(
+        repo({
+          'package.json': pkg({}),
+          'vite.config.js': [
+            "const routify = require('@roxi/routify/plugins/rollup');",
+            'module.exports = { plugins: [routify(options)] };',
+          ].join('\n'),
+        }),
+        page,
+      ),
+    ).toEqual([]);
+    expect(loaded(repo({ 'package.json': pkg({ routify: { extensions: [1] } }) }), page)).toEqual(
+      [],
+    );
+    expect(loaded(repo({ 'package.json': '{ not json' }), page)).toEqual([]);
+    expect(
+      loaded(repo({ 'package.json': pkg({ routify: { extensions: ['svx', 'svelte'] } }) }), page),
+    ).toEqual(page);
+    expect(
+      loaded(repo({ 'package.json': pkg({ scripts: { dev: 'routify -e svx' } }) }), page),
+    ).toEqual([]);
+    expect(loaded(repo({ 'package.json': pkg({}) }), page)).toEqual(page);
+  });
+
   it('keeps route files off the orphan list and still lists an unused component', () => {
     const root = repo({
       'tsconfig.json': '{}',

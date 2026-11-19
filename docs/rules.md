@@ -244,9 +244,15 @@ the module paths `routes.ts` passes to `route()`, `index()` and `layout()` and, 
 its `ignoredRouteFiles`; the app folder is the config's `appDirectory`,
 `app` by default. In a TanStack Router project (one declaring `@tanstack/router-plugin`, `@tanstack/router-cli` or
 TanStack Start), every file under `routesDirectory` (`src/routes` by default) is a route, except names starting with
-`-`. These settings are read when written as text in the config (`tsr.config.json` or a root config such as
-`vite.config.ts` for TanStack Router); a project that computes them is not modeled. Remix, Routify and Nuxt are not
-modeled yet. Nor is a
+`-`. In a Routify 2 project (one declaring `@roxi/routify` 2.x), every `.svelte` page under `pages` (`src/pages` by
+default) is a route, except files in a folder whose name starts with `_` and files named with `_` other than
+`_layout`, `_reset`, `_folder`, `_module` and `_fallback`; `pages` and `extensions` come from package.json's
+`routify` key, `routify.config.js`, the `routify` command's `--pages` and `--extensions` flags in package.json
+scripts, or the Routify rollup plugin's options. These settings are read when written as text in the config
+(`tsr.config.json` or a root config such as `vite.config.ts` for TanStack Router); a project that computes them, or
+that sets a Routify `ignore` glob or a `ROUTIFY_` variable in `.env`, is not modeled (nor is a `ROUTIFY_` variable set
+only in the environment of the build). Remix, Routify 3 and Nuxt are
+not modeled yet. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
 `*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
 `out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
