@@ -213,7 +213,8 @@ export function renderReport(
     if (files.length === 0) return;
     lines.push(yellow(bold(`${heading} (${files.length}, review before deleting)`)));
     for (const file of files.slice(0, 8)) lines.push(dim(`  ${file}`));
-    if (files.length > 8) lines.push(dim(`  ... and ${files.length - 8} more`));
+    if (files.length > 8)
+      lines.push(dim(`  ... and ${files.length - 8} more (scan --json lists all)`));
     lines.push(dim(`  ${note} Suggest only, not enforced.`), '');
   };
   orphanList(

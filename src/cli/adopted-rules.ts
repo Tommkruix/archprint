@@ -512,6 +512,33 @@ export function readRemovedRules(outDir: string): string[] {
   return removed;
 }
 
+/** A context-file sentence the team mapped to an adopted inferred rule, which enforces it. */
+export interface StatedSentence {
+  rule: string;
+  /** The context file, relative to where the gap report ran. */
+  file: string;
+  quote: string;
+}
+
+const isStatedSentence = (value: unknown): value is StatedSentence =>
+  typeof value === 'object' &&
+  value !== null &&
+  ['rule', 'file', 'quote'].every(
+    (key) => typeof (value as Record<string, unknown>)[key] === 'string',
+  );
+
+/** The sentences `generate --declare` recorded as stated by adopted inferred rules, in config.json. */
+export function readStated(outDir: string): StatedSentence[] {
+  const stated = readConfigSection(outDir, 'stated');
+  if (stated === undefined) return [];
+  if (!Array.isArray(stated) || !stated.every(isStatedSentence)) {
+    throw new InvalidRulesError(
+      `${configPath(outDir)}: "stated" must be a list of { rule, file, quote }. Fix it, or run archprint generate --reset.`,
+    );
+  }
+  return stated;
+}
+
 /** What a declared rule enforces, without its bookkeeping (evidence, exceptions, source line). */
 export function declaredDefinition(rule: DeclaredDefinition): DeclaredDefinition {
   const scope = { files: rule.files, except: rule.except };

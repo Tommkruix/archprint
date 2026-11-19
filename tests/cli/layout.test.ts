@@ -105,6 +105,7 @@ describe('writeLayout', () => {
     expect(result.reset).toEqual([]);
     expect(adoptedIds()).toEqual(['console-isolation', 'env-access', 'no-cycles']);
     expect(eslintSource()).toContain(ENV_MESSAGE);
+    expect(write().kept).toEqual(['console-isolation', 'env-access', 'no-cycles']);
   });
 
   it('returns to the default rule set with reset, naming the rules it removed', () => {

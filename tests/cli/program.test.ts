@@ -89,6 +89,36 @@ describe('cli program', () => {
     expect(parsed.apps[0]!.rules.every((rule) => rule.status !== 'REJECT')).toBe(true);
   });
 
+  it('scan --json lists every dead-code file, where the text report shows the first 8', async () => {
+    const app = mkdtempSync(path.join(tmpdir(), 'archprint-dead-'));
+    const names = Array.from({ length: 10 }, (_, index) => `m${index}`);
+    writeFileSync(path.join(app, 'tsconfig.json'), '{}\n');
+    mkdirSync(path.join(app, 'lib'));
+    for (const name of names) {
+      writeFileSync(path.join(app, 'lib', `${name}.ts`), `export const ${name} = 1;\n`);
+      writeFileSync(path.join(app, 'lib', `used-${name}.ts`), `export const used${name} = 1;\n`);
+      writeFileSync(
+        path.join(app, 'lib', `used-${name}.test.ts`),
+        `import { used${name} } from './used-${name}';\nexport const t = used${name};\n`,
+      );
+    }
+    try {
+      await run(['scan', app]);
+      expect(output()).toContain('... and 2 more (scan --json lists all)');
+      logSpy.mockClear();
+      await run(['scan', app, '--json']);
+      const { deadCode } = (
+        JSON.parse(output()) as {
+          apps: { deadCode: { orphans: string[]; importedOnlyByTests: string[] } }[];
+        }
+      ).apps[0]!;
+      expect(deadCode.orphans).toEqual(names.map((name) => `lib/${name}.ts`));
+      expect(deadCode.importedOnlyByTests).toEqual(names.map((name) => `lib/used-${name}.ts`));
+    } finally {
+      rmSync(app, { recursive: true, force: true });
+    }
+  });
+
   it('recommend --json emits per-app tiers as parseable JSON', async () => {
     await run(['recommend', auto, '--json']);
     const parsed = JSON.parse(output()) as {

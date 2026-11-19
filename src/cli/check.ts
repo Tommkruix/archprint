@@ -7,6 +7,7 @@ import {
   parseConfigRules,
   parseLegacyRules,
   readAdoptedRules,
+  readStated,
   type AdoptedRule,
   type DeclaredAdoptedRule,
 } from './adopted-rules.js';
@@ -293,6 +294,7 @@ export function runCheck(options: CheckOptions): CheckResult {
         appPrefix,
         rulesDir: realpathSync(outDir),
         declared: adopted.filter((rule): rule is DeclaredAdoptedRule => rule.family === 'declared'),
+        stated: readStated(outDir),
       }),
     };
   } finally {
@@ -319,10 +321,10 @@ const rulesRemovedMessage = (result: Extract<CheckResult, { status: 'rules-remov
 
 const LISTED_SENTENCES = 10;
 
-const ENFORCE_NEXT_STEP =
-  'To enforce one, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.';
+const enforceNextStep = (target: 'one' | 'it'): string =>
+  `To enforce ${target}, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare; when an adopted rule already enforces it, the inferred template records that.`;
 
-const UNCHECKED_SENTENCE_MESSAGE = `This reads like a rule, and no archprint rule checks it yet. ${ENFORCE_NEXT_STEP.replace('one', 'it')}`;
+const UNCHECKED_SENTENCE_MESSAGE = `This reads like a rule, and no archprint rule checks it yet. ${enforceNextStep('it')}`;
 
 const describeContextFile = (change: ContextFileChange): string =>
   `${change.file}: ${change.unchecked} new sentence(s) no adopted rule checks${
@@ -347,7 +349,7 @@ function contextTextLines(context: ContextReport): string[] {
       lines.push(`    ${change.file}:${sentence.line}  ${sentence.text}`);
     if (more > 0) lines.push(`    and ${more} more`);
   }
-  lines.push(`  ${ENFORCE_NEXT_STEP}`);
+  lines.push(`  ${enforceNextStep('one')}`);
   return lines;
 }
 
@@ -499,7 +501,7 @@ function contextSummaryLines(context: ContextReport): string[] {
     for (const sentence of shown) lines.push(`  - line ${sentence.line}: ${sentence.text}`);
     if (more > 0) lines.push(`  - and ${more} more`);
   }
-  lines.push('', ENFORCE_NEXT_STEP);
+  lines.push('', enforceNextStep('one'));
   return lines;
 }
 
