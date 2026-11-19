@@ -121,7 +121,8 @@ rule counts a re-export (`export ... from`) or `require()` yet. The dependency-c
 layer was found in, as dependency-cruiser resolves each import.
 
 Layer rules are adopted, so `archprint check` reports a new break and `archprint allow` can accept one. Adopt only
-some of them with `--rules`, for example `archprint generate --include-structural --rules no-utils-to-app`.
+some of them with `--rules`, for example `archprint generate --include-structural --rules no-utils-to-app`, and
+remove one you adopted with `--remove`, for example `archprint generate --remove no-utils-to-app`.
 
 ### Role layering (Review)
 

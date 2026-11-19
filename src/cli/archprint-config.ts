@@ -23,6 +23,7 @@ export interface ArchprintConfig {
   stack: string[];
   rulesDir: string;
   rules?: AdoptedRule[];
+  removed?: string[];
   allowed?: AllowedException[];
   enforced: Recommendation[];
   reportOnly: Recommendation[];
@@ -46,7 +47,7 @@ export function configPath(outDir: string): string {
   return path.join(outDir, CONFIG_FILE);
 }
 
-export type ConfigSection = 'rules' | 'allowed';
+export type ConfigSection = 'rules' | 'removed' | 'allowed';
 
 /** The raw value of a section in config.json text; undefined when the text is not JSON or has no such section. */
 export function configSection(text: string, section: ConfigSection): unknown {
@@ -66,7 +67,7 @@ export function buildConfig(
   recommendations: Recommendations,
   version: string,
   location: { app: string; rulesDir: string },
-  adoption: { rules: AdoptedRule[]; allowed: AllowedException[] },
+  adoption: { rules: AdoptedRule[]; removed: string[]; allowed: AllowedException[] },
   managed: ManagedOutputs,
 ): ArchprintConfig {
   return {
@@ -75,6 +76,7 @@ export function buildConfig(
     stack: recommendations.stack,
     rulesDir: location.rulesDir,
     rules: adoption.rules,
+    ...(adoption.removed.length > 0 ? { removed: adoption.removed } : {}),
     allowed: adoption.allowed,
     enforced: recommendations.enforceNow,
     reportOnly: recommendations.reportOnly,

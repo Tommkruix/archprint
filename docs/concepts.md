@@ -259,7 +259,7 @@ one of them, since which one is new cannot be told. The ESLint rule skips a reco
 a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
 take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
 if the sentence is gone, `generate` says so (and so does `archprint check`, on each pull request) and the rule
-stays until `--reset`. dependency-cruiser does not enforce declared rules.
+stays until `archprint generate --remove <id>` removes it. dependency-cruiser does not enforce declared rules.
 
 **Keeping up as the files change.** When a change edits a context file, `archprint check` compares it with the
 base branch and lists, per file, the sentences the change adds that no adopted rule quotes. A file counts when it

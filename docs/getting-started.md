@@ -136,6 +136,9 @@ archprint generate apps/web --include-structural --rules no-lib-to-app,import-st
 # Adopt a rule your code almost follows, recording today's breaks as exceptions that only shrink
 archprint generate apps/web --include-structural --rules no-lib-to-hooks --baseline
 
+# Remove an adopted rule; later runs leave it out until --rules adopts it again
+archprint generate apps/web --remove no-lib-to-hooks
+
 # Also write the granular per-family files, rule cards, fixtures, and graph
 archprint generate apps/web --expand
 
@@ -149,7 +152,8 @@ archprint generate apps/web --declare mapping.json
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
 Every `generate` keeps the rules you adopted before: a plain run refreshes them alongside the default rule set,
 `--only` and `--rules` add to them, and each run says which it kept and names any earlier rule the current code no
-longer supports. `--reset` starts again from the default rule set and lists the adopted rules it removes. A rule's
+longer supports. `--remove <ids>` removes the adopted rules it names, and later runs leave them out until `--rules` (or
+`--declare`) adopts them again. `--reset` starts again from the default rule set and lists the adopted rules it removes. A rule's
 exceptions only shrink: a file that breaks an adopted rule after it was written stops `generate`, which names it
 and writes nothing until you fix it or accept it with `archprint allow`.
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with

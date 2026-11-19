@@ -500,6 +500,18 @@ export function readAdoptedRules(outDir: string): AdoptedRule[] | null {
   return existsSync(legacy) ? parseLegacyRules(readFileSync(legacy, 'utf8'), legacy) : null;
 }
 
+/** The rule ids `generate --remove` recorded in config.json. */
+export function readRemovedRules(outDir: string): string[] {
+  const removed = readConfigSection(outDir, 'removed');
+  if (removed === undefined) return [];
+  if (!Array.isArray(removed) || !removed.every((id) => typeof id === 'string')) {
+    throw new InvalidRulesError(
+      `${configPath(outDir)}: "removed" must be a list of rule ids. Fix it, or run archprint generate --reset.`,
+    );
+  }
+  return removed;
+}
+
 /** What a declared rule enforces, without its bookkeeping (evidence, exceptions, source line). */
 export function declaredDefinition(rule: DeclaredDefinition): DeclaredDefinition {
   const scope = { files: rule.files, except: rule.except };

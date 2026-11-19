@@ -215,7 +215,7 @@ export function describeDeclared(result: DeclaredResult, hasEslint: boolean): st
 }
 
 export const staleSentenceMessage = (rule: DeclaredAdoptedRule): string =>
-  `The sentence behind ${rule.id} is no longer in ${rule.source.file}; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --reset.`;
+  `The sentence behind ${rule.id} is no longer in ${rule.source.file}; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --remove ${rule.id}.`;
 
 /** Whether a rule reference names a declared rule: its id, or its ESLint name. */
 export const isDeclaredRef = (ref: string): boolean => /^(?:archprint\/)?doc-/i.test(ref.trim());
