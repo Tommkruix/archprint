@@ -191,7 +191,7 @@ describe('archprint check and explain with a declared rule', { timeout: 120_000 
     await run(['check', '--base', 'main', '--format', 'github']);
     const lines = output().split('\n');
     expect(lines).toContain(
-      '::warning file=CLAUDE.md,line=2,title=archprint%3A doc-no-fetch-in-components sentence missing::The sentence behind doc-no-fetch-in-components is no longer in CLAUDE.md; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --reset.',
+      '::warning file=CLAUDE.md,line=2,title=archprint%3A doc-no-fetch-in-components sentence missing::The sentence behind doc-no-fetch-in-components is no longer in CLAUDE.md; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --remove doc-no-fetch-in-components.',
     );
     expect(lines).toContain(
       '::notice file=CLAUDE.md,line=2,title=archprint%3A not enforced yet::This reads like a rule, and no archprint rule checks it yet. To enforce it, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.',

@@ -149,31 +149,37 @@ export interface CollectOptions {
   enforcers: InstalledEnforcers;
   only?: string;
   ruleIds?: readonly string[];
+  /** Rule ids a run without `ruleIds` leaves out: those removed with `generate --remove`. */
+  removed?: readonly string[];
   mode?: ResolutionMode;
   allowed?: ReadonlyMap<string, readonly string[]>;
   appPath?: string;
 }
 
-/** Which emitted rules --rules keeps: every rule when it is absent, else those named by id or label. */
+/** Which emitted rules a run keeps: those --rules names by id or label, else every rule not removed. */
 class RuleSelection {
   private readonly wanted: ReadonlyMap<string, string> | null;
+  private readonly removed: ReadonlySet<string>;
   private readonly seen = new Set<string>();
   private readonly ids = new Set<string>();
 
-  constructor(ruleIds: readonly string[] | undefined) {
+  constructor(ruleIds: readonly string[] | undefined, removed: readonly string[]) {
     this.wanted =
       ruleIds === undefined ? null : new Map(ruleIds.map((id) => [ruleKey(id), id.trim()]));
+    this.removed = new Set(removed.map(ruleKey));
   }
 
   selects(id: string, label?: string): boolean {
     const keys = [id, label].filter((key): key is string => key !== undefined).map(ruleKey);
     this.ids.add(id);
     for (const key of keys) this.seen.add(key);
-    return this.wanted === null || keys.some((key) => this.wanted!.has(key));
+    return this.wanted === null
+      ? !this.removed.has(ruleKey(id))
+      : keys.some((key) => this.wanted!.has(key));
   }
 
   keeps(id: string): boolean {
-    return this.wanted === null || this.wanted.has(ruleKey(id));
+    return this.wanted === null ? !this.removed.has(ruleKey(id)) : this.wanted.has(ruleKey(id));
   }
 
   available(): string[] {
@@ -224,7 +230,7 @@ export function collectEnforcement(
     scan.patterns.map((pattern) => [pattern.config.name, pattern.config.id]),
   );
 
-  const selection = new RuleSelection(options.ruleIds);
+  const selection = new RuleSelection(options.ruleIds, options.removed ?? []);
   const selects = (id: string, label?: string): boolean => selection.selects(id, label);
   const selected = <T extends { name: string }>(rules: readonly T[]): T[] =>
     rules.filter((rule) => selects(rule.name));
