@@ -121,7 +121,8 @@ rule counts a re-export (`export ... from`) or `require()` yet. The dependency-c
 layer was found in, as dependency-cruiser resolves each import.
 
 Layer rules are adopted, so `archprint check` reports a new break and `archprint allow` can accept one. Adopt only
-some of them with `--rules`, for example `archprint generate --include-structural --rules no-utils-to-app`.
+some of them with `--rules`, for example `archprint generate --include-structural --rules no-utils-to-app`, and
+remove one you adopted with `--remove`, for example `archprint generate --remove no-utils-to-app`.
 
 ### Role layering (Review)
 
@@ -192,7 +193,8 @@ heuristic. **When not to use:** rarely; low volume.
 ### Orphans (Report)
 
 Production files nothing in the workspace references, listed after the files only tests import (dead code the
-tests keep alive, usually the more actionable list). A reference is any import, type-only included, an `export ...
+tests keep alive, usually the more actionable list). A reference is any import, type-only included (an import with
+a bundler query, such as `./theme?raw` or `./worker.js?worker&url`, names the file without its query), an `export ...
 from` through a barrel, an `import()` or `require()` call, an `import.meta.glob` (Vite) or `require.context`
 (webpack) call whose patterns or folder are written out (every file it matches; `!` patterns excluded; relative
 patterns start at a literal `base` option when there is one; a pattern starting with `/` starts at the nearest folder
@@ -243,16 +245,46 @@ the module paths `routes.ts` passes to `route()`, `index()` and `layout()` and, 
 its `ignoredRouteFiles`; the app folder is the config's `appDirectory`,
 `app` by default. In a TanStack Router project (one declaring `@tanstack/router-plugin`, `@tanstack/router-cli` or
 TanStack Start), every file under `routesDirectory` (`src/routes` by default) is a route, except names starting with
-`-`. These settings are read when written as text in the config (`tsr.config.json` or a root config such as
-`vite.config.ts` for TanStack Router); a project that computes them is not modeled. Remix, Routify and Nuxt are not
-modeled yet. Nor is a
+`-`. In a Routify 2 project (one declaring `@roxi/routify` 2.x), every `.svelte` page under `pages` (`src/pages` by
+default) is a route, except files in a folder whose name starts with `_` and files named with `_` other than
+`_layout`, `_reset`, `_folder`, `_module` and `_fallback`; `pages` and `extensions` come from package.json's
+`routify` key, `routify.config.js`, the `routify` command's `--pages` and `--extensions` flags in package.json
+scripts, or the Routify rollup plugin's options. These settings are read when written as text in the config
+(`tsr.config.json` or a root config such as `vite.config.ts` for TanStack Router); a project that computes them, or
+that sets a Routify `ignore` glob or a `ROUTIFY_` variable in `.env`, is not modeled (nor is a `ROUTIFY_` variable set
+only in the environment of the build). Remix, Routify 3 and Nuxt are
+not modeled yet. Nor is a
 file a package exposes through its package.json (`main`, `module`, `types`, `browser`, `bin`, `exports` targets,
-`*` patterns included): a target built into the package's tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or
-`out/`, counts for the source file it was built from. So does a file a package.json script runs with a JavaScript
+`*` patterns included), and each module its Nx or Angular devkit collections name (the `generators`, `executors`,
+`builders` and `schematics` files, and the `migrations` of `ng-update` or `nx-migrations`: every `factory` and
+`implementation`, relative to the collection file; a collection's `extends` is not followed): a target built into
+the `outDir` of any of the package's tsconfigs (`tsconfig.json`, `tsconfig.build.json`, `tsconfig.lib.json`, ...;
+not a test one such as `tsconfig.spec.json`), the package folder itself included (`"outDir": "."`), or into `dist/`,
+`lib/`, `build/` or `out/`, counts for the source file it was built from. Each subpath a workspace package exports
+also counts as an import of `<name>/<subpath>`, resolved the way the repo resolves imports, so a tsconfig `paths`
+entry that maps `@scope/ui/Button` to `packages/ui/src/Button.tsx` marks that file as used when the package exports
+`./Button`. So does a file a package.json script runs with a JavaScript
 runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
 config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint
-glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be
-listed. A dedicated dead-code tool such as knip covers more of these cases.
+glob, are not entries.
+
+A third list, **shipped in a published package**, holds the files that would otherwise be listed but that a published
+package ships without an `exports` map. Without `exports`, Node.js lets a user of the package import any file it
+ships (`xstate/lib/model`), so nothing in the repo can tell whether such a file is used: it is shown apart, neither
+dead nor known to be used. A package counts as published when its package.json has a `name`, is not marked
+`private`, has no `exports`, and is set up to publish (a `files` list, a `publishConfig`, or an `.npmignore`; an app
+with only `main` is not). A file ships when the package packs it or the output one of the package's tsconfigs builds
+from it (`src/model.ts` to `lib/model.js` with `"outDir": "lib"`); a tsconfig builds only the files its `include`
+and `files` take in, and nothing when it sets `noEmit`. What a package packs is read as `npm pack` reads
+it: its `files` list, else its `.npmignore`, else its `.gitignore`, with npm's rules (an entry naming a folder covers
+its contents, a later `!` entry excludes, and a file inside a folder npm does not walk into is left out); a package
+with none of these, or one packed from another folder (`publishConfig.directory`), ships every file it holds or
+builds. A workspace root does not pack its workspace packages. A published package can build another package's
+sources (a tsconfig `rootDir` outside it), so a file of a private package can ship too. Ignore files in subfolders
+of the package are not read.
+
+Reported only, never enforced: a file loaded by a tool archprint does not read can still be listed. A dedicated
+dead-code tool such as knip covers more of these cases.
 
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
 November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of

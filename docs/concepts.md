@@ -245,24 +245,29 @@ in (the globs are relative to it). It verifies the mapping again, then adopts, f
   then only removes as it is fixed, as for inferred rules;
 - a `forbid-file` rule, which records the files there today, so only a new one breaks it.
 
+An `inferred` sentence whose rule the app has adopted is recorded as stated by that rule (in `stated` in
+`.archprint/config.json`), so `archprint check` counts the sentence as checked. The record goes when the rule is
+removed, and on `--reset`; a sentence edited afterwards counts as a new one.
+
 It refuses the rest and says why: the quote is not in the file, the mapping matches no file, the files are in
-another app (adopt it from that app), or the sentence is a rule archprint already finds (adopt it with
-`--rules <id>`).
+another app (adopt it from that app), or the sentence is a rule archprint finds but the app has not adopted (adopt
+it with `--rules <id>`).
 
 An adopted rule is enforced by an `archprint/doc-<name>` rule in `.archprint/eslint.mjs`, whose error message is
 your team's sentence and where it is written, for example `Components never call fetch directly. (CLAUDE.md:2)`,
 and by `archprint check`, which finds the same breaks, file for file and line for line, and in a pull request
 reports only the ones the change adds. `check` counts like ESLint's bulk suppressions, with the base branch as the
 baseline: a recorded file that breaks the rule more times than it did on the base fails. A break of a new kind (an
-import of another forbidden module) is listed on its own; more of the same kind (another `fetch` call) lists every
-one of them, since which one is new cannot be told. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
+import of another forbidden module) is listed on its own; more of the same kind (another `fetch` call) lists the ones
+on lines the change added, or every one of them when the change also edited an old one or moved code. The ESLint rule skips a recorded file entirely, so in the editor only `check` catches
 a second break there. Exceptions are recorded per file: a file stays an exception until all its breaks are fixed. `archprint allow` and `archprint explain`
 take its id. Later runs of `generate` keep it, refuse a new break, and follow the sentence if it moves in its file;
 if the sentence is gone, `generate` says so (and so does `archprint check`, on each pull request) and the rule
-stays until `--reset`. dependency-cruiser does not enforce declared rules.
+stays until `archprint generate --remove <id>` removes it. dependency-cruiser does not enforce declared rules.
 
 **Keeping up as the files change.** When a change edits a context file, `archprint check` compares it with the
-base branch and lists, per file, the sentences the change adds that no adopted rule quotes. A file counts when it
+base branch and lists, per file, the sentences the change adds that no adopted rule quotes or is recorded as stating
+(map one an adopted rule already enforces with the `inferred` template). A file counts when it
 applies to the checked app: CLAUDE.md, AGENTS.md, GEMINI.md, `.cursorrules` or `.windsurfrules` in the app, below
 it or in a folder above it, and `.cursor/rules/`, `.github/copilot-instructions.md` and
 `.github/instructions/*.instructions.md` beside such a folder. Prose counts (paragraphs, list items, quotes, table

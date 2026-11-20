@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { writeOwnedFile } from '../generator/owned-paths.js';
-import type { AdoptedRule } from './adopted-rules.js';
+import type { AdoptedRule, StatedSentence } from './adopted-rules.js';
 import type { AllowedException } from './allowed-exceptions.js';
 import type { Recommendation, Recommendations } from './recommend.js';
 
@@ -23,6 +23,8 @@ export interface ArchprintConfig {
   stack: string[];
   rulesDir: string;
   rules?: AdoptedRule[];
+  removed?: string[];
+  stated?: StatedSentence[];
   allowed?: AllowedException[];
   enforced: Recommendation[];
   reportOnly: Recommendation[];
@@ -46,7 +48,7 @@ export function configPath(outDir: string): string {
   return path.join(outDir, CONFIG_FILE);
 }
 
-export type ConfigSection = 'rules' | 'allowed';
+export type ConfigSection = 'rules' | 'removed' | 'stated' | 'allowed';
 
 /** The raw value of a section in config.json text; undefined when the text is not JSON or has no such section. */
 export function configSection(text: string, section: ConfigSection): unknown {
@@ -66,7 +68,12 @@ export function buildConfig(
   recommendations: Recommendations,
   version: string,
   location: { app: string; rulesDir: string },
-  adoption: { rules: AdoptedRule[]; allowed: AllowedException[] },
+  adoption: {
+    rules: AdoptedRule[];
+    removed: string[];
+    stated: StatedSentence[];
+    allowed: AllowedException[];
+  },
   managed: ManagedOutputs,
 ): ArchprintConfig {
   return {
@@ -75,6 +82,8 @@ export function buildConfig(
     stack: recommendations.stack,
     rulesDir: location.rulesDir,
     rules: adoption.rules,
+    ...(adoption.removed.length > 0 ? { removed: adoption.removed } : {}),
+    ...(adoption.stated.length > 0 ? { stated: adoption.stated } : {}),
     allowed: adoption.allowed,
     enforced: recommendations.enforceNow,
     reportOnly: recommendations.reportOnly,

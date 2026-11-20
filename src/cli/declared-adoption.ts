@@ -7,6 +7,7 @@ import {
   type DeclaredAdoptedRule,
   declaredDefinition,
   readAdoptedRules,
+  type StatedSentence,
 } from './adopted-rules.js';
 import { type DeclaredRule, declaredRuleId, isDeclaredRule } from './declared-mapping.js';
 import { entryLabel, type GapEntry, restate, verifyMapping } from './gap-report.js';
@@ -70,6 +71,8 @@ export interface Declaration {
   /** The rules this mapping adopts in the app, measured, with what breaks them today as exceptions. */
   adopted: DeclaredAdoptedRule[];
   refused: DeclarationRefusal[];
+  /** Sentences mapped to an inferred rule the app has adopted, which already enforces them. */
+  stated: StatedSentence[];
 }
 
 export interface DeclareOptions {
@@ -80,6 +83,8 @@ export interface DeclareOptions {
   /** Adopt sentences the code breaks today too, recording the breaks as exceptions. */
   baseline: boolean;
   allowedFor: (ruleId: string) => readonly string[];
+  /** The inferred rules the app adopts. */
+  adoptedRules: ReadonlySet<string>;
 }
 
 /** Why a verified sentence is not adopted, or null when it is: the code follows it, or breaks it with `baseline`. */
@@ -108,7 +113,12 @@ export function declareFromMapping(mapping: unknown, options: DeclareOptions): D
   const root = toPosix(path.relative(options.rulesDir, options.root)) || '.';
   const refused: DeclarationRefusal[] = [];
   const candidates: DeclaredAdoptedRule[] = [];
+  const stated: StatedSentence[] = [];
   for (const { entry, sentence } of verifyMapping(options.root, mapping)) {
+    if (entry.status === 'inferred' && options.adoptedRules.has(entry.rule!.id)) {
+      stated.push({ rule: entry.rule!.id, file: entry.source!.file, quote: entry.source!.quote });
+      continue;
+    }
     const reason = refusalOf(entry, options.baseline);
     if (reason === null && sentence !== null && isDeclaredRule(sentence)) {
       candidates.push(toAdopted(sentence, root, entry.source!.line!));
@@ -134,7 +144,7 @@ export function declareFromMapping(mapping: unknown, options: DeclareOptions): D
     }
     adopted.push(remeasure(candidate, measure, options.allowedFor(candidate.id)));
   }
-  return { adopted, refused };
+  return { adopted, refused, stated };
 }
 
 /**
@@ -168,6 +178,8 @@ export interface DeclaredResult {
   replaced: string[];
   /** Kept rules whose sentence is no longer in its file. */
   stale: DeclaredAdoptedRule[];
+  /** Sentences this run recorded as stated by the adopted inferred rule that enforces them. */
+  stated: StatedSentence[];
 }
 
 function evidenceLine(rule: DeclaredAdoptedRule): string {
@@ -210,12 +222,19 @@ export function describeDeclared(result: DeclaredResult, hasEslint: boolean): st
       lines.push(`  ${refusal.label}${quote}: ${refusal.reason}`);
     }
   }
+  if (result.stated.length > 0) {
+    lines.push(
+      `Recorded ${result.stated.length} sentence(s) an adopted rule already enforces, so archprint check counts them as checked:`,
+    );
+    for (const entry of result.stated)
+      lines.push(`  ${entry.rule}  "${entry.quote}" (${entry.file})`);
+  }
   for (const rule of result.stale) lines.push(staleSentenceMessage(rule));
   return lines;
 }
 
 export const staleSentenceMessage = (rule: DeclaredAdoptedRule): string =>
-  `The sentence behind ${rule.id} is no longer in ${rule.source.file}; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --reset.`;
+  `The sentence behind ${rule.id} is no longer in ${rule.source.file}; the rule stays in force. Restore the sentence, or remove the rule with archprint generate --remove ${rule.id}.`;
 
 /** Whether a rule reference names a declared rule: its id, or its ESLint name. */
 export const isDeclaredRef = (ref: string): boolean => /^(?:archprint\/)?doc-/i.test(ref.trim());

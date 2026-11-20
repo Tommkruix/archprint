@@ -27,3 +27,18 @@ export const sliceStatement = (container: string): string =>
 
 export const appIsolationStatement = (container: string): string =>
   `apps under ${container} must not import each other`;
+
+/** The text ending a sentence: a full stop is added only when it does not already end with one. */
+export const withFullStop = (text: string): string => {
+  const trimmed = text.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+};
+
+/** A rule's statement capitalized, except a declared rule's: the team's own words, kept as written. */
+export function statementText(rule: { family: string; statement: string }): string {
+  const text = rule.statement.trim();
+  return rule.family === 'declared' ? text : text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export const statementSentence = (rule: { family: string; statement: string }): string =>
+  withFullStop(statementText(rule));

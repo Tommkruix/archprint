@@ -25,7 +25,7 @@ export const TOOLS = [
     title: 'Scan architecture rules',
     annotations: READ_ONLY,
     description:
-      'List the architecture rules this TypeScript repo already follows, with the evidence: each rule stated in plain words, whether it is AUTO (clears the confidence gate) or SUGGEST (short of it), its adoption ("enforce": archprint init or generate writes a rule for it, which archprint wire connects to the linter, and public-API rules need dependency-cruiser; "review": held for a human to review, not enforced by default; "report-only": the code follows it but archprint writes no rule for it), how many files conform vs. break it, the files that break it, and the confidence. Read-only. `path` defaults to "." and a monorepo root scans every app.',
+      'List the architecture rules this TypeScript repo already follows, with the evidence: each rule stated in plain words, whether it is AUTO (clears the confidence gate) or SUGGEST (short of it), its adoption ("enforce": archprint init or generate writes a rule for it, which archprint wire connects to the linter, and public-API rules need dependency-cruiser; "review": held for a human to review, not enforced by default; "report-only": the code follows it but archprint writes no rule for it), how many files conform vs. break it, the files that break it, and the confidence; and, in deadCode, every production file nothing imports (orphans), every one only tests import (importedOnlyByTests), and every such file a published package without an exports map ships, which its users may import by path (shipped), as suggestions to review, never enforced. Read-only. `path` defaults to "." and a monorepo root scans every app.',
     inputSchema: {
       type: 'object',
       properties: {

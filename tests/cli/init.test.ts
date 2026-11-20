@@ -27,7 +27,7 @@ describe('buildConfig', () => {
       recommendations,
       '1.2.3',
       { app: '.', rulesDir: '.archprint' },
-      { rules: [], allowed: [] },
+      { rules: [], removed: [], stated: [], allowed: [] },
       managed,
     );
     expect(config).toEqual({

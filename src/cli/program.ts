@@ -123,6 +123,12 @@ function displayPath(target: string, cwd: string = process.cwd()): string {
   return relative === '' ? '.' : relative.startsWith('..') ? target : relative;
 }
 
+const splitIds = (list: string | undefined): string[] | undefined =>
+  list
+    ?.split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+
 /** Whether a flag other than --check and --out was given, so `generate --check` writes before it checks. */
 function generationFlagsPassed(command: Command): boolean {
   return command.options
@@ -323,6 +329,10 @@ export function buildProgram(version = readVersion()): Command {
       'start from the default rule set instead of keeping the rules adopted before, and list the ones it removes',
     )
     .option(
+      '--remove <ids>',
+      'remove these adopted rules (comma-separated ids); later runs leave them out until you adopt them again with --rules or --declare',
+    )
+    .option(
       '--check',
       'run the generated eslint rules against the repo and report pass/fail; on its own it checks the rules already generated and writes nothing',
     )
@@ -341,6 +351,7 @@ export function buildProgram(version = readVersion()): Command {
           only?: string;
           rules?: string;
           reset?: boolean;
+          remove?: string;
           baseline?: boolean;
           declare?: string;
           check?: boolean;
@@ -411,10 +422,8 @@ export function buildProgram(version = readVersion()): Command {
         const heldStructuralAuto = structural ? 0 : countStructuralAuto(scan);
         const enforcers = applyEmitOverride(detectEnforcers(scan.appDir), options.emit);
         const recommendations = buildRecommendations(scan, detectStack(scan.appDir), enforcers);
-        const ruleIds = options.rules
-          ?.split(',')
-          .map((id) => id.trim())
-          .filter(Boolean);
+        const ruleIds = splitIds(options.rules);
+        const removeIds = splitIds(options.remove);
         if (options.baseline && ruleIds === undefined && options.declare === undefined) {
           console.error(
             '--baseline adopts only the rules you name; pass them with --rules (or --declare), e.g. --rules no-lib-to-hooks --baseline.',
@@ -427,6 +436,18 @@ export function buildProgram(version = readVersion()): Command {
           process.exitCode = 1;
           return;
         }
+        if (removeIds !== undefined && removeIds.length === 0) {
+          console.error('--remove needs at least one rule id, e.g. --remove AP-002,no-lib-to-app.');
+          process.exitCode = 1;
+          return;
+        }
+        if (removeIds !== undefined && options.reset) {
+          console.error(
+            '--reset already removes every adopted rule; use --remove on its own to remove some of them.',
+          );
+          process.exitCode = 1;
+          return;
+        }
         const {
           files,
           removed,
@@ -435,6 +456,7 @@ export function buildProgram(version = readVersion()): Command {
           kept,
           dropped,
           reset,
+          removedRules,
           fixed,
           firstRecorded,
           remeasured,
@@ -448,6 +470,7 @@ export function buildProgram(version = readVersion()): Command {
           only: options.only,
           ruleIds,
           reset: options.reset,
+          remove: removeIds,
           baseline: options.baseline,
           declare:
             options.declare === undefined
@@ -477,6 +500,10 @@ export function buildProgram(version = readVersion()): Command {
         if (reset.length > 0)
           console.log(
             `Reset to the default rules: removed ${reset.length} previously adopted rule(s): ${reset.join(', ')}.`,
+          );
+        if (removedRules.length > 0)
+          console.log(
+            `Removed ${removedRules.length} adopted rule(s): ${removedRules.join(', ')}. Later runs of generate leave them out; adopt one again with --rules <id> (a rule your context files state, with --declare).`,
           );
         if (fixed.length > 0)
           console.log(

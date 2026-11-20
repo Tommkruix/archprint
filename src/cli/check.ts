@@ -7,6 +7,7 @@ import {
   parseConfigRules,
   parseLegacyRules,
   readAdoptedRules,
+  readStated,
   type AdoptedRule,
   type DeclaredAdoptedRule,
 } from './adopted-rules.js';
@@ -14,6 +15,7 @@ import { allowKey, readAllowed, type AllowedException } from './allowed-exceptio
 import { diffFindings, partitionRules, type RuleChange } from './check-diff.js';
 import { evaluateRules, type Finding } from './check-evaluate.js';
 import {
+  addedLines,
   CheckSetupError,
   checkoutBase,
   defaultBase,
@@ -31,6 +33,7 @@ import {
 import { createLineLocator } from './check-locate.js';
 import { describeBurnDown, exceptionBurnDown, type ExceptionBurnDown } from './check-exceptions.js';
 import { staleSentenceMessage } from './declared-adoption.js';
+import { statementSentence } from './rule-statements.js';
 
 export type FailOn = 'none' | 'new';
 
@@ -229,10 +232,15 @@ export function runCheck(options: CheckOptions): CheckResult {
       ? evaluateRules(baseApp, partition.comparable, baseOutDir)
       : [];
     const headFindings = evaluateRules(appDir, partition.comparable, outDir);
+    let added: Map<string, Set<number>> | undefined;
+    const addedIn = (file: string): ReadonlySet<number> =>
+      (added ??= addedLines(root, commit, appPrefix)).get(path.posix.join(appPrefix, file)) ??
+      new Set();
     const { introduced } = diffFindings(
       baseFindings,
       withoutAllowed(headFindings, allowed),
       renames,
+      addedIn,
     );
     const { fixed } = diffFindings(baseFindings, headFindings, renames);
     const locate = createLineLocator(appDir);
@@ -292,6 +300,7 @@ export function runCheck(options: CheckOptions): CheckResult {
         appPrefix,
         rulesDir: realpathSync(outDir),
         declared: adopted.filter((rule): rule is DeclaredAdoptedRule => rule.family === 'declared'),
+        stated: readStated(outDir),
       }),
     };
   } finally {
@@ -303,14 +312,9 @@ export function checkExitCode(result: CheckResult, failOn: FailOn): number {
   return result.status === 'checked' && failOn === 'new' && result.introduced.length > 0 ? 1 : 0;
 }
 
-const sentence = (text: string): string => {
-  const trimmed = text.trim().replace(/\.$/, '');
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-};
-
 export function findingMessage(rule: AdoptedRule): string {
   const { conforming, total, floor } = rule.evidence;
-  return `${sentence(rule.statement)}. When this rule was adopted, ${conforming} of ${total} files it applies to followed it (confidence ${Math.round(floor * 100)}%).`;
+  return `${statementSentence(rule)} When this rule was adopted, ${conforming} of ${total} files it applies to followed it (confidence ${Math.round(floor * 100)}%).`;
 }
 
 const describeSubject = (finding: Pick<Finding, 'kind' | 'subject'>): string =>
@@ -323,10 +327,10 @@ const rulesRemovedMessage = (result: Extract<CheckResult, { status: 'rules-remov
 
 const LISTED_SENTENCES = 10;
 
-const ENFORCE_NEXT_STEP =
-  'To enforce one, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare.';
+const enforceNextStep = (target: 'one' | 'it'): string =>
+  `To enforce ${target}, ask your agent to map it with archprint gap-report, then adopt it with archprint generate --declare; when an adopted rule already enforces it, the inferred template records that.`;
 
-const UNCHECKED_SENTENCE_MESSAGE = `This reads like a rule, and no archprint rule checks it yet. ${ENFORCE_NEXT_STEP.replace('one', 'it')}`;
+const UNCHECKED_SENTENCE_MESSAGE = `This reads like a rule, and no archprint rule checks it yet. ${enforceNextStep('it')}`;
 
 const describeContextFile = (change: ContextFileChange): string =>
   `${change.file}: ${change.unchecked} new sentence(s) no adopted rule checks${
@@ -351,7 +355,7 @@ function contextTextLines(context: ContextReport): string[] {
       lines.push(`    ${change.file}:${sentence.line}  ${sentence.text}`);
     if (more > 0) lines.push(`    and ${more} more`);
   }
-  lines.push(`  ${ENFORCE_NEXT_STEP}`);
+  lines.push(`  ${enforceNextStep('one')}`);
   return lines;
 }
 
@@ -503,7 +507,7 @@ function contextSummaryLines(context: ContextReport): string[] {
     for (const sentence of shown) lines.push(`  - line ${sentence.line}: ${sentence.text}`);
     if (more > 0) lines.push(`  - and ${more} more`);
   }
-  lines.push('', ENFORCE_NEXT_STEP);
+  lines.push('', enforceNextStep('one'));
   return lines;
 }
 

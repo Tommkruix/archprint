@@ -11,12 +11,20 @@ export const propertyName = (property: ts.ObjectLiteralElementLike): string | un
     ? property.name.text
     : undefined;
 
+/** The value an object literal gives a property: its initializer, or the variable a shorthand `{ name }` names. */
 export function objectProperty(
   object: ts.ObjectLiteralExpression | undefined,
   name: string,
 ): ts.Expression | undefined {
-  const found = object?.properties.find((property) => propertyName(property) === name);
-  return found !== undefined && ts.isPropertyAssignment(found) ? found.initializer : undefined;
+  for (const property of object?.properties ?? []) {
+    if (ts.isPropertyAssignment(property) && propertyName(property) === name) {
+      return property.initializer;
+    }
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === name) {
+      return property.name;
+    }
+  }
+  return undefined;
 }
 
 export const asObject = (
@@ -36,16 +44,45 @@ export function propertyValues(source: ts.SourceFile, name: string): (string | n
     if (ts.isPropertyAssignment(node) && propertyName(node) === name) {
       values.push(asString(node.initializer) ?? null);
     }
+    if (ts.isShorthandPropertyAssignment(node) && node.name.text === name) values.push(null);
     ts.forEachChild(node, visit);
   };
   visit(source);
   return values;
 }
 
-/** The local name a file imports each named export of a module under: `import { route as r }` maps route to r. */
+const isRequireOf = (node: ts.Expression | undefined, moduleName: string): boolean =>
+  node !== undefined &&
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === 'require' &&
+  node.arguments.length === 1 &&
+  asString(node.arguments[0]) === moduleName;
+
+/**
+ * The local name a file imports each named export of a module under: `import { route as r }` and
+ * `const { route: r } = require(...)` map route to r.
+ */
 export function importedNames(source: ts.SourceFile, moduleName: string): Map<string, string> {
   const names = new Map<string, string>();
   for (const statement of source.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          !ts.isObjectBindingPattern(declaration.name) ||
+          !isRequireOf(declaration.initializer, moduleName)
+        ) {
+          continue;
+        }
+        for (const element of declaration.name.elements) {
+          const exported = element.propertyName ?? element.name;
+          if (ts.isIdentifier(exported) && ts.isIdentifier(element.name)) {
+            names.set(exported.text, element.name.text);
+          }
+        }
+      }
+      continue;
+    }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
@@ -60,6 +97,28 @@ export function importedNames(source: ts.SourceFile, moduleName: string): Map<st
     }
   }
   return names;
+}
+
+/** The local name a file gives a module's default export: `import x from 'm'` or `const x = require('m')`. */
+export function defaultImportName(source: ts.SourceFile, moduleName: string): string | undefined {
+  for (const statement of source.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === moduleName &&
+      statement.importClause?.name !== undefined
+    ) {
+      return statement.importClause.name.text;
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && isRequireOf(declaration.initializer, moduleName)) {
+          return declaration.name.text;
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 /** The arguments of each call to a function called `name` anywhere in a file. */

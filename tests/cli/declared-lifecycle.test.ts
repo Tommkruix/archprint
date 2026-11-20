@@ -149,6 +149,7 @@ describe('declared rules: adopted with generate --declare, then kept by the ratc
     write({ declare: MAPPING, baseline: true });
     const result = write();
     expect(result.declared.kept).toEqual(['doc-freeze-ui', 'doc-no-fetch-in-components']);
+    expect(result.kept).toEqual(expect.arrayContaining(result.declared.kept));
     expect(declared().map((rule) => rule.id)).toEqual([
       'doc-freeze-ui',
       'doc-no-fetch-in-components',
@@ -216,6 +217,27 @@ describe('declared rules: adopted with generate --declare, then kept by the ratc
       expect.arrayContaining(['doc-freeze-ui', 'doc-no-fetch-in-components']),
     );
     expect(declared()).toEqual([]);
+  });
+
+  it('removes one declared rule with remove, keeping the others, even one a new break would block', () => {
+    write({ declare: MAPPING, baseline: true });
+    put('CLAUDE.md', '# Rules\n- Components never call fetch directly.\n');
+    put('src/components/list.tsx', FETCH);
+    expect(() => write()).toThrow(NewViolationsError);
+    const result = write({ remove: ['doc-freeze-ui', 'archprint/doc-no-fetch-in-components'] });
+    expect(result.removedRules).toEqual(['doc-freeze-ui', 'doc-no-fetch-in-components']);
+    expect(result.declared.stale).toEqual([]);
+    expect(declared()).toEqual([]);
+    expect(readFileSync(path.join(outDir, 'config.json'), 'utf8')).not.toContain('"removed"');
+  });
+
+  it('refuses to remove a declared rule the same run declares again, writing nothing', () => {
+    write({ declare: MAPPING, baseline: true });
+    const before = readFileSync(path.join(outDir, 'config.json'), 'utf8');
+    expect(() => write({ declare: MAPPING, baseline: true, remove: ['doc-freeze-ui'] })).toThrow(
+      '--remove and --declare both name doc-freeze-ui; keep it in one of them.',
+    );
+    expect(readFileSync(path.join(outDir, 'config.json'), 'utf8')).toBe(before);
   });
 
   it('replaces a rule declared again under the same name with its new definition', () => {

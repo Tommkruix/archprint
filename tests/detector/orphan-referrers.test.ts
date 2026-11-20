@@ -107,3 +107,72 @@ describe('orphans: Astro components reference source files', () => {
     ]);
   });
 });
+
+describe('orphans: an import with a bundler query names its file', () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-orphans-query-')));
+    writeTree(repo, {
+      'tsconfig.json': '{}',
+      'src/theme.tsx': [
+        "import script from './load-theme?compiled-string';",
+        "import workerUrl from './worker.js?worker&url';",
+        "import raw from './notes.ts?raw';",
+        'export const parts = [script, workerUrl, raw];',
+      ].join('\n'),
+      'src/load-theme.ts': SOURCE,
+      'src/worker.ts': SOURCE,
+      'src/notes.ts': SOURCE,
+      'src/unused.ts': SOURCE,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('counts the file without its query, and still lists a file nothing imports', () => {
+    const { orphans } = detectOrphans(repo);
+    expect(orphans).toEqual(expect.arrayContaining(['src/unused.ts']));
+    for (const file of ['src/load-theme.ts', 'src/worker.ts', 'src/notes.ts']) {
+      expect(orphans).not.toContain(file);
+    }
+  });
+});
+
+describe("orphans: a workspace package's exported subpath resolves like an import of it", () => {
+  let repo: string;
+  beforeAll(() => {
+    repo = realpathSync(mkdtempSync(path.join(tmpdir(), 'archprint-orphans-exports-')));
+    writeTree(repo, {
+      'package.json': json({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      'tsconfig.json': json({
+        compilerOptions: {
+          paths: {
+            '@scope/react/ListPlugin': ['./packages/react/src/ListPlugin.tsx'],
+            '@scope/react/Blocked': ['./packages/react/src/Blocked.tsx'],
+          },
+        },
+      }),
+      'packages/react/package.json': json({
+        name: '@scope/react',
+        exports: {
+          './ListPlugin': {
+            import: { types: './ListPlugin.d.ts', default: './ListPlugin.mjs' },
+            require: './ListPlugin.js',
+          },
+          './Blocked': null,
+          './icons/*': './icons/*.mjs',
+        },
+      }),
+      'packages/react/src/ListPlugin.tsx': SOURCE,
+      'packages/react/src/ListPlugin.test.tsx': "import { value } from './ListPlugin';\n",
+      'packages/react/src/Blocked.tsx': SOURCE,
+      'packages/react/src/Unexported.tsx': SOURCE,
+    });
+  });
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  it('counts the source file the tsconfig paths name for an exported subpath, not a blocked or unexported one', () => {
+    const { orphans, testOnly } = detectOrphans(path.join(repo, 'packages', 'react'));
+    expect(testOnly).toEqual([]);
+    expect(orphans).toEqual(['src/Blocked.tsx', 'src/Unexported.tsx']);
+  });
+});

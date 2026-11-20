@@ -136,6 +136,9 @@ archprint generate apps/web --include-structural --rules no-lib-to-app,import-st
 # Adopt a rule your code almost follows, recording today's breaks as exceptions that only shrink
 archprint generate apps/web --include-structural --rules no-lib-to-hooks --baseline
 
+# Remove an adopted rule; later runs leave it out until --rules adopts it again
+archprint generate apps/web --remove no-lib-to-hooks
+
 # Also write the granular per-family files, rule cards, fixtures, and graph
 archprint generate apps/web --expand
 
@@ -149,7 +152,8 @@ archprint generate apps/web --declare mapping.json
 `generate` re-cleans its own previous output each run, so the generated rules never drift from the current code.
 Every `generate` keeps the rules you adopted before: a plain run refreshes them alongside the default rule set,
 `--only` and `--rules` add to them, and each run says which it kept and names any earlier rule the current code no
-longer supports. `--reset` starts again from the default rule set and lists the adopted rules it removes. A rule's
+longer supports. `--remove <ids>` removes the adopted rules it names, and later runs leave them out until `--rules` (or
+`--declare`) adopts them again. `--reset` starts again from the default rule set and lists the adopted rules it removes. A rule's
 exceptions only shrink: a file that breaks an adopted rule after it was written stops `generate`, which names it
 and writes nothing until you fix it or accept it with `archprint allow`.
 The default output is one self-contained `.archprint/eslint.mjs` (adopt it in one line with
@@ -190,8 +194,8 @@ does.
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
 and now breaks it more often is reported, a recorded exception included. A new import is listed on its own; when
-the file has more of the same break (another `console` call), every one of them is listed, since which one is new
-cannot be told. It works in any CI, and on GitHub it shows each finding inline on the pull request
+the file has more of the same break (another `console` call), the ones on lines the change added are listed, or every
+one of them when the change also edited an old one or moved code, so the diff cannot tell them apart. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
@@ -281,7 +285,8 @@ change.` When a fixed exception is still recorded, it says to run `archprint gen
 - **Safe on pull requests from forks.** It needs only read access, uses no secrets, and never runs your code.
 
 `scan --json` and `recommend --json` also emit stable, version-keyed JSON for scripting, with exit code `0` on
-success and `1` on error.
+success and `1` on error. `scan --json` lists every dead-code file in each app's `deadCode` (`orphans`,
+`importedOnlyByTests` and `shipped`), where the text report shows the first 8.
 
 ## Use with AI agents (MCP)
 

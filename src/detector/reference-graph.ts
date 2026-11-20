@@ -17,6 +17,7 @@ import { sourceFileFor } from './import-target.js';
 import { resolveImportTarget } from './layer-paths.js';
 import { type MetroPlatform, metroFileFor, metroPlatformsUnder } from './metro-platforms.js';
 import { createViteProjects, createViteRoots, loadedFiles } from './module-loaders.js';
+import { shippedFilesUnder } from './published-files.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
@@ -27,9 +28,11 @@ export interface ReferenceGraph {
   tests: ReadonlySet<string>;
   /**
    * Imports of any kind (type-only included), re-exports, `import()` and `require()` calls, `import.meta.glob` and
-   * `require.context` loaders, and tool configs.
+   * `require.context` loaders, tool configs, and a workspace package's package.json for each subpath it exports.
    */
   referrers: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The files a published package without `exports` ships, which its users can import by path. */
+  shipped: ReadonlySet<string>;
 }
 
 /** A file's path inside its app: the deepest tsconfig directory above it. */
@@ -108,10 +111,17 @@ function graphFiles(root: string, accepts: (name: string) => boolean): GraphFile
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
+/** The module an import names without its bundler query (`./theme?raw`, `./worker.js?worker&url`). */
+const withoutQuery = (specifier: string): string => {
+  const query = specifier.indexOf('?');
+  return query > 0 ? specifier.slice(0, query) : specifier;
+};
+
 /**
  * Every source file under `root` with the files that reference it, imports resolved first hop the way the scan and
- * the generated rules resolve them: through the importing file's deepest tsconfig aliases, its package.json `imports`
- * and the workspace packages.
+ * the generated rules resolve them (through the importing file's deepest tsconfig aliases, its package.json `imports`
+ * and the workspace packages), without a bundler query. Each subpath a workspace package exports counts as an import
+ * of `<name>/<subpath>` from its package.json, so the repo's own tsconfig `paths` say which source file it is.
  */
 export function buildReferenceGraph(root: string): ReferenceGraph {
   const absoluteRoot = path.resolve(root);
@@ -179,7 +189,9 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
   };
   for (const file of walked) {
     for (const specifier of readSafely(() => moduleReferences(file.absolutePath))) {
-      for (const target of targets(file.relativePath, specifier)) refer(file.relativePath, target);
+      for (const target of targets(file.relativePath, withoutQuery(specifier))) {
+        refer(file.relativePath, target);
+      }
     }
   }
   const sources = [...referrers.keys()];
@@ -206,7 +218,19 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
       refer(config, resolve(config, specifier.startsWith('.') ? specifier : `./${specifier}`));
     }
   }
-  return { root: absoluteRoot, tests, referrers };
+  for (const { name, dir, subpaths } of packages) {
+    const manifest = `${dir}/package.json`;
+    for (const { key, targets: written } of subpaths) {
+      if (written.length === 0) continue;
+      for (const target of targets(manifest, `${name}${key.slice(1)}`)) refer(manifest, target);
+    }
+  }
+  return {
+    root: absoluteRoot,
+    tests,
+    referrers,
+    shipped: shippedFilesUnder(absoluteRoot, sources),
+  };
 }
 
 /** The folder whose files can import an app's files: its workspace root, or the app itself outside a workspace. */

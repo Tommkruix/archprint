@@ -310,8 +310,9 @@ format.
 
 - **`.archprint/config.json`** (always): the exact definition of each rule you adopted, with the
   evidence recorded at adoption and the resolution mode it was generated in (`archprint check` reads it, so a check
-  never re-infers a rule), the exceptions you allowed with a reason, what is enforced, followed but only reported,
-  held for review, and worth adopting, and the list of managed outputs `eject` removes.
+  never re-infers a rule), the rules you removed with `generate --remove`, the context-file sentences an adopted rule
+  states, the exceptions you allowed with a reason, what is enforced, followed but only reported, held for review,
+  and worth adopting, and the list of managed outputs `eject` removes.
 - **`.archprint/eslint.mjs`** (when ESLint is present): one self-contained ESLint flat-config file that inlines
   every inferred ESLint rule (marker-based forbidden imports, import style, test isolation, console isolation,
   and, when you include structural rules and do not use dependency-cruiser, env access, workspace package APIs,
@@ -340,8 +341,9 @@ element-types config, ts-arch tests, and the Mermaid and Graphviz DOT layer grap
 
 **Staying in sync, and leaving cleanly.** Re-running `generate` refreshes `.archprint/`: it keeps every rule you
 adopted, names any the evidence no longer supports and drops it, so the output never drifts from the code.
-`generate --reset` (and `init --force`) start again from the default rule set and list the adopted rules they
-remove. `wire` inserts a single managed
+`generate --remove <ids>` removes the adopted rules it names, and later runs leave them out until `--rules` (or
+`--declare`) adopts them again. `generate --reset` (and `init --force`) start again from the default rule set and list
+the adopted rules they remove. `wire` inserts a single managed
 reference into each enforcement tool your repo uses (a flat eslint config, a `.dependency-cruiser.json`), one that
 survives those regenerations; for a config it cannot safely edit (a JS dependency-cruiser config, say), it prints
 the exact snippet to paste. `eject` removes Archprint's files and every wired reference, restoring each config
@@ -358,8 +360,8 @@ this layout and rewires your configs in place.
 your team adopted with `init` or `generate`. The existing backlog never shows up, and every finding carries its
 evidence. It counts like ESLint's bulk suppressions, with the base as the baseline: a file that already broke a rule
 and now breaks it more often is reported, a recorded exception included. A new import is listed on its own; when
-the file has more of the same break (another `console` call), every one of them is listed, since which one is new
-cannot be told. It works in any CI, and on GitHub it shows each finding inline on the pull request
+the file has more of the same break (another `console` call), the ones on lines the change added are listed, or every
+one of them when the change also edited an old one or moved code, so the diff cannot tell them apart. It works in any CI, and on GitHub it shows each finding inline on the pull request
 ([see it on a demo pull request](https://github.com/Tommkruix/archprint-demo/pull/1)).
 
 When a change edits a context file that applies to the app (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`,
@@ -563,7 +565,8 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `--only <family>` and `--rules <ids>` adopt one family or the rules they name (such as `AP-002`, `import-style`
   or the layer rule `no-lib-to-app`), `--rules <ids> --baseline` adopts the named rules even below the confidence
   gate, with what breaks them today recorded as exceptions that only shrink, every run keeps the rules you adopted
-  before and `--reset` returns to the default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
+  before, `--remove <ids>` removes the adopted rules it names (later runs leave them out until you adopt them
+  again) and `--reset` returns to the default set, `--check` runs the generated rules against your repo (writing nothing when passed on its own),
   `--readme` adds the README section, `--expand` also writes the per-family files, cards, fixtures and graph, and
   `--rule <id>` emits one reviewed rule. Also `--include-structural`, `--no-graph`, `--out <dir>`, `--fast`.
 - **`archprint check [path]`**: reports the violations of your adopted rules that a change introduces, compared
@@ -584,7 +587,9 @@ reachability) and knip (dead code); rather than compete, it writes the rules it 
   `scan`, `recommend`, `explain`, and `check` tools. Serves over stdio by default; `--http` runs a remote server
   that scans a public repo by URL (`scan`, `recommend`, and `explain`).
 
-`scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting. Exit
+`scan --json`, `recommend --json` and `check --format json` emit stable, version-keyed JSON for scripting; `scan
+--json` lists every dead-code file in each app's `deadCode` (`orphans`, `importedOnlyByTests` and `shipped`), where the text
+report shows the first 8. Exit
 codes are the contract: `0` on success, `1` on error (for `check`: new violations with `--fail-on new`), `2` for a
 `check` that could not run because of the CI setup.
 
@@ -639,7 +644,7 @@ Without dependency-cruiser, each boundary becomes an ESLint rule in `.archprint/
 exempts the files that already break the boundary, so your lint stays green, and it catches a new import across
 the boundary, by relative path or alias. `archprint check` reports a new break in a pull request, and
 `archprint allow` records a justified exception. `--rules` adds the rules it names to the ones you adopted before,
-so you can adopt boundaries one run at a time, and a plain `archprint generate` keeps them too (`--reset` returns to
+so you can adopt boundaries one run at a time, and a plain `archprint generate` keeps them too (`--remove <id>` removes one, `--reset` returns to
 the default rule set). If your CI pins archprint (for example the GitHub Action's `archprint-version`), use 0.13.0
 or later there first. The [rules reference](https://tommkruix.github.io/archprint/rules#layer-boundaries-review)
 says exactly which imports and files the rule reads.

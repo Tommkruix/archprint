@@ -31,6 +31,11 @@ export interface OrphanAnalysis {
   orphans: string[];
   /** Production files only tests import: dead code the tests keep alive. */
   testOnly: string[];
+  /**
+   * Production files nothing but tests imports that a published package without `exports` ships, so its users may
+   * import them by path: neither listed as dead nor known to be used.
+   */
+  shipped: string[];
 }
 
 /**
@@ -58,6 +63,7 @@ export function detectOrphans(
   const production = files.filter((file) => file.role !== 'TEST');
   const orphans: string[] = [];
   const testOnly: string[] = [];
+  const shipped: string[] = [];
   for (const file of production) {
     if (
       isEntry(file) ||
@@ -69,15 +75,16 @@ export function detectOrphans(
     }
     const referrers = graph.referrers.get(inGraph(file.relativePath));
     if (referrers === undefined) continue;
-    if (referrers.size === 0) orphans.push(file.relativePath);
-    else if ([...referrers].every((referrer) => graph.tests.has(referrer))) {
-      testOnly.push(file.relativePath);
-    }
+    const unused = referrers.size === 0;
+    if (!unused && ![...referrers].every((referrer) => graph.tests.has(referrer))) continue;
+    if (graph.shipped.has(inGraph(file.relativePath))) shipped.push(file.relativePath);
+    else (unused ? orphans : testOnly).push(file.relativePath);
   }
   return {
     appDir: root,
     fileCount: production.length,
     orphans: orphans.sort(),
     testOnly: testOnly.sort(),
+    shipped: shipped.sort(),
   };
 }

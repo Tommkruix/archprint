@@ -203,6 +203,7 @@ describe('declared rules: the generated ESLint rules and archprint check agree',
       rulesDir: outDir,
       baseline: true,
       allowedFor: () => [],
+      adoptedRules: new Set<string>(),
     });
     expect(declaration.refused).toEqual([]);
     rules = declaration.adopted.map((rule) => ({ ...rule, exceptions: [] }));
@@ -265,6 +266,7 @@ describe('declared rules adopted with --baseline: ESLint skips exactly the recor
       rulesDir: outDir,
       baseline: true,
       allowedFor: () => [],
+      adoptedRules: new Set<string>(),
     }).adopted;
     emitLayout(scanRepo(appDir), outDir, {
       version: '9.9.9',

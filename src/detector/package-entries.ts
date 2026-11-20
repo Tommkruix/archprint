@@ -1,9 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as ts from 'typescript';
 import { directoriesUnder } from '../scanner/directory-walk.js';
 
-const TSCONFIGS = ['tsconfig.json', 'tsconfig.build.json'];
+/** A package's build tsconfigs: `tsconfig.json` and its variants (`tsconfig.build.json`, `tsconfig.lib.json`, ...). */
+const TSCONFIG = /^tsconfig(\..+)?\.json$/;
+/** A tsconfig a test runner or story tool compiles with, which builds nothing a package exposes. */
+const TEST_TSCONFIG = /\.(spec|test|e2e|cy|cypress|playwright|storybook|vitest|jest)\.json$/;
 /** Folders bundlers (tsup, unbuild, esbuild scripts) write to when no tsconfig `outDir` says so. */
 const OUTPUT_DIRS = new Set(['dist', 'lib', 'build', 'out']);
 const EXTENSION = /(\.d)?\.(tsx?|jsx?|mjs|cjs|mts|cts)$/;
@@ -11,7 +14,7 @@ const EXTENSION = /(\.d)?\.(tsx?|jsx?|mjs|cjs|mts|cts)$/;
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 const stem = (file: string): string => file.replace(EXTENSION, '');
 
-function readJson(file: string): Record<string, unknown> | null {
+export function readJson(file: string): Record<string, unknown> | null {
   try {
     return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
   } catch {
@@ -31,6 +34,46 @@ const localPaths = (targets: readonly string[]): string[] =>
     .filter(
       (target) => target !== '' && !target.startsWith('../') && !/^[a-z]+:|^\//i.test(target),
     );
+
+const COLLECTION_FIELDS = ['generators', 'executors', 'builders', 'schematics'];
+const MIGRATION_FIELDS = ['ng-update', 'nx-migrations'];
+const MODULE_KEYS = ['factory', 'implementation', 'batchImplementation'];
+
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+/** The devkit collections (generators.json, executors.json, migrations.json, ...) a package.json names. */
+function collectionFiles(manifest: Record<string, unknown>): string[] {
+  const migrations = MIGRATION_FIELDS.map((field) => {
+    const value = manifest[field];
+    return value !== null && typeof value === 'object'
+      ? (value as Record<string, unknown>).migrations
+      : value;
+  });
+  return localPaths(
+    [...COLLECTION_FIELDS.map((field) => manifest[field]), ...migrations].filter(isString),
+  );
+}
+
+/**
+ * The modules a devkit collection names, from the package: each generator's, schematic's or migration's `factory` and
+ * each executor's or builder's `implementation`, relative to the collection file, without a `#export` suffix.
+ */
+function collectionTargets(packageDir: string, collection: string): string[] {
+  const json = readJson(path.join(packageDir, collection));
+  if (json === null) return [];
+  const modules = COLLECTION_FIELDS.flatMap((field) => {
+    const entries = json[field];
+    if (entries === null || typeof entries !== 'object') return [];
+    return Object.values(entries).flatMap((entry: unknown) =>
+      entry !== null && typeof entry === 'object'
+        ? MODULE_KEYS.map((key) => (entry as Record<string, unknown>)[key]).filter(isString)
+        : [],
+    );
+  });
+  return localPaths(
+    modules.map((module) => path.posix.join(path.posix.dirname(collection), module.split('#')[0]!)),
+  );
+}
 
 /** The relative paths a package.json exposes: `main`, `module`, `types`, `browser`, `bin` and every `exports` target. */
 export function manifestTargets(manifest: Record<string, unknown>): string[] {
@@ -105,9 +148,12 @@ export function scriptTargets(manifest: Record<string, unknown>): string[] {
   );
 }
 
-interface CompiledRoot {
+/** Where one tsconfig writes its output, and the source folder that output mirrors, from the package directory. */
+export interface CompiledRoot {
   outDir: string;
   rootDir: string;
+  /** Whether the config builds this file (from the package directory): it emits and lists the file as an input. */
+  emits: (file: string) => boolean;
 }
 
 function commonDirectory(files: readonly string[]): string {
@@ -121,33 +167,57 @@ function commonDirectory(files: readonly string[]): string {
   return shared.join('/').replace(/^\.$/, '');
 }
 
-/** Where each of the package's tsconfigs writes its output and the source folder that output mirrors. */
-function compiledRoots(packageDir: string): CompiledRoot[] {
+/** Reads a tsconfig's options without listing its input files. */
+const OPTIONS_ONLY: ts.ParseConfigHost = { ...ts.sys, readDirectory: () => [] };
+
+/**
+ * Where each of the package's tsconfigs writes its output and the source folder that output mirrors, which may lie
+ * outside the package (a published package compiling another's sources); the input files are listed only when needed,
+ * to infer a `rootDir` the config does not state or to tell which files it builds.
+ */
+export function compiledRoots(packageDir: string): CompiledRoot[] {
   const roots: CompiledRoot[] = [];
-  for (const name of TSCONFIGS) {
-    const configPath = path.join(packageDir, name);
-    if (!existsSync(configPath)) continue;
-    const read = ts.readConfigFile(configPath, ts.sys.readFile);
+  for (const name of readdirSync(packageDir)
+    .filter((entry) => TSCONFIG.test(entry) && !TEST_TSCONFIG.test(entry))
+    .sort()) {
+    const read = ts.readConfigFile(path.join(packageDir, name), ts.sys.readFile);
     if (read.error !== undefined) continue;
-    const { options, fileNames } = ts.parseJsonConfigFileContent(read.config, ts.sys, packageDir);
+    const parse = (host: ts.ParseConfigHost): ts.ParsedCommandLine =>
+      ts.parseJsonConfigFileContent(read.config, host, packageDir);
+    const { options } = parse(OPTIONS_ONLY);
     if (options.outDir === undefined) continue;
     const relative = (dir: string): string => toPosix(path.relative(packageDir, dir));
-    const inputs = fileNames.filter((file) => !/\.d\.[cm]?ts$/.test(file)).map(relative);
-    if (options.rootDir === undefined && inputs.length === 0) continue;
-    const rootDir =
-      options.rootDir === undefined ? commonDirectory(inputs) : relative(options.rootDir);
     const outDir = relative(options.outDir);
-    if (outDir === '' || outDir.startsWith('..') || rootDir.startsWith('..')) continue;
-    roots.push({ outDir, rootDir });
+    if (outDir.startsWith('..')) continue;
+    let listed: string[] | undefined;
+    const inputs = (): string[] =>
+      (listed ??= parse(ts.sys)
+        .fileNames.filter((file) => !/\.d\.[cm]?ts$/.test(file))
+        .map(relative));
+    let rootDir: string;
+    if (options.rootDir === undefined) {
+      if (inputs().length === 0) continue;
+      rootDir = commonDirectory(inputs());
+    } else {
+      rootDir = relative(options.rootDir);
+    }
+    let built: Set<string> | undefined;
+    const emits = (file: string): boolean =>
+      options.noEmit !== true && (built ??= new Set(inputs())).has(file);
+    roots.push({ outDir, rootDir, emits });
   }
   return roots;
 }
 
-/** The source paths a target may have been built from: itself, through each tsconfig `outDir`, and through `src/`. */
+/**
+ * The source paths a target may have been built from: itself, through each tsconfig `outDir` (the package directory
+ * itself included), and through `src/`.
+ */
 function sourceCandidates(target: string, roots: readonly CompiledRoot[]): string[] {
   const candidates = [target];
   for (const { outDir, rootDir } of roots) {
-    if (target.startsWith(`${outDir}/`)) {
+    if (outDir === '') candidates.push(path.posix.join(rootDir, target));
+    else if (target.startsWith(`${outDir}/`)) {
       candidates.push(path.posix.join(rootDir, target.slice(outDir.length + 1)));
     }
   }
@@ -176,7 +246,10 @@ function exposedBy(packageDir: string, files: readonly string[]): string[] {
   const manifest = readJson(path.join(packageDir, 'package.json'));
   if (manifest === null) return [];
   const roots = compiledRoots(packageDir);
-  const matchers = [...manifestTargets(manifest), ...scriptTargets(manifest)]
+  const collections = collectionFiles(manifest).flatMap((collection) =>
+    collectionTargets(packageDir, collection),
+  );
+  const matchers = [...manifestTargets(manifest), ...scriptTargets(manifest), ...collections]
     .flatMap((target) => sourceCandidates(target, roots))
     .map(matcherFor);
   return files.filter((file) => matchers.some((matches) => matches(stem(file))));
@@ -206,8 +279,9 @@ function pathsInPackage(
 
 /**
  * The files under `root` (paths from it) that a package exposes or runs through its package.json, so whoever installs
- * or runs the package loads them: those of every package at or below `root`, and of the nearest one above it. A target built
- * into a tsconfig `outDir`, or into `dist/`, `lib/`, `build/` or `out/`, counts for the source file it was built from.
+ * or runs the package loads them (its devkit collections' modules included): those of every package at or below
+ * `root`, and of the nearest one above it. A target built into a tsconfig `outDir`, or into `dist/`, `lib/`, `build/`
+ * or `out/`, counts for the source file it was built from.
  */
 export function packageEntriesUnder(root: string, files: readonly string[]): Set<string> {
   const absoluteRoot = path.resolve(root);

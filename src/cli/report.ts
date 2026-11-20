@@ -10,7 +10,7 @@ import type { FamilyKey } from '../detector/family-maturity.js';
 import type { ArchprintConfig } from './archprint-config.js';
 import { locateImport } from './codeframe.js';
 import { guidanceFor } from './rule-guidance.js';
-import { FAMILY_STATEMENTS } from './rule-statements.js';
+import { FAMILY_STATEMENTS, statementText } from './rule-statements.js';
 import type { GenerationStatus } from '../detector/confidence-gate.js';
 import type { RuleSummary } from './summary.js';
 import type { AdoptedRule } from './adopted-rules.js';
@@ -213,7 +213,8 @@ export function renderReport(
     if (files.length === 0) return;
     lines.push(yellow(bold(`${heading} (${files.length}, review before deleting)`)));
     for (const file of files.slice(0, 8)) lines.push(dim(`  ${file}`));
-    if (files.length > 8) lines.push(dim(`  ... and ${files.length - 8} more`));
+    if (files.length > 8)
+      lines.push(dim(`  ... and ${files.length - 8} more (scan --json lists all)`));
     lines.push(dim(`  ${note} Suggest only, not enforced.`), '');
   };
   orphanList(
@@ -225,6 +226,11 @@ export function renderReport(
     'ORPHAN MODULES',
     scan.orphans.orphans,
     'Nothing imports these and they are not framework entries.',
+  );
+  orphanList(
+    'SHIPPED IN A PUBLISHED PACKAGE',
+    scan.orphans.shipped,
+    'Nothing in the repo imports these outside tests, but a published package without an exports map ships them, so its users may import them by path.',
   );
   const autoApi = scan.publicApi.groups.filter((g) => g.gate.status === 'AUTO');
   const suggestApi = scan.publicApi.groups.filter((g) => g.gate.status === 'SUGGEST');
@@ -577,13 +583,8 @@ const adoptionItem = (r: { title: string; enforcer?: string }): string =>
 const adoptionSection = (heading: string, blurb: string, items: string[]): string[] =>
   items.length === 0 ? [] : ['', `### ${heading}`, blurb, '', ...items];
 
-const asSentence = (statement: string): string => {
-  const trimmed = statement.replace(/\.$/, '');
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-};
-
 const adoptedItem = (rule: AdoptedRule): string =>
-  `- \`${rule.id}\`: ${asSentence(rule.statement)} (${rule.evidence.conforming} of ${rule.evidence.total} files it applies to follow it)`;
+  `- \`${rule.id}\`: ${statementText(rule).replace(/\.$/, '')} (${rule.evidence.conforming} of ${rule.evidence.total} files it applies to follow it)`;
 
 /** The README section: this repo's adopted rules with their evidence, and what it follows but does not enforce. */
 export function renderAdoptionBody(rec: Recommendations, rules: readonly AdoptedRule[]): string {

@@ -26,8 +26,12 @@ import {
   type DeclaredAdoptedRule,
   LEGACY_RULES_FILE,
   readAdoptedRules,
+  readRemovedRules,
+  readStated,
   type ResolutionMode,
+  type StatedSentence,
 } from './adopted-rules.js';
+import { findRule } from './rule-ref.js';
 import { measureAdopted } from './check-evaluate.js';
 import {
   breakingFiles,
@@ -52,6 +56,8 @@ export interface WriteLayoutOptions {
   ruleIds?: readonly string[];
   /** Start from the default rule set instead of keeping the rules adopted before. */
   reset?: boolean;
+  /** Adopted rules to remove, by id, label or ESLint name; later runs leave them out until adopted again. */
+  remove?: readonly string[];
   /** Adopt the rules named in `ruleIds` below the confidence gate, recording their current breaks as exceptions. */
   baseline?: boolean;
   /** A gap-report mapping whose verified sentences this run adopts as declared rules (broken ones with `baseline`). */
@@ -72,11 +78,13 @@ export interface WriteLayoutResult {
   folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
-  /** Previously adopted rules outside this run's selection that it kept, and those the current scan no longer generates. */
+  /** Previously adopted rules this run kept, and those outside its selection the current scan no longer generates. */
   kept: string[];
   dropped: string[];
   /** Previously adopted rules --reset removed. */
   reset: string[];
+  /** The adopted rules --remove removed. */
+  removedRules: string[];
   /** Every file this run wrote or changed, relative to the working directory. */
   touched: string[];
   /** Recorded exceptions the code no longer has, so the rules now apply to them. */
@@ -102,6 +110,41 @@ export class UnknownRulesError extends Error {
           : ' Structural rules, such as layer boundaries, need --include-structural.'),
     );
   }
+}
+
+export class UnknownRemovalError extends Error {
+  constructor(unknown: readonly string[], adopted: readonly string[]) {
+    super(
+      `--remove names no adopted rule: ${unknown.join(', ')}. ` +
+        (adopted.length > 0 ? `Adopted rules: ${adopted.join(', ')}.` : 'No rule is adopted.'),
+    );
+  }
+}
+
+export class RemovalConflictError extends Error {
+  constructor(flag: '--rules' | '--declare', ids: readonly string[]) {
+    super(`--remove and ${flag} both name ${ids.join(', ')}; keep it in one of them.`);
+  }
+}
+
+/** The adopted rules the --remove references name, in adoption order. */
+function rulesToRemove(refs: readonly string[], adopted: readonly AdoptedRule[]): AdoptedRule[] {
+  const unknown = refs.filter((ref) => findRule(ref, adopted) === undefined);
+  if (unknown.length > 0)
+    throw new UnknownRemovalError(
+      unknown.map((ref) => ref.trim()),
+      adopted.map((rule) => rule.id),
+    );
+  return adopted.filter((rule) => refs.some((ref) => findRule(ref, [rule]) !== undefined));
+}
+
+const statedKey = (entry: StatedSentence): string =>
+  [entry.rule, entry.file, entry.quote].join('\u0000');
+
+/** Each stated sentence once, by rule, file and quote. */
+function uniqueStated(entries: readonly StatedSentence[]): StatedSentence[] {
+  const byKey = new Map(entries.map((entry) => [statedKey(entry), entry]));
+  return [...byKey.keys()].sort().map((key) => byKey.get(key)!);
 }
 
 const LEGACY_FILES: readonly string[] = [LEGACY_RULES_FILE, LEGACY_ALLOW_FILE];
@@ -158,8 +201,17 @@ export function writeLayout(
 ): WriteLayoutResult {
   assertRealDirectory(outDir);
   const adoptedBefore = readAdoptedRules(outDir) ?? [];
-  const inferredBefore = adoptedBefore.filter((rule) => !isDeclared(rule));
-  const declaredBefore = options.reset ? [] : adoptedBefore.filter(isDeclared);
+  const removing = rulesToRemove(options.remove ?? [], adoptedBefore);
+  const reAdopted = (options.ruleIds ?? []).filter((ref) => findRule(ref, removing) !== undefined);
+  if (reAdopted.length > 0) throw new RemovalConflictError('--rules', reAdopted);
+  const removingIds = new Set(removing.map((rule) => rule.id));
+  const remaining = adoptedBefore.filter((rule) => !removingIds.has(rule.id));
+  const inferredBefore = remaining.filter((rule) => !isDeclared(rule));
+  const declaredBefore = options.reset ? [] : remaining.filter(isDeclared);
+  const excluded = [
+    ...(options.reset ? [] : readRemovedRules(outDir)),
+    ...removing.filter((rule) => !isDeclared(rule)).map((rule) => rule.id),
+  ];
   const baselineIds =
     options.baseline && options.ruleIds !== undefined ? baselineRuleIds(scan, options.ruleIds) : [];
   const enforced = promoteBelowGate(
@@ -174,6 +226,7 @@ export function writeLayout(
     enforcers: options.enforcers,
     only: options.only,
     ruleIds: options.ruleIds,
+    removed: excluded,
     mode: options.mode,
   };
   const requested = collectEnforcement(enforced, collectOptions);
@@ -199,8 +252,11 @@ export function writeLayout(
           rulesDir: outDir,
           baseline: options.baseline ?? false,
           allowedFor,
+          adoptedRules: new Set([...inferredBefore, ...requested.adopted].map((rule) => rule.id)),
         });
   const redeclared = new Set(declaration?.adopted.map((rule) => rule.id));
+  const declaredRemoving = [...redeclared].filter((id) => removingIds.has(id));
+  if (declaredRemoving.length > 0) throw new RemovalConflictError('--declare', declaredRemoving);
   const declaredKept = declaredBefore.filter((rule) => !redeclared.has(rule.id));
   const keptMeasures = measureAdopted(scan.appDir, declaredKept, outDir);
   const declaredNow = new Map(
@@ -231,6 +287,10 @@ export function writeLayout(
   });
   const emittedIds = new Set(emitted.rules.map((rule) => rule.id));
   const keptRules = previousRules.filter((rule) => emittedIds.has(rule.id));
+  const stated = uniqueStated([
+    ...(options.reset ? [] : readStated(outDir)),
+    ...(declaration?.stated ?? []),
+  ]).filter((entry) => emittedIds.has(entry.rule));
   const keptComparable = keptRules.filter(comparableIn(options.mode));
   const adoption = reconcileWithAdopted(options.recommendations, emitted.rules);
   const files = [emitted.eslint, emitted.depcruise, ...emitted.expanded].filter(
@@ -298,6 +358,8 @@ export function writeLayout(
           })),
           ...declaredRules,
         ].sort(byRuleId),
+        stated,
+        removed: [...new Set(excluded)].filter((id) => !emittedIds.has(id)).sort(),
         allowed: sortAllowed(allowed),
       },
       managed,
@@ -310,7 +372,7 @@ export function writeLayout(
     folded,
     readme,
     configPath,
-    kept: carried.filter((id) => emittedIds.has(id)),
+    kept: [...keptRules, ...declaredKept].sort(byRuleId).map((rule) => rule.id),
     dropped: carried.filter((id) => !emittedIds.has(id)),
     reset: options.reset
       ? [
@@ -318,6 +380,7 @@ export function writeLayout(
           ...adoptedBefore.filter(isDeclared).map((rule) => rule.id),
         ]
       : [],
+    removedRules: removing.map((rule) => rule.id),
     fixed: [
       ...fixedExceptions(keptComparable, exceptionsNow),
       ...fixedExceptions(declaredKept, declaredNow),
@@ -333,6 +396,7 @@ export function writeLayout(
       kept: declaredKept.map((rule) => rule.id),
       replaced: declaredBefore.filter((rule) => redeclared.has(rule.id)).map((rule) => rule.id),
       stale: relocated.stale,
+      stated: (declaration?.stated ?? []).filter((entry) => emittedIds.has(entry.rule)),
     },
     touched: [
       configPath,

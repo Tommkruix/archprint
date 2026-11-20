@@ -22,6 +22,7 @@ import {
 } from './declared-mapping.js';
 import type { AutoTier } from './recommend.js';
 import { findRule } from './rule-ref.js';
+import { withFullStop } from './rule-statements.js';
 import { scanRepo } from './scan.js';
 import { type RuleSummary, summarizeRules } from './summary.js';
 import { locateQuote } from './source-quote.js';
@@ -308,13 +309,13 @@ function entryLines(entry: GapEntry): string[] {
   if (entry.rule) {
     const { rule } = entry;
     lines.push(
-      `  archprint rule ${rule.id} (${rule.status}, ${rule.adoption}${rule.app === '.' ? '' : `, ${rule.app}`}): ${rule.statement}.`,
+      `  archprint rule ${rule.id} (${rule.status}, ${rule.adoption}${rule.app === '.' ? '' : `, ${rule.app}`}): ${withFullStop(rule.statement)}`,
       `  ${rule.following} of ${rule.files} file(s) follow it.`,
     );
   }
   const note = STATUS_NOTES[entry.status];
   if (note !== undefined || entry.status === 'guidance') {
-    lines.push(`  ${note ?? 'Not checkable by a template'}: ${entry.reason}.`);
+    lines.push(`  ${note ?? 'Not checkable by a template'}: ${withFullStop(entry.reason ?? '')}`);
   }
   return [...lines, ...evidenceLines(entry).map((line) => `  ${line}`)];
 }

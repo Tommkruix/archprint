@@ -15,6 +15,7 @@ import { declaredPackages } from '../scanner/package-name.js';
 import { isSvelteKitProject } from '../scanner/sveltekit.js';
 import { findWorkspaceRoot } from '../scanner/workspace-packages.js';
 import { CONFIG_FILE } from './reference-graph.js';
+import { routify2Pages } from './routify-routes.js';
 
 /** Whether a path from a project folder names a file the framework loads by its location. */
 type RoutedFile = (inside: string) => boolean;
@@ -259,18 +260,24 @@ const tanStackRoutes: FileRoutedFramework = (folder) => {
   };
 };
 
+/** Routify 2: the pages it routes, when `@roxi/routify` 2.x is declared. */
+const routify2Routes: FileRoutedFramework = (folder) =>
+  folder.names().includes('package.json') ? routify2Pages(folder.dir) : null;
+
 const FILE_ROUTED_FRAMEWORKS: readonly FileRoutedFramework[] = [
   nextPages,
   svelteKitFiles,
   expoRoutes,
   reactRouterRoutes,
   tanStackRoutes,
+  routify2Routes,
 ];
 
 /**
  * Whether a file under `root` is one a framework loads by its location, so nothing needs to import it: a Next.js
  * pages-router page, a SvelteKit route file, hook, param matcher, service worker or instrumentation file, an Expo
- * Router route, a React Router route module, or a TanStack Router route file, each in a project of that framework.
+ * Router route, a React Router route module, a TanStack Router route file, or a Routify 2 page, each in a project of
+ * that framework.
  */
 export function frameworkFilesUnder(root: string): (relativePath: string) => boolean {
   const projects = new Map<string, readonly RoutedFile[]>();
