@@ -17,6 +17,7 @@ import { sourceFileFor } from './import-target.js';
 import { resolveImportTarget } from './layer-paths.js';
 import { type MetroPlatform, metroFileFor, metroPlatformsUnder } from './metro-platforms.js';
 import { createViteProjects, createViteRoots, loadedFiles } from './module-loaders.js';
+import { shippedFilesUnder } from './published-files.js';
 
 export const CONFIG_FILE = /\.config\.(ts|tsx|js|mjs|cjs|mts|cts)$/;
 
@@ -30,6 +31,8 @@ export interface ReferenceGraph {
    * `require.context` loaders, tool configs, and a workspace package's package.json for each subpath it exports.
    */
   referrers: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The files a published package without `exports` ships, which its users can import by path. */
+  shipped: ReadonlySet<string>;
 }
 
 /** A file's path inside its app: the deepest tsconfig directory above it. */
@@ -222,7 +225,12 @@ export function buildReferenceGraph(root: string): ReferenceGraph {
       for (const target of targets(manifest, `${name}${key.slice(1)}`)) refer(manifest, target);
     }
   }
-  return { root: absoluteRoot, tests, referrers };
+  return {
+    root: absoluteRoot,
+    tests,
+    referrers,
+    shipped: shippedFilesUnder(absoluteRoot, sources),
+  };
 }
 
 /** The folder whose files can import an app's files: its workspace root, or the app itself outside a workspace. */

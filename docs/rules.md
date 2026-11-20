@@ -266,8 +266,25 @@ entry that maps `@scope/ui/Button` to `packages/ui/src/Button.tsx` marks that fi
 `./Button`. So does a file a package.json script runs with a JavaScript
 runtime (`node`, `tsx`, `ts-node`, `bun`, `deno` and similar): the first file it is given and the modules or
 config its `--require`, `--import`, `--loader` or `--config` flags name; other tools' arguments, such as a lint
-glob, are not entries. Reported only, never enforced: a file loaded by a tool archprint does not read can still be
-listed. A dedicated dead-code tool such as knip covers more of these cases.
+glob, are not entries.
+
+A third list, **shipped in a published package**, holds the files that would otherwise be listed but that a published
+package ships without an `exports` map. Without `exports`, Node.js lets a user of the package import any file it
+ships (`xstate/lib/model`), so nothing in the repo can tell whether such a file is used: it is shown apart, neither
+dead nor known to be used. A package counts as published when its package.json has a `name`, is not marked
+`private`, has no `exports`, and is set up to publish (a `files` list, a `publishConfig`, or an `.npmignore`; an app
+with only `main` is not). A file ships when the package packs it or the output one of the package's tsconfigs builds
+from it (`src/model.ts` to `lib/model.js` with `"outDir": "lib"`); a tsconfig builds only the files its `include`
+and `files` take in, and nothing when it sets `noEmit`. What a package packs is read as `npm pack` reads
+it: its `files` list, else its `.npmignore`, else its `.gitignore`, with npm's rules (an entry naming a folder covers
+its contents, a later `!` entry excludes, and a file inside a folder npm does not walk into is left out); a package
+with none of these, or one packed from another folder (`publishConfig.directory`), ships every file it holds or
+builds. A workspace root does not pack its workspace packages. A published package can build another package's
+sources (a tsconfig `rootDir` outside it), so a file of a private package can ship too. Ignore files in subfolders
+of the package are not read.
+
+Reported only, never enforced: a file loaded by a tool archprint does not read can still be listed. A dedicated
+dead-code tool such as knip covers more of these cases.
 
 **How precise it is.** In a blind audit of 100 listed orphans from 74 open-source repositories (archprint 0.18.2,
 November 2026), 68 were unused and 32 were in use. Most of those are files that nothing imports by design: routes of
