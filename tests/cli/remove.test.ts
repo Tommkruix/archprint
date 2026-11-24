@@ -92,7 +92,10 @@ describe('removing an adopted rule with generate --remove', () => {
   it('adopts it again with --rules, or --reset, which clear the record', async () => {
     await generate('--include-structural');
     await generate('--include-structural', '--remove', RULE);
+    log.mockClear();
     await generate('--include-structural', '--rules', RULE);
+    expect(printed()).toContain(`Adopted 1 rule(s): ${RULE}.`);
+    expect(printed()).toContain(`Kept ${OTHERS.length} previously adopted rule(s)`);
     expect(adoptedIds()).toEqual([...OTHERS, RULE]);
     expect(recorded()).toBeUndefined();
 

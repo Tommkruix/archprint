@@ -453,6 +453,7 @@ export function buildProgram(version = readVersion()): Command {
           removed,
           folded,
           configPath,
+          adopted,
           kept,
           dropped,
           reset,
@@ -491,6 +492,8 @@ export function buildProgram(version = readVersion()): Command {
           );
         }
         reportFolded(folded, displayPath(configPath, cwd));
+        if (adopted.length > 0)
+          console.log(`Adopted ${adopted.length} rule(s): ${adopted.join(', ')}.`);
         if (kept.length > 0)
           console.log(`Kept ${kept.length} previously adopted rule(s): ${kept.join(', ')}.`);
         if (dropped.length > 0)

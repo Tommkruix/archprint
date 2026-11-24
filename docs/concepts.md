@@ -117,7 +117,8 @@ layer graph.
 confirm they are green before wiring. On its own it checks the rules already generated and writes nothing; with
 other flags it generates first. It uses the ESLint installed in your repo (version 9 or later). Once the rules are
 wired, it lints through your own ESLint config and names any generated rule that config turns off or overrides for
-some files, so a rule that is generated but not in force does not pass unnoticed.
+some of the files the rule applies to (not its tests or files outside its folders), so a rule that is generated but
+not in force does not pass unnoticed.
 
 Re-running `generate` **cleans its previous outputs first**, so a rule the evidence no longer supports stops
 being enforced instead of lingering. `wire` inserts a single managed, reversible reference into the enforcement

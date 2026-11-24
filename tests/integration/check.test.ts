@@ -517,7 +517,7 @@ describe('archprint check against real git history', { timeout: REAL_GIT_TIMEOUT
     expect(output()).toContain(
       'Moved .archprint/rules.json and .archprint/allow.json into .archprint/config.json.',
     );
-    expect(output()).toContain('removed 1 stale archprint output(s)');
+    expect(output()).not.toContain('stale archprint output');
     expect(readdirSync(path.join(repo, '.archprint')).sort()).toEqual([
       'config.json',
       'eslint.mjs',
