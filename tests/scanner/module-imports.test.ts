@@ -1,7 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { minimatch } from 'minimatch';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { literalGlob, TEST_GLOBS } from '../../src/generator/eslint-scope.js';
 import {
   moduleReferences,
   valueImportBindings,
@@ -90,10 +92,54 @@ describe('valueModuleImports', () => {
 });
 
 describe('matchesGlob', () => {
-  it('matches minimatch globs with dotfiles included and a leading ./ ignored, as ESLint reads them', () => {
+  it('matches globs with dotfiles included and a leading ./ ignored, as ESLint reads them', () => {
     expect(matchesGlob('src/.storybook/main.ts', 'src/**')).toBe(true);
     expect(matchesGlob('src/a.ts', './src/*.ts')).toBe(true);
     expect(matchesGlob('src/app/[id]/page.tsx', 'src/app/**')).toBe(true);
+  });
+
+  it("agrees with ESLint's minimatch on every file path", () => {
+    const globs = [
+      ...TEST_GLOBS,
+      '**/*.{ts,tsx}',
+      'src/**',
+      'src/components/*',
+      'src/**/use-*.ts',
+      'src/{a,b}/**',
+      'src/[ab].ts',
+      'src/!(x).ts',
+      'src/+(a|b).ts',
+      '**/?.ts',
+      '**/.*',
+      literalGlob('app/[id]/page.tsx'),
+      literalGlob('app/(group)/[...slug]/page.tsx'),
+      literalGlob('app/@modal/page.tsx'),
+    ];
+    const files = [
+      'a.ts',
+      'src/a.ts',
+      'src/x.ts',
+      'src/a/x.ts',
+      'src/c/x.ts',
+      'src/.hidden/a.ts',
+      'src/components/card.tsx',
+      'src/components/ui/button.test.tsx',
+      'src/hooks/use-thing.ts',
+      'src/__tests__/a.ts',
+      'e2e/login.spec.ts',
+      'test/a.ts',
+      '.env.ts',
+      'app/[id]/page.tsx',
+      'app/x/page.tsx',
+      'app/(group)/[...slug]/page.tsx',
+      'app/@modal/page.tsx',
+    ];
+    const disagreements = globs.flatMap((glob) =>
+      files
+        .filter((file) => matchesGlob(file, glob) !== minimatch(file, glob, { dot: true }))
+        .map((file) => `${glob} ${file}`),
+    );
+    expect(disagreements).toEqual([]);
   });
 
   it('anchors a pattern at the root, and lets dir/** match the directory itself', () => {
@@ -112,9 +158,11 @@ describe('globPattern', () => {
     expect(rebuilt.test('src/lib/db.ts')).toBe(false);
   });
 
-  it('turns a glob minimatch reads as a comment into one that matches nothing', () => {
+  it('turns a glob ESLint reads as a comment, or an empty one, into one that matches nothing', () => {
     const { source, flags } = globPattern('#not a glob');
     expect(new RegExp(source, flags).test('#not a glob')).toBe(false);
     expect(matchesGlob('', '#')).toBe(false);
+    expect(matchesGlob('', '')).toBe(false);
+    expect(matchesGlob('src/a.ts', './')).toBe(false);
   });
 });

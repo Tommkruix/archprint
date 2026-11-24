@@ -1,4 +1,4 @@
-import { makeRe } from 'minimatch';
+import picomatch from 'picomatch';
 
 /** A glob compiled to a regular expression, as `source` and `flags`, so a generated ESLint rule can rebuild it. */
 export interface GlobPattern {
@@ -6,10 +6,10 @@ export interface GlobPattern {
   flags: string;
 }
 
-/** ESLint's minimatch options for `files` and `ignores` (@eslint/config-array): dotfiles match. */
+/** Dotfiles match, as in ESLint's `files` and `ignores` (@eslint/config-array). */
 const GLOB_OPTIONS = { dot: true } as const;
 
-/** A pattern no path matches, for a glob minimatch cannot compile. */
+/** A pattern no path matches: what ESLint's minimatch makes of an empty glob or a `#` comment. */
 const NEVER: GlobPattern = { source: '$.', flags: '' };
 
 const compiled = new Map<string, RegExp>();
@@ -19,8 +19,10 @@ const compiled = new Map<string, RegExp>();
  * on every path. A leading `./` is dropped, as ESLint drops it.
  */
 export function globPattern(glob: string): GlobPattern {
-  const regex = makeRe(glob.replace(/^\.\//, ''), GLOB_OPTIONS);
-  return regex === false ? NEVER : { source: regex.source, flags: regex.flags };
+  const pattern = glob.replace(/^\.\//, '');
+  if (pattern === '' || pattern.startsWith('#')) return NEVER;
+  const regex = picomatch.makeRe(pattern, GLOB_OPTIONS);
+  return { source: regex.source, flags: regex.flags };
 }
 
 function regexFor(glob: string): RegExp {
