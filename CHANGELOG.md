@@ -1,5 +1,16 @@
 # archprint
 
+## 0.20.1
+
+### Patch Changes
+
+- Dependency updates that close every open security advisory in archprint's dependencies: `minimatch` 11 (whose earlier versions could be slowed by a crafted glob), and patched versions of the MCP server's dependencies (`hono`, `@hono/node-server`, `body-parser`, `qs`, `fast-uri`, `ip-address`, `zod`). Generated rules compile globs with `picomatch` and match the same files as before.
+- The "shipped in a published package" list reads a `.tsx` file as built to `.jsx` when its tsconfig sets `"jsx": "preserve"`, as TypeScript builds it. Before, it looked for a `.js` file, so a package that packs only `.jsx` files had its components listed as dead code.
+- - `generate --check` names a rule your ESLint config turns off only for the files the rule applies to. Before, it also counted test files a rule skips and folders it never covers, so turning a rule off for a folder it does not apply to (`AP-001` for `lib/**`, or a CLAUDE.md rule for a folder its sentence does not name) failed the check.
+  - `generate` says which rules it adopted in this run ("Adopted 1 rule(s): console-isolation"), including a rule removed earlier and adopted again with `--rules`.
+  - `generate` no longer prints "Refreshed: removed 1 stale archprint output(s)" when it rewrote the same files; it names only outputs it no longer writes.
+  - `check`'s burn-down line counts the files a freeze rule keeps as they are apart from the exceptions left to fix: "Exceptions: 2 left. Not counted: 38 file(s) a freeze rule allows as they are."
+
 ## 0.20.0
 
 ### Minor Changes
