@@ -74,10 +74,13 @@ export interface WriteLayoutOptions {
 
 export interface WriteLayoutResult {
   files: string[];
+  /** Outputs an earlier run wrote that this run no longer writes, so they were deleted. */
   removed: string[];
   folded: string[];
   readme: 'created' | 'updated' | 'skipped' | 'off';
   configPath: string;
+  /** Rules this run adopted that were not adopted before it, a removed rule adopted again included. */
+  adopted: string[];
   /** Previously adopted rules this run kept, and those outside its selection the current scan no longer generates. */
   kept: string[];
   dropped: string[];
@@ -368,10 +371,14 @@ export function writeLayout(
   const folded = removeFoldedFiles(outDir, options.cwd);
   return {
     files,
-    removed,
+    removed: removed.filter((relative) => !managed.files.includes(relative)),
     folded,
     readme,
     configPath,
+    adopted: emitted.rules
+      .filter((rule) => !previous.includes(rule.id))
+      .sort(byRuleId)
+      .map((rule) => rule.id),
     kept: [...keptRules, ...declaredKept].sort(byRuleId).map((rule) => rule.id),
     dropped: carried.filter((id) => !emittedIds.has(id)),
     reset: options.reset

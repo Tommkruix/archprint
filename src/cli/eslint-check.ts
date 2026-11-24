@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { ESLint, Linter } from 'eslint';
+import type { ESLint, Linter, Rule } from 'eslint';
 import { walkRepo } from '../scanner/file-walker.js';
 import { ESLINT_FILE } from './generate.js';
 
@@ -74,6 +74,78 @@ async function inactiveRules(
     }
   }
   return wired ? inactive : null;
+}
+
+const PLUGIN = 'archprint';
+
+/**
+ * The generated config with each archprint rule recording the files it applies to: those its `create` returns
+ * listeners for. A generated rule checks its own scope (its folders, its exceptions, test files) there, so a file it
+ * returns none for is one it never governs.
+ */
+function recordingConfig(
+  config: readonly Linter.Config[],
+  applies: Map<string, Set<string>>,
+): Linter.Config[] {
+  const recordingRule = (name: string, rule: Rule.RuleModule): Rule.RuleModule => ({
+    ...rule,
+    create(context) {
+      const listeners = rule.create(context);
+      if (Object.keys(listeners).length > 0) {
+        const ruleId = `${PLUGIN}/${name}`;
+        applies.set(ruleId, (applies.get(ruleId) ?? new Set()).add(context.physicalFilename));
+      }
+      return listeners;
+    },
+  });
+  const recorded = new Map<ESLint.Plugin, ESLint.Plugin>();
+  const recording = (plugin: ESLint.Plugin): ESLint.Plugin => {
+    if (!recorded.has(plugin)) {
+      const rules = Object.entries(plugin.rules ?? {}).map(([name, rule]) => [
+        name,
+        recordingRule(name, rule as Rule.RuleModule),
+      ]);
+      recorded.set(plugin, { ...plugin, rules: Object.fromEntries(rules) });
+    }
+    return recorded.get(plugin)!;
+  };
+  return config.map((block) => {
+    const plugin = block.plugins?.[PLUGIN];
+    return plugin === undefined
+      ? block
+      : { ...block, plugins: { ...block.plugins, [PLUGIN]: recording(plugin) } };
+  });
+}
+
+/**
+ * Narrows each rule's inactive files to those the rule governs, by linting them with the generated rules alone. A file
+ * that does not parse is reported by the lint that follows. Without a TypeScript parser, every file stays.
+ */
+async function governedOnly(
+  inactive: ReadonlyMap<string, string[]>,
+  eslint: EslintModule,
+  appDir: string,
+  generatedConfig: readonly Linter.Config[],
+): Promise<ReadonlyMap<string, string[]>> {
+  if (inactive.size === 0) return inactive;
+  const parser = await typeScriptParser(appDir);
+  /* v8 ignore next -- a wired TypeScript config without typescript-eslint or its parser installed */
+  if (parser === null) return inactive;
+  const applies = new Map<string, Set<string>>();
+  await new eslint.ESLint({
+    cwd: appDir,
+    overrideConfigFile: true,
+    overrideConfig: [
+      { files: [LINTED_GLOB], languageOptions: { parser } },
+      ...recordingConfig(generatedConfig, applies),
+    ],
+  }).lintFiles([...new Set([...inactive.values()].flat())]);
+  const governed = new Map<string, string[]>();
+  for (const [ruleId, files] of inactive) {
+    const applying = files.filter((file) => applies.get(ruleId)?.has(file));
+    if (applying.length > 0) governed.set(ruleId, applying);
+  }
+  return governed;
 }
 
 function reportInactive(inactive: ReadonlyMap<string, string[]>, appDir: string): void {
@@ -180,7 +252,7 @@ export async function runEslintCheck(appDir: string, outDir: string): Promise<vo
       overrideConfig: [{ files: [LINTED_GLOB], languageOptions: { parser } }, ...generatedConfig],
     });
   } else {
-    reportInactive(inactive, appDir);
+    reportInactive(await governedOnly(inactive, eslint, appDir, generatedConfig), appDir);
   }
   let results: ESLint.LintResult[];
   /* v8 ignore start -- defensive: a config that loads only fails here on a rule it cannot resolve */

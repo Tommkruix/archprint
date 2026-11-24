@@ -41,7 +41,59 @@ describe('exception burn-down', () => {
     ]);
   });
 
+  it('counts the files a freeze rule allows apart from the exceptions left to fix', () => {
+    const freeze = {
+      id: 'doc-freeze-ui',
+      family: 'declared',
+      template: 'forbid-file',
+      files: ['src/components/ui/**'],
+      except: [],
+      root: '..',
+      source: { file: 'CLAUDE.md', line: 99 },
+      statement: 'Do not add new primitives here.',
+      mode: 'fast',
+      evidence: { conforming: 0, total: 2, floor: 0 },
+      exceptions: ['src/components/ui/button.tsx', 'src/components/ui/card.tsx'],
+    } as AdoptedRule;
+    const consoleRule = {
+      id: 'console-isolation',
+      family: 'console-isolation',
+      statement: 'library code must not use console',
+      mode: 'fast',
+      evidence: { conforming: 40, total: 41, floor: 0.9 },
+      exceptions: ['src/lib/storage.ts'],
+    } as AdoptedRule;
+    const findings: Finding[] = [
+      ...freeze.exceptions!.map((file) => ({
+        ruleId: freeze.id,
+        file,
+        subject: file,
+        kind: 'target' as const,
+      })),
+      { ruleId: consoleRule.id, file: 'src/lib/storage.ts', subject: 'console', kind: 'usage' },
+    ];
+    const burnDown = exceptionBurnDown(
+      [freeze, consoleRule],
+      [freeze, consoleRule],
+      findings,
+      findings,
+      new Map(),
+    );
+    expect(burnDown).toMatchObject({ left: 1, frozen: 2 });
+    expect(describeBurnDown(burnDown)).toEqual([
+      'Exceptions: 1 left. Not counted: 2 file(s) a freeze rule allows as they are.',
+    ]);
+  });
+
+  it('still says how many files a freeze rule allows when no other exception is left', () => {
+    expect(describeBurnDown({ left: 0, frozen: 38, fixedInChange: [], stillRecorded: [] })).toEqual(
+      ['Exceptions: 0 left. Not counted: 38 file(s) a freeze rule allows as they are.'],
+    );
+  });
+
   it('says nothing when no rule records an exception', () => {
-    expect(describeBurnDown({ left: 0, fixedInChange: [], stillRecorded: [] })).toEqual([]);
+    expect(describeBurnDown({ left: 0, frozen: 0, fixedInChange: [], stillRecorded: [] })).toEqual(
+      [],
+    );
   });
 });

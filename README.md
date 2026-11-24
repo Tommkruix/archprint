@@ -350,7 +350,7 @@ the exact snippet to paste. `eject` removes Archprint's files and every wired re
 exactly. `generate --check` runs the generated ESLint rules against your repo with your own ESLint (version 9 or
 later, installed in the repo) and reports whether they pass; on its own it checks the rules already generated and
 writes nothing. Once they are wired, it lints through your ESLint config, the one your editor and CI run, and names
-any generated rule that config turns off or overrides for some files. Before wiring, it checks the rules on their
+any generated rule that config turns off or overrides for some of the files it applies to. Before wiring, it checks the rules on their
 own. Upgrading from 0.5.x? `archprint migrate` moves an older `archprint-rules/` setup to
 this layout and rewires your configs in place.
 
@@ -429,8 +429,8 @@ jobs:
   rejected, and an entry the code no longer needs is pointed out.
 - **Existing breaks burn down in the open.** Each adopted rule records the files that already broke it, and `check`
   says how many are left and which the pull request fixed, for example `Exceptions: 3 left, 1 fixed in this
-change.` When a fixed exception is still recorded, it says to run `archprint generate` so the rule applies there
-  too.
+change.` The files a freeze rule (`forbid-file`) keeps as they are are not debt, so they are counted apart. When a
+  fixed exception is still recorded, it says to run `archprint generate` so the rule applies there too.
 - **Removing rules is never silent.** If a pull request deletes `.archprint/config.json`, or the rules in it,
   that the base branch has, `check` warns and lists every rule that stops being checked. It does not
   fail the job, because dropping a rule can be a deliberate team decision. To make that decision need a reviewer,

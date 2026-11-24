@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scanRepo } from '../../src/cli/scan.js';
 import { emitLayout } from '../../src/cli/generate.js';
 import { runEslintCheck } from '../../src/cli/eslint-check.js';
+import { writeLayout } from '../../src/cli/layout.js';
+import { buildRecommendations } from '../../src/cli/recommend.js';
+import { writeTree } from '../integration/layer-app.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => path.join(here, '..', 'fixtures', name);
@@ -184,5 +187,64 @@ describe('runEslintCheck', () => {
     await runEslintCheck(appDir, outDir);
     expect(logged()).toContain('--check needs ESLint 9 or later installed in');
     expect(process.exitCode).toBe(2);
+  });
+
+  describe('a declared rule, which applies only to the files its sentence names', () => {
+    const NO_FETCH = 'archprint/doc-no-fetch-in-components';
+    /** An app with "Components never call fetch directly." adopted, and production and test files in and out of it. */
+    const declaredApp = (): { appDir: string; outDir: string } => {
+      const appDir = path.join(dir, 'declared');
+      writeTree(appDir, {
+        'CLAUDE.md': '# Rules\n- Components never call fetch directly.\n',
+        'tsconfig.json': '{}\n',
+        'src/components/card.tsx': 'export const Card = 1;\n',
+        'src/components/ui/button.tsx': 'export const Button = 1;\n',
+        'src/components/ui/button.test.tsx': "export const t = fetch('/t');\n",
+        'src/lib/api.ts': "export const load = () => fetch('/x');\n",
+      });
+      symlinkSync(installed, path.join(appDir, 'node_modules'), 'dir');
+      const outDir = path.join(appDir, '.archprint');
+      const scan = scanRepo(appDir);
+      writeLayout(scan, outDir, {
+        enforcers: eslintOnly,
+        mode: 'fast',
+        version: '9.9.9',
+        recommendations: buildRecommendations(scan, new Set(), eslintOnly),
+        app: '.',
+        cwd: appDir,
+        declare: {
+          rules: [
+            {
+              template: 'forbid-usage',
+              source: { file: 'CLAUDE.md', quote: 'Components never call fetch directly.' },
+              name: 'no-fetch-in-components',
+              files: ['src/components/**'],
+              usage: ['fetch'],
+            },
+          ],
+        },
+      });
+      return { appDir, outDir };
+    };
+
+    it('counts only the production files it governs where the repo turns it off, not the tests it skips', async () => {
+      const { appDir, outDir } = declaredApp();
+      wire(appDir, `, { files: ['src/components/ui/**'], rules: { '${NO_FETCH}': 'off' } }`);
+      await runEslintCheck(appDir, outDir);
+      expect(logged()).toContain(
+        `${NO_FETCH}: not active for 1 file(s), e.g. src/components/ui/button.tsx`,
+      );
+      expect(logged()).not.toContain('button.test.tsx');
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('does not flag a folder the rule never applies to that the repo turns it off for', async () => {
+      const { appDir, outDir } = declaredApp();
+      wire(appDir, `, { files: ['src/lib/**'], rules: { '${NO_FETCH}': 'off' } }`);
+      await runEslintCheck(appDir, outDir);
+      expect(logged()).not.toContain('not active');
+      expect(logged()).toContain('pass clean');
+      expect(process.exitCode).toBe(0);
+    });
   });
 });
