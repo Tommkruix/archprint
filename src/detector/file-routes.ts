@@ -1,6 +1,6 @@
 import { type Dirent, existsSync, readdirSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { makeRe } from 'minimatch';
+import { Minimatch } from 'minimatch';
 import * as ts from 'typescript';
 import {
   asObject,
@@ -126,15 +126,13 @@ function flatRouteModules(
   if (ignoredValue !== undefined && !ts.isArrayLiteralExpression(ignoredValue)) return null;
   const ignored = (ignoredValue?.elements ?? []).map((element) => asString(element));
   if (ignored.includes(undefined)) return null;
-  const ignoredPatterns = ['**/.*', ...(ignored as string[])]
-    .map((glob) => makeRe(glob))
-    .filter((pattern) => pattern !== false);
+  const ignoredPatterns = ['**/.*', ...(ignored as string[])].map((glob) => new Minimatch(glob));
   const routes = path.posix.join(app, folderPath(rootDirectory));
   const modules: string[] = [];
   for (const entry of entriesOf(path.join(projectDir, routes))) {
     const entryPath = path.posix.join(routes, entry.name);
     const fromApp = path.posix.relative(app, entryPath);
-    if (ignoredPatterns.some((pattern) => pattern.test(fromApp))) continue;
+    if (ignoredPatterns.some((pattern) => pattern.match(fromApp))) continue;
     if (entry.isFile()) modules.push(entryPath);
     if (entry.isDirectory()) {
       const folderDir = path.join(projectDir, entryPath);
