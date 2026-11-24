@@ -154,6 +154,8 @@ export interface CompiledRoot {
   rootDir: string;
   /** Whether the config builds this file (from the package directory): it emits and lists the file as an input. */
   emits: (file: string) => boolean;
+  /** Whether it keeps JSX as written (`"jsx": "preserve"`), so a `.tsx` file builds to `.jsx`, not `.js`. */
+  preservesJsx: boolean;
 }
 
 function commonDirectory(files: readonly string[]): string {
@@ -204,7 +206,7 @@ export function compiledRoots(packageDir: string): CompiledRoot[] {
     let built: Set<string> | undefined;
     const emits = (file: string): boolean =>
       options.noEmit !== true && (built ??= new Set(inputs())).has(file);
-    roots.push({ outDir, rootDir, emits });
+    roots.push({ outDir, rootDir, emits, preservesJsx: options.jsx === ts.JsxEmit.Preserve });
   }
   return roots;
 }
