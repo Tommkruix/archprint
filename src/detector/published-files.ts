@@ -91,6 +91,7 @@ const BUILT_EXTENSION: Record<string, string[]> = {
   '.mts': ['.mjs', '.d.mts'],
   '.cts': ['.cjs', '.d.cts'],
 };
+const PRESERVED_JSX = ['.jsx', '.d.ts'];
 
 /**
  * The paths, from the package directory, a file (from the same directory) may have in the tarball: itself, when it lies
@@ -99,12 +100,16 @@ const BUILT_EXTENSION: Record<string, string[]> = {
 function packedPaths(file: string, roots: readonly CompiledRoot[]): string[] {
   const packed = file.startsWith('../') ? [] : [file];
   const extension = path.posix.extname(file);
-  for (const { outDir, rootDir, emits } of roots) {
+  for (const { outDir, rootDir, emits, preservesJsx } of roots) {
     const fromRoot = path.posix.relative(rootDir, file);
     if (fromRoot.startsWith('../') || !emits(file)) continue;
     const built = path.posix.join(outDir, fromRoot);
     const base = built.slice(0, built.length - extension.length);
-    for (const output of BUILT_EXTENSION[extension] ?? [extension]) packed.push(base + output);
+    const outputs =
+      extension === '.tsx' && preservesJsx
+        ? PRESERVED_JSX
+        : (BUILT_EXTENSION[extension] ?? [extension]);
+    for (const output of outputs) packed.push(base + output);
   }
   return packed;
 }

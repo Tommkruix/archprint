@@ -7,6 +7,8 @@ import type { RuleExceptions } from './ratchet.js';
 export interface ExceptionBurnDown {
   /** Recorded exceptions that still break their rule. */
   left: number;
+  /** Files a freeze rule recorded when it was adopted and allows as they are: not debt to fix. */
+  frozen: number;
   /** Exceptions recorded before the change that broke their rule then and no longer do. */
   fixedInChange: RuleExceptions[];
   /** Exceptions still recorded that no longer break their rule, which the next generate enforces. */
@@ -15,6 +17,9 @@ export interface ExceptionBurnDown {
 
 const keyOf = (rule: AdoptedRule, finding: Finding): string =>
   rule.family === 'entry-purity' ? importPair(finding.file, finding.subject) : finding.file;
+
+const isFreeze = (rule: AdoptedRule): boolean =>
+  rule.family === 'declared' && rule.template === 'forbid-file';
 
 const renamed = (key: string, renames: ReadonlyMap<string, string>): string =>
   key
@@ -36,12 +41,14 @@ export function exceptionBurnDown(
         .filter((finding) => finding.ruleId === rule.id)
         .map((finding) => renamed(keyOf(rule, finding), renames)),
     );
-  const burnDown: ExceptionBurnDown = { left: 0, fixedInChange: [], stillRecorded: [] };
+  const burnDown: ExceptionBurnDown = { left: 0, frozen: 0, fixedInChange: [], stillRecorded: [] };
   for (const rule of rules) {
     const now = breaking(rule, headFindings);
     const before = breaking(rule, baseFindings);
     const recorded = (rule.exceptions ?? []).map((key) => renamed(key, renames));
-    burnDown.left += recorded.filter((key) => now.has(key)).length;
+    const unfixed = recorded.filter((key) => now.has(key)).length;
+    if (isFreeze(rule)) burnDown.frozen += unfixed;
+    else burnDown.left += unfixed;
     const stillRecorded = recorded.filter((key) => !now.has(key));
     if (stillRecorded.length > 0)
       burnDown.stillRecorded.push({ rule: rule.id, exceptions: stillRecorded });
@@ -59,12 +66,15 @@ const count = (entries: readonly RuleExceptions[]): number =>
 /** The burn-down as lines of text, or none when no rule records an exception. */
 export function describeBurnDown({
   left,
+  frozen,
   fixedInChange,
   stillRecorded,
 }: ExceptionBurnDown): string[] {
   const fixed = count(fixedInChange);
-  if (left === 0 && fixed === 0 && stillRecorded.length === 0) return [];
-  const lines = [`Exceptions: ${left} left${fixed > 0 ? `, ${fixed} fixed in this change` : ''}.`];
+  if (left === 0 && frozen === 0 && fixed === 0 && stillRecorded.length === 0) return [];
+  const lines = [
+    `Exceptions: ${left} left${fixed > 0 ? `, ${fixed} fixed in this change` : ''}.${frozen > 0 ? ` Not counted: ${frozen} file(s) a freeze rule allows as they are.` : ''}`,
+  ];
   for (const { rule, exceptions } of fixedInChange)
     lines.push(`  ${rule}: ${exceptions.join(', ')}`);
   if (stillRecorded.length > 0)

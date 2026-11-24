@@ -76,6 +76,18 @@ const TREE: Record<string, string> = {
   'packages/gitignored/src/kept.ts': SOURCE,
   'packages/gitignored/src/dist/ignored.ts': SOURCE,
   'packages/gitignored/scripts/ignored.ts': SOURCE,
+  'packages/jsx/package.json': json({ name: 'jsx-lib', files: ['dist/**/*.jsx'] }),
+  'packages/jsx/tsconfig.json': json({
+    compilerOptions: { outDir: 'dist', rootDir: 'src', jsx: 'preserve' },
+    include: ['src'],
+  }),
+  'packages/jsx/src/Button.tsx': SOURCE,
+  'packages/jsx-emit/package.json': json({ name: 'jsx-emit-lib', files: ['dist/**/*.jsx'] }),
+  'packages/jsx-emit/tsconfig.json': json({
+    compilerOptions: { outDir: 'dist', rootDir: 'src', jsx: 'react-jsx' },
+    include: ['src'],
+  }),
+  'packages/jsx-emit/src/Button.tsx': SOURCE,
   'packages/bare/package.json': json({ name: 'bare', publishConfig: { access: 'public' } }),
   'packages/bare/src/anything.ts': SOURCE,
   'packages/ssr/package.json': json({
@@ -151,7 +163,7 @@ const TREE: Record<string, string> = {
   'apps/desktop/src/leftover.ts': SOURCE,
 };
 
-const FILES = Object.keys(TREE).filter((file) => /\.(m?ts|js)$/.test(file));
+const FILES = Object.keys(TREE).filter((file) => /\.(m?tsx?|js)$/.test(file));
 
 describe('shippedFilesUnder', () => {
   let repo: string;
@@ -183,6 +195,11 @@ describe('shippedFilesUnder', () => {
     expect(shipped).not.toContain('packages/ssr/src/lib/tests/helper.ts');
     expect(shipped).not.toContain('packages/ssr/src/other/unshipped.ts');
     expect(shipped).not.toContain('packages/core/scripts/release.ts');
+  });
+
+  it('builds a .tsx file to .jsx only when its tsconfig preserves JSX', () => {
+    expect(shipped).toContain('packages/jsx/src/Button.tsx');
+    expect(shipped).not.toContain('packages/jsx-emit/src/Button.tsx');
   });
 
   it("builds only a tsconfig's input files, and nothing when it does not emit", () => {

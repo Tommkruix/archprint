@@ -56,7 +56,7 @@ const checked = (
   removedInChange: [],
   allowedInChange: [],
   unusedAllows: [],
-  exceptions: { left: 0, fixedInChange: [], stillRecorded: [] },
+  exceptions: { left: 0, frozen: 0, fixedInChange: [], stillRecorded: [] },
   context: { files: [], stale: [] },
   ...overrides,
 });

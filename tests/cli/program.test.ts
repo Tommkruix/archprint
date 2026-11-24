@@ -688,10 +688,19 @@ describe('init', () => {
     expect(output()).toContain('Warning');
   });
 
-  it('regenerating removes stale outputs before writing fresh ones', async () => {
-    await run(['init', auto]);
+  it('regenerating names only the outputs it no longer writes as stale', async () => {
+    await run(['generate', auto, '--expand']);
     await run(['generate', auto]);
-    expect(output()).toContain('Refreshed: removed');
+    expect(output()).toMatch(/Refreshed: removed [1-9]\d* stale archprint output\(s\)/);
+  });
+
+  it('regenerating with nothing changed reports no stale output and adopts nothing new', async () => {
+    await run(['generate', auto]);
+    expect(output()).toMatch(/Adopted [1-9]\d* rule\(s\): /);
+    logSpy.mockClear();
+    await run(['generate', auto]);
+    expect(output()).not.toContain('Refreshed');
+    expect(output()).not.toContain('Adopted ');
   });
 
   it('init --readme adds the adopted rules with their evidence to the README, and no corpus rates', async () => {
